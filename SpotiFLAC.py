@@ -1568,6 +1568,7 @@ if __name__ == '__main__':
         pass
         
     app = QApplication(sys.argv)
+    app.setStyle('fusion')
     ex = SpotiFLACGUI()
     ex.show()
     sys.exit(app.exec())
