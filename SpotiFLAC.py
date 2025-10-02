@@ -9,15 +9,15 @@ import asyncio
 from packaging import version
 import qdarktheme
 
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QLabel, QFileDialog, QListWidget, QTextEdit, QTabWidget, QButtonGroup, QRadioButton,
     QAbstractItemView, QProgressBar, QCheckBox, QDialog,
     QDialogButtonBox, QComboBox, QStyledItemDelegate
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer, QTime, QSettings, QSize
-from PyQt6.QtGui import QIcon, QTextCursor, QDesktopServices, QPixmap, QBrush
-from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+from PySide6.QtCore import Qt, QThread, Signal, QUrl, QTimer, QTime, QSettings, QSize
+from PySide6.QtGui import QIcon, QTextCursor, QDesktopServices, QPixmap, QBrush
+from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 
 from getMetadata import get_filtered_data, parse_uri, SpotifyInvalidUrlException
 from qobuzAutoDL import QobuzDownloader as QobuzAutoDownloader
@@ -39,8 +39,8 @@ class Track:
     release_date: str = ""
 
 class MetadataFetchWorker(QThread):
-    finished = pyqtSignal(dict)
-    error = pyqtSignal(str)
+    finished = Signal(dict)
+    error = Signal(str)
     
     def __init__(self, url):
         super().__init__()
@@ -59,8 +59,8 @@ class MetadataFetchWorker(QThread):
             self.error.emit(f'Failed to fetch metadata: {str(e)}')
 
 class DownloadWorker(QThread):
-    finished = pyqtSignal(bool, str, list)
-    progress = pyqtSignal(str, int)
+    finished = Signal(bool, str, list, list)
+    progress = Signal(str, int)
     
     def __init__(self, tracks, outpath, is_single_track=False, is_album=False, is_playlist=False,
                  album_or_playlist_name='', filename_format='title_artist', use_track_numbers=True,
@@ -82,6 +82,7 @@ class DownloadWorker(QThread):
         self.is_paused = False
         self.is_stopped = False
         self.failed_tracks = []
+        self.successful_tracks = []
 
     def get_formatted_filename(self, track):
         if self.filename_format == "artist_title":
@@ -294,6 +295,7 @@ class DownloadWorker(QThread):
                     
                     self.progress.emit(f"Successfully downloaded: {track.title} - {track.artists}", 
                                     int((i + 1) / total_tracks * 100))
+                    self.successful_tracks.append(track)
                 except Exception as e:
                     self.failed_tracks.append((track.title, track.artists, str(e)))
                     self.progress.emit(f"Failed to download: {track.title} - {track.artists}\nError: {str(e)}", 
@@ -304,10 +306,12 @@ class DownloadWorker(QThread):
                 success_message = "Download completed!"
                 if self.failed_tracks:
                     success_message += f"\n\nFailed downloads: {len(self.failed_tracks)} tracks"
-                self.finished.emit(True, success_message, self.failed_tracks)
+                if self.successful_tracks:
+                    success_message += f"\n\nSuccessful downloads: {len(self.successful_tracks)} tracks"
+                self.finished.emit(True, success_message, self.failed_tracks, self.successful_tracks)
                 
         except Exception as e:
-            self.finished.emit(False, str(e), self.failed_tracks)
+            self.finished.emit(False, str(e), self.failed_tracks, self.successful_tracks)
 
     def pause(self):
         self.is_paused = True
@@ -351,8 +355,8 @@ class UpdateDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
 
 class TidalStatusChecker(QThread):
-    status_updated = pyqtSignal(bool)
-    error = pyqtSignal(str)
+    status_updated = Signal(bool)
+    error = Signal(str)
 
     def run(self):
         try:
@@ -364,8 +368,8 @@ class TidalStatusChecker(QThread):
             self.status_updated.emit(False)
 
 class QobuzStatusChecker(QThread):
-    status_updated = pyqtSignal(bool)
-    error = pyqtSignal(str)
+    status_updated = Signal(bool)
+    error = Signal(str)
     
     def __init__(self, region="us", mode="auto"):
         super().__init__()
@@ -384,8 +388,8 @@ class QobuzStatusChecker(QThread):
             self.status_updated.emit(False)
 
 class DeezerStatusChecker(QThread):
-    status_updated = pyqtSignal(bool)
-    error = pyqtSignal(str)
+    status_updated = Signal(bool)
+    error = Signal(str)
 
     def run(self):
         try:
@@ -397,8 +401,8 @@ class DeezerStatusChecker(QThread):
             self.status_updated.emit(False)
 
 class AmazonStatusChecker(QThread):
-    status_updated = pyqtSignal(bool)
-    error = pyqtSignal(str)
+    status_updated = Signal(bool)
+    error = Signal(str)
 
     def run(self):
         try:
@@ -558,7 +562,7 @@ class ServiceComboBox(QComboBox):
         self.update()
 
 class QobuzRegionComboBox(QComboBox):
-    status_updated = pyqtSignal(str, bool)
+    status_updated = Signal(str, bool)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -643,6 +647,7 @@ class SpotiFLACGUI(QWidget):
         self.current_version = "4.6"
         self.tracks = []
         self.all_tracks = []  
+        self.successful_downloads = []
         self.reset_state()
         
         self.settings = QSettings('SpotiFLAC', 'Settings')
@@ -709,6 +714,7 @@ class SpotiFLACGUI(QWidget):
     def reset_state(self):
         self.tracks.clear()
         self.all_tracks.clear()
+        self.successful_downloads.clear()
         self.is_album = False
         self.is_playlist = False 
         self.is_single_track = False
@@ -966,6 +972,8 @@ class SpotiFLACGUI(QWidget):
         self.remove_btn.clicked.connect(self.remove_selected_tracks)
         self.clear_btn.clicked.connect(self.clear_tracks)
         
+        # Debug removed - buttons working correctly
+        
         self.btn_layout.addStretch()
         for btn in [self.download_selected_btn, self.download_all_btn, self.remove_btn, self.clear_btn]:
             self.btn_layout.addWidget(btn, 1)
@@ -1016,19 +1024,24 @@ class SpotiFLACGUI(QWidget):
         control_layout = QHBoxLayout()
         self.stop_btn = QPushButton('Stop')
         self.pause_resume_btn = QPushButton('Pause')
+        self.remove_successful_btn = QPushButton('Remove Successful Downloads')
         
         self.stop_btn.setFixedWidth(120)
         self.pause_resume_btn.setFixedWidth(120)
+        self.remove_successful_btn.setFixedWidth(200)
         
         self.stop_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.pause_resume_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.remove_successful_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self.stop_btn.clicked.connect(self.stop_download)
         self.pause_resume_btn.clicked.connect(self.toggle_pause_resume)
+        self.remove_successful_btn.clicked.connect(self.remove_successful_downloads)
         
         control_layout.addStretch()
         control_layout.addWidget(self.stop_btn)
         control_layout.addWidget(self.pause_resume_btn)
+        control_layout.addWidget(self.remove_successful_btn)
         control_layout.addStretch()
         
         process_layout.addLayout(control_layout)
@@ -1041,6 +1054,7 @@ class SpotiFLACGUI(QWidget):
         self.time_label.hide()
         self.stop_btn.hide()
         self.pause_resume_btn.hide()
+        self.remove_successful_btn.hide()
 
     def setup_settings_tab(self):
         settings_tab = QWidget()
@@ -1907,6 +1921,10 @@ class SpotiFLACGUI(QWidget):
             self.download_tracks(selected_indices)
 
     def download_all(self):
+        if not self.tracks:
+            self.log_output.append('Warning: No tracks to download. Please fetch tracks first.')
+            return
+        
         if self.is_single_track:
             self.download_tracks([0])
         else:
@@ -1916,6 +1934,7 @@ class SpotiFLACGUI(QWidget):
         self.log_output.clear()
         raw_outpath = self.output_dir.text().strip()
         outpath = os.path.normpath(raw_outpath)
+        
         if not os.path.exists(outpath):
             self.log_output.append('Warning: Invalid output directory.')
             return
@@ -1953,7 +1972,7 @@ class SpotiFLACGUI(QWidget):
             qobuz_region,
             qobuz_mode
         )
-        self.worker.finished.connect(self.on_download_finished)
+        self.worker.finished.connect(lambda success, message, failed_tracks, successful_tracks: self.on_download_finished(success, message, failed_tracks, successful_tracks))
         self.worker.progress.connect(self.update_progress)
         self.worker.start()
         self.start_timer()
@@ -1970,6 +1989,7 @@ class SpotiFLACGUI(QWidget):
             
         self.stop_btn.show()
         self.pause_resume_btn.show()
+        self.remove_successful_btn.hide()
         self.progress_bar.show()
         self.progress_bar.setValue(0)
         
@@ -1985,14 +2005,23 @@ class SpotiFLACGUI(QWidget):
         if hasattr(self, 'worker'):
             self.worker.stop()
         self.stop_timer()
-        self.on_download_finished(True, "Download stopped by user.", [])
+        self.on_download_finished(True, "Download stopped by user.", [], [])
         
-    def on_download_finished(self, success, message, failed_tracks):
+    def on_download_finished(self, success, message, failed_tracks, successful_tracks):
         self.progress_bar.hide()
         self.stop_btn.hide()
         self.pause_resume_btn.hide()
         self.pause_resume_btn.setText('Pause')
         self.stop_timer()
+        
+        # Store successful downloads for later removal
+        self.successful_downloads = successful_tracks
+        
+        # Show remove successful button if there are successful downloads
+        if successful_tracks:
+            self.remove_successful_btn.show()
+        else:
+            self.remove_successful_btn.hide()
         
         self.download_selected_btn.setEnabled(True)
         self.download_all_btn.setEnabled(True)
@@ -2024,20 +2053,60 @@ class SpotiFLACGUI(QWidget):
                 self.worker.pause()
                 self.pause_resume_btn.setText('Resume')
 
-    def remove_selected_tracks(self):
-        if not self.is_single_track:
-            selected_items = self.track_list.selectedItems()
-            selected_indices = [self.track_list.row(item) for item in selected_items]
-            
-            tracks_to_remove = [self.tracks[i] for i in selected_indices]
-            
+    def remove_successful_downloads(self):
+        """Remove successfully downloaded tracks from the dashboard"""
+        if not self.successful_downloads:
+            # Show message on process tab since user is still there
+            self.log_output.append("No successful downloads to remove.")
+            return
+        
+        # Find successful tracks in the track list
+        tracks_to_remove = []
+        for track in self.tracks:
+            for successful_track in self.successful_downloads:
+                if (track.title == successful_track.title and 
+                    track.artists == successful_track.artists and
+                    track.album == successful_track.album):
+                    tracks_to_remove.append(track)
+                    break
+        
+        if tracks_to_remove:
+            # Remove tracks from both lists
             for track in tracks_to_remove:
                 if track in self.tracks:
                     self.tracks.remove(track)
                 if track in self.all_tracks:
                     self.all_tracks.remove(track)
             
+            self.update_track_list_display()
+            self.log_output.append(f"Removed {len(tracks_to_remove)} successfully downloaded tracks from the list.")
+            # Switch to dashboard after showing the message
+            self.tab_widget.setCurrentIndex(0)
+        else:
+            self.log_output.append("No matching tracks found in the current list.")
+        
+        # Hide the button after use
+        self.remove_successful_btn.hide()
 
+    def remove_selected_tracks(self):
+        if not self.is_single_track:
+            selected_items = self.track_list.selectedItems()
+            selected_indices = [self.track_list.row(item) for item in selected_items]
+            
+            # Sort indices in descending order to avoid index shifting issues
+            selected_indices.sort(reverse=True)
+            
+            tracks_to_remove = []
+            for i in selected_indices:
+                if 0 <= i < len(self.tracks):
+                    tracks_to_remove.append(self.tracks[i])
+            
+            # Remove tracks from both lists
+            for track in tracks_to_remove:
+                if track in self.tracks:
+                    self.tracks.remove(track)
+                if track in self.all_tracks:
+                    self.all_tracks.remove(track)
             
             self.update_track_list_display()
 
@@ -2102,6 +2171,7 @@ if __name__ == '__main__':
             }
         }
     )
+    
     ex = SpotiFLACGUI()
     ex.show()
     sys.exit(app.exec())
