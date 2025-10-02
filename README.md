@@ -1,8 +1,5 @@
 # SpotiFLAC - Enhanced Fork
 
-<div align="center">
-<b>SpotiFLAC</b> allows you to download Spotify tracks in true FLAC format through services like Qobuz, Tidal, Deezer & Amazon Music.
-</div>
 
 ## 🚀 Enhanced Features (This Fork)
 
