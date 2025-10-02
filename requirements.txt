@@ -1,0 +1,11 @@
+# Core Dependencies
+requests>=2.31
+mutagen>=1.47
+pyotp>=2.9.0
+packaging>=23.0
+
+# Dark Theme (PyQtDarkTheme = Import "qdarktheme")
+pyqtdarktheme>=2.0,<3
+
+# Qt-Binding (PySide6 for better Windows compatibility)
+PySide6>=6.5.3,<7
