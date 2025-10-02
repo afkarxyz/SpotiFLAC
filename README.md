@@ -12,11 +12,9 @@
 
 This is an enhanced fork of the original SpotiFLAC with the following improvements:
 
-- ✅ **PySide6 Support**: Switched from PyQt6 to PySide6 for better Windows compatibility
-- ✅ **Python 3.11 Compatible**: Optimized for Python 3.11 environment
+- ✅ **PySide6 Support**: For Automarking Files in the List
 - ✅ **Enhanced Download Management**: New "Remove Successful Downloads" feature
-- ✅ **Improved Theme System**: Fixed theme functionality with better compatibility
-- ✅ **Requirements File**: Added `requirements.txt` for easy dependency management
+- ✅- ✅ **Requirements File**: Added `requirements.txt` for easy dependency management
 - ✅ **Better Error Handling**: Improved DLL loading and Qt library compatibility
 
 ## 📋 Requirements
@@ -31,7 +29,7 @@ This is an enhanced fork of the original SpotiFLAC with the following improvemen
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/YOUR_USERNAME/SpotiFLAC.git
+git clone https://github.com/value1338/SpotiFLAC.git
 cd SpotiFLAC
 ```
 
@@ -94,24 +92,6 @@ After a download completes, you can now:
 ![image](https://github.com/user-attachments/assets/7649e6e1-d2d1-49b3-b83f-965d44651d05)
 
 #### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/download/v0/FLAC-Checker.zip) FLAC Checker
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-**DLL Load Failed Error:**
-```bash
-pip uninstall PySide6 -y
-pip install PySide6==6.5.3
-```
-
-**Theme Not Working:**
-- Make sure `pyqtdarktheme` is installed: `pip install pyqtdarktheme`
-- Try restarting the application
-
-**Python Version Issues:**
-- Ensure you're using Python 3.11+
-- Use a virtual environment to avoid conflicts
 
 ## 📝 Original Project
 
