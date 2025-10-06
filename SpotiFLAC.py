@@ -1,11 +1,15 @@
 import sys
 import os
+import time
+import threading
+import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 import requests
 import re
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from packaging import version
 import qdarktheme
 
@@ -13,7 +17,7 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QLabel, QFileDialog, QListWidget, QTextEdit, QTabWidget, QButtonGroup, QRadioButton,
     QAbstractItemView, QProgressBar, QCheckBox, QDialog,
-    QDialogButtonBox, QComboBox, QStyledItemDelegate
+    QDialogButtonBox, QComboBox, QStyledItemDelegate, QSpinBox, QSizePolicy
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl, QTimer, QTime, QSettings, QSize
 from PyQt6.QtGui import QIcon, QTextCursor, QDesktopServices, QPixmap, QBrush
@@ -61,7 +65,8 @@ class DownloadWorker(QThread):
     
     def __init__(self, tracks, outpath, is_single_track=False, is_album=False, is_playlist=False,
                  album_or_playlist_name='', filename_format='title_artist', use_track_numbers=True,
-                 use_artist_subfolders=False, use_album_subfolders=False, service="tidal"):
+                 use_artist_subfolders=False, use_album_subfolders=False, service="tidal", retry_attempts=1,
+                 fallback_enabled=False):
         super().__init__()
         self.tracks = tracks
         self.outpath = outpath
@@ -74,6 +79,10 @@ class DownloadWorker(QThread):
         self.use_artist_subfolders = use_artist_subfolders
         self.use_album_subfolders = use_album_subfolders
         self.service = service
+        self.retry_attempts = max(1, retry_attempts)
+        self.fallback_enabled = fallback_enabled
+        self.file_locks = {}
+        self.file_locks_lock = threading.Lock()
         self.is_paused = False
         self.is_stopped = False
         self.failed_tracks = []
@@ -88,190 +97,446 @@ class DownloadWorker(QThread):
         else:
             filename = f"{track.title} - {track.artists}.flac"
         return re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', filename)
+    
+    def _get_file_lock(self, filepath):
+        with self.file_locks_lock:
+            lock = self.file_locks.get(filepath)
+            if lock is None:
+                lock = threading.Lock()
+                self.file_locks[filepath] = lock
+        return lock
+    
+    def _build_staging_dir(self, base_outpath, track, service_name, index):
+        service_key = service_name or "primary"
+        identifier = track.id or track.isrc or f"{track.title}_{track.artists}_{index}"
+        safe_service = re.sub(r'[<>:"/\\|?*]', '_', service_key.lower())
+        safe_identifier = re.sub(r'[<>:"/\\|?*]', '_', identifier)
+        return os.path.join(base_outpath, ".spoti_cache", safe_service, safe_identifier)
+    
+    def _prepare_staging_dir(self, staging_dir):
+        if os.path.isdir(staging_dir):
+            shutil.rmtree(staging_dir, ignore_errors=True)
+        os.makedirs(staging_dir, exist_ok=True)
+    
+    @staticmethod
+    def _cleanup_staging_dir(staging_dir):
+        if os.path.isdir(staging_dir):
+            shutil.rmtree(staging_dir, ignore_errors=True)
 
     def run(self):
         try:
-            if self.service == "tidal": 
-                downloader = TidalDownloader()            
-            elif self.service == "deezer":
-                downloader = DeezerDownloader()
-            else:
-                downloader = TidalDownloader()
-            
+            total_tracks = len(self.tracks)
+            if total_tracks == 0:
+                self.finished.emit(True, "No tracks to download.", self.failed_tracks, self.successful_tracks, self.skipped_tracks)
+                return
+
             def progress_update(current, total):
                 if total <= 0:
                     self.progress.emit("Processing metadata...", 0)
-            
-            downloader.set_progress_callback(progress_update)
-            
-            total_tracks = len(self.tracks)
-            
-            for i, track in enumerate(self.tracks):
-                while self.is_paused:
-                    if self.is_stopped:
-                        return
-                    self.msleep(100)
-                if self.is_stopped:
-                    return
-                
-                self.progress.emit(f"Starting download ({i+1}/{total_tracks}): {track.title} - {track.artists}", 
-                                int((i) / total_tracks * 100))
-                
-                try:
-                    if self.is_playlist:
-                        track_outpath = self.outpath
-                        
-                        if self.use_artist_subfolders:
-                            artist_name = track.artists.split(', ')[0] if ', ' in track.artists else track.artists
-                            artist_folder = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', artist_name)
-                            track_outpath = os.path.join(track_outpath, artist_folder)
-                        
-                        if self.use_album_subfolders:
-                            album_folder = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', track.album)
-                            track_outpath = os.path.join(track_outpath, album_folder)
-                        
-                        os.makedirs(track_outpath, exist_ok=True)
-                    else:
-                        track_outpath = self.outpath
-                    
-                    if (self.is_album or self.is_playlist) and self.use_track_numbers:
-                        new_filename = f"{track.track_number:02d} - {self.get_formatted_filename(track)}"
-                    else:
-                        new_filename = self.get_formatted_filename(track)
-                    
-                    new_filename = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', new_filename)
-                    new_filepath = os.path.join(track_outpath, new_filename)
-                    
+
+            max_workers = min(4, total_tracks)
+            completion_lock = threading.Lock()
+            completed_count = 0
+
+            def download_single_track(index, track):
+                def wait_for_resume():
+                    while self.is_paused and not self.is_stopped:
+                        time.sleep(0.1)
+                    return self.is_stopped
+
+                if wait_for_resume():
+                    return {"status": "stopped", "track": track}
+
+                if self.is_playlist:
+                    track_outpath = self.outpath
+
+                    if self.use_artist_subfolders:
+                        artist_name = track.artists.split(', ')[0] if ', ' in track.artists else track.artists
+                        artist_folder = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', artist_name)
+                        track_outpath = os.path.join(track_outpath, artist_folder)
+
+                    if self.use_album_subfolders:
+                        album_folder = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', track.album)
+                        track_outpath = os.path.join(track_outpath, album_folder)
+
+                    os.makedirs(track_outpath, exist_ok=True)
+                else:
+                    track_outpath = self.outpath
+
+                if (self.is_album or self.is_playlist) and self.use_track_numbers:
+                    new_filename = f"{track.track_number:02d} - {self.get_formatted_filename(track)}"
+                else:
+                    new_filename = self.get_formatted_filename(track)
+
+                new_filename = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', new_filename)
+                new_filepath = os.path.join(track_outpath, new_filename)
+
+                path_lock = self._get_file_lock(new_filepath)
+
+                with path_lock:
+                    if wait_for_resume():
+                        return {"status": "stopped", "track": track}
+
                     if os.path.exists(new_filepath) and os.path.getsize(new_filepath) > 0:
                         self.progress.emit(f"File already exists: {new_filename}. Skipping download.", 0)
-                        self.progress.emit(f"Skipped: {track.title} - {track.artists}", 
-                                    int((i + 1) / total_tracks * 100))
-                        self.skipped_tracks.append(track)
-                        continue
-                    
-                    if self.service == "tidal": 
-                        if not track.isrc:
-                            self.progress.emit(f"No ISRC found for track: {track.title}. Skipping.", 0)
-                            self.failed_tracks.append((track.title, track.artists, "No ISRC available"))
-                            continue
-                        
-                        self.progress.emit(f"Searching and downloading from Tidal for ISRC: {track.isrc} - {track.title} - {track.artists}", 0)
-                        is_paused_callback = lambda: self.is_paused
-                        is_stopped_callback = lambda: self.is_stopped
-                        
-                        download_result_details = downloader.download(
-                            query=f"{track.title} {track.artists}", 
-                            isrc=track.isrc,
-                            output_dir=track_outpath,
-                            quality="LOSSLESS", 
-                            is_paused_callback=is_paused_callback,
-                            is_stopped_callback=is_stopped_callback
-                        )
-                        
-                        if isinstance(download_result_details, str) and os.path.exists(download_result_details): 
-                            downloaded_file = download_result_details
-                        elif isinstance(download_result_details, dict) and download_result_details.get("success") == False and download_result_details.get("error") == "Download stopped by user":
-                            self.progress.emit(f"Download stopped by user for: {track.title}",0)
-                            return 
-                        elif isinstance(download_result_details, dict) and download_result_details.get("success") == False:
-                            raise Exception(download_result_details.get("error", "Tidal download failed"))                        
-                        elif isinstance(download_result_details, dict) and (download_result_details.get("status") == "all_skipped" or download_result_details.get("status") == "skipped_exists"):
-                            self.progress.emit(f"File already exists or skipped: {new_filename}",0)
-                            downloaded_file = new_filepath
-                            self.skipped_tracks.append(track)
-                        else: 
-                            downloaded_file = None 
-                            raise Exception(f"Tidal download failed or returned unexpected result: {download_result_details}")
-                    elif self.service == "deezer":
-                        if not track.isrc:
-                            self.progress.emit(f"No ISRC found for track: {track.title}. Skipping.", 0)
-                            self.failed_tracks.append((track.title, track.artists, "No ISRC available"))
-                            continue
-                        
-                        self.progress.emit(f"Downloading from Deezer with ISRC: {track.isrc}", 0)
-                        
-                        success = asyncio.run(downloader.download_by_isrc(track.isrc, track_outpath))
-                        
-                        if success:
-                            safe_title = "".join(c for c in track.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                            safe_artist = "".join(c for c in track.artists if c.isalnum() or c in (' ', '-', '_')).rstrip()
-                            expected_filename = f"{safe_artist} - {safe_title}.flac"
-                            downloaded_file = os.path.join(track_outpath, expected_filename)
-                            
-                            if not os.path.exists(downloaded_file):
-                                import glob
-                                flac_files = glob.glob(os.path.join(track_outpath, "*.flac"))
-                                if flac_files:
-                                    downloaded_file = max(flac_files, key=os.path.getctime)
-                                else:
-                                    raise Exception("Downloaded file not found")
-                        else:
-                            raise Exception("Deezer download failed")
-                    else: 
-                        track_id = track.id
-                        self.progress.emit(f"Getting track info for ID: {track_id} from {self.service}", 0)
-                        
+                        return {
+                            "status": "skipped",
+                            "track": track,
+                            "message": f"Skipped (exists): {track.title} - {track.artists}",
+                            "service": None,
+                        }
+
+                    primary_service = (self.service or "tidal").lower()
+                    candidate_services = [primary_service]
+                    if self.fallback_enabled:
+                        for svc in ("tidal", "deezer"):
+                            if svc not in candidate_services:
+                                candidate_services.append(svc)
+
+                    services_sequence = []
+                    for svc in candidate_services:
+                        if svc and svc not in services_sequence:
+                            services_sequence.append(svc)
+                    if not services_sequence:
+                        services_sequence.append("tidal")
+
+                    service_label_map = {
+                        "tidal": "Tidal",
+                        "deezer": "Deezer",
+                    }
+
+                    first_service_label = service_label_map.get(services_sequence[0], services_sequence[0].capitalize())
+                    self.progress.emit(
+                        f"Starting download ({index + 1}/{total_tracks}) via {first_service_label}: {track.title} - {track.artists}",
+                        0,
+                    )
+
+                    def attempt_service_once(service_name):
+                        service_label = service_label_map.get(service_name, service_name.capitalize())
+                        staging_dir = self._build_staging_dir(track_outpath, track, service_name, index)
+                        self._prepare_staging_dir(staging_dir)
                         try:
-                            loop = asyncio.get_event_loop()
-                            if loop.is_closed():
-                                loop = asyncio.new_event_loop()
-                                asyncio.set_event_loop(loop)
-                        except RuntimeError:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                        
-                        metadata = loop.run_until_complete(downloader.get_track_info(track_id, self.service))
-                        self.progress.emit(f"Track info received, starting download process", 0)
-                        
-                        is_paused_callback = lambda: self.is_paused
-                        is_stopped_callback = lambda: self.is_stopped
-                        
-                        downloaded_file = downloader.download(
-                            metadata, 
-                            track_outpath,
-                            is_paused_callback=is_paused_callback,
-                            is_stopped_callback=is_stopped_callback
+                            downloaded_file = None
+
+                            if service_name == "tidal":
+                                if not track.isrc:
+                                    self.progress.emit(f"[{service_label}] No ISRC found for track: {track.title}. Skipping.", 0)
+                                    self._cleanup_staging_dir(staging_dir)
+                                    return {
+                                        "status": "failed",
+                                        "track": track,
+                                        "error": f"[{service_label}] No ISRC available",
+                                        "service": service_name,
+                                    }
+
+                                downloader = TidalDownloader()
+                                downloader.set_progress_callback(progress_update)
+
+                                self.progress.emit(
+                                    f"[{service_label}] Searching by ISRC {track.isrc} for {track.title} - {track.artists}",
+                                    0,
+                                )
+                                is_paused_callback = lambda: self.is_paused
+                                is_stopped_callback = lambda: self.is_stopped
+
+                                download_result_details = downloader.download(
+                                    query=f"{track.title} {track.artists}",
+                                    isrc=track.isrc,
+                                    output_dir=staging_dir,
+                                    quality="LOSSLESS",
+                                    is_paused_callback=is_paused_callback,
+                                    is_stopped_callback=is_stopped_callback,
+                                )
+
+                                if isinstance(download_result_details, str) and os.path.exists(download_result_details):
+                                    downloaded_file = download_result_details
+                                elif (
+                                    isinstance(download_result_details, dict)
+                                    and download_result_details.get("success") is False
+                                    and download_result_details.get("error") == "Download stopped by user"
+                                ):
+                                    self._cleanup_staging_dir(staging_dir)
+                                    return {"status": "stopped", "track": track, "service": service_name}
+                                elif isinstance(download_result_details, dict) and download_result_details.get("success") is False:
+                                    raise Exception(download_result_details.get("error", "Download failed"))
+                                elif isinstance(download_result_details, dict) and (
+                                    download_result_details.get("status") == "all_skipped"
+                                    or download_result_details.get("status") == "skipped_exists"
+                                ):
+                                    self.progress.emit(f"[{service_label}] File already exists or skipped: {new_filename}", 0)
+                                    self._cleanup_staging_dir(staging_dir)
+                                    return {
+                                        "status": "skipped",
+                                        "track": track,
+                                        "message": f"[{service_label}] Skipped (exists): {track.title} - {track.artists}",
+                                        "service": service_name,
+                                    }
+                                else:
+                                    raise Exception(f"Unexpected response: {download_result_details}")
+
+                            elif service_name == "deezer":
+                                if not track.isrc:
+                                    self.progress.emit(f"[{service_label}] No ISRC found for track: {track.title}. Skipping.", 0)
+                                    self._cleanup_staging_dir(staging_dir)
+                                    return {
+                                        "status": "failed",
+                                        "track": track,
+                                        "error": f"[{service_label}] No ISRC available",
+                                        "service": service_name,
+                                    }
+
+                                downloader = DeezerDownloader()
+                                downloader.set_progress_callback(progress_update)
+
+                                self.progress.emit(f"[{service_label}] Downloading via ISRC {track.isrc}", 0)
+
+                                success = asyncio.run(downloader.download_by_isrc(track.isrc, staging_dir))
+
+                                if success:
+                                    safe_title = "".join(c for c in track.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                                    safe_artist = "".join(c for c in track.artists if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                                    expected_filename = f"{safe_artist} - {safe_title}.flac"
+                                    downloaded_file = os.path.join(staging_dir, expected_filename)
+
+                                    if not os.path.exists(downloaded_file):
+                                        import glob
+
+                                        flac_files = glob.glob(os.path.join(staging_dir, "*.flac"))
+                                        if flac_files:
+                                            downloaded_file = max(flac_files, key=os.path.getctime)
+                                        else:
+                                            raise Exception("Downloaded file not found")
+                                else:
+                                    raise Exception("Download failed")
+
+                            else:
+                                downloader = TidalDownloader()
+                                downloader.set_progress_callback(progress_update)
+
+                                track_id = track.id
+                                self.progress.emit(f"[{service_label}] Fetching track info for ID: {track_id}", 0)
+
+                                try:
+                                    loop = asyncio.get_event_loop()
+                                    if loop.is_closed():
+                                        loop = asyncio.new_event_loop()
+                                        asyncio.set_event_loop(loop)
+                                except RuntimeError:
+                                    loop = asyncio.new_event_loop()
+                                    asyncio.set_event_loop(loop)
+
+                                metadata = loop.run_until_complete(downloader.get_track_info(track_id, service_name))
+                                self.progress.emit(f"[{service_label}] Track info received; starting download", 0)
+
+                                is_paused_callback = lambda: self.is_paused
+                                is_stopped_callback = lambda: self.is_stopped
+
+                                downloaded_file = downloader.download(
+                                    metadata,
+                                    staging_dir,
+                                    is_paused_callback=is_paused_callback,
+                                    is_stopped_callback=is_stopped_callback,
+                                )
+
+                            if self.is_stopped:
+                                self._cleanup_staging_dir(staging_dir)
+                                return {"status": "stopped", "track": track, "service": service_name}
+
+                            if downloaded_file and os.path.exists(downloaded_file):
+                                if downloaded_file == new_filepath:
+                                    self.progress.emit(f"[{service_label}] File already exists: {new_filename}", 0)
+                                    self._cleanup_staging_dir(staging_dir)
+                                    return {
+                                        "status": "skipped",
+                                        "track": track,
+                                        "message": f"[{service_label}] Skipped (exists): {track.title} - {track.artists}",
+                                        "service": service_name,
+                                    }
+
+                                if downloaded_file != new_filepath:
+                                    renamed_successfully = False
+                                    try:
+                                        os.rename(downloaded_file, new_filepath)
+                                        renamed_successfully = True
+                                        self.progress.emit(f"[{service_label}] File renamed to: {new_filename}", 0)
+                                    except OSError as e:
+                                        self.progress.emit(
+                                            f"[{service_label}] Warning: Could not rename file {downloaded_file} to {new_filepath}: {str(e)}",
+                                            0,
+                                        )
+                                        try:
+                                            fallback_filename = os.path.join(
+                                                track_outpath,
+                                                f"{Path(downloaded_file).stem}_{service_label.lower()}_{int(time.time())}.flac"
+                                            )
+                                            shutil.move(downloaded_file, fallback_filename)
+                                            self.progress.emit(
+                                                f"[{service_label}] Saved download as {Path(fallback_filename).name} to avoid data loss.",
+                                                0,
+                                            )
+                                            downloaded_file = fallback_filename
+                                            renamed_successfully = True
+                                        except Exception as move_err:
+                                            self.progress.emit(
+                                                f"[{service_label}] Error while preserving file after rename failure: {move_err}",
+                                                0,
+                                            )
+                                    finally:
+                                        if renamed_successfully and os.path.dirname(downloaded_file) == staging_dir:
+                                            downloaded_file = new_filepath
+
+                                if os.path.dirname(downloaded_file) == staging_dir:
+                                    self._cleanup_staging_dir(staging_dir)
+                            else:
+                                raise Exception("Download failed or file not found")
+
+                            return {
+                                "status": "success",
+                                "track": track,
+                                "message": f"[{service_label}] Successfully downloaded: {track.title} - {track.artists}",
+                                "service": service_name,
+                            }
+                        except Exception as e:
+                            self._cleanup_staging_dir(staging_dir)
+                            return {
+                                "status": "failed",
+                                "track": track,
+                                "error": f"[{service_label}] {str(e)}",
+                                "service": service_name,
+                            }
+
+                    def perform_service_with_retries(service_name):
+                        service_label = service_label_map.get(service_name, service_name.capitalize())
+                        last_failure_local = None
+
+                        for attempt in range(1, self.retry_attempts + 1):
+                            if wait_for_resume():
+                                return {"status": "stopped", "track": track, "service": service_name}
+
+                            if attempt > 1:
+                                self.progress.emit(
+                                    f"[{service_label}] Attempt {attempt}/{self.retry_attempts} for {track.title} - {track.artists}",
+                                    0,
+                                )
+
+                            result = attempt_service_once(service_name)
+
+                            if result["status"] in ("success", "skipped"):
+                                if result["status"] == "success" and attempt > 1:
+                                    result["message"] = f"{result['message']} (after {attempt} attempts)"
+                                return result
+
+                            if result["status"] == "stopped":
+                                return result
+
+                            last_failure_local = result
+
+                            if attempt < self.retry_attempts and not self.is_stopped:
+                                error_msg = result.get("error", "Unknown error")
+                                self.progress.emit(
+                                    f"[{service_label}] Retrying in 2s (attempt {attempt + 1}/{self.retry_attempts}) for {track.title} - {track.artists}: {error_msg}",
+                                    0,
+                                )
+                                time.sleep(2)
+
+                        if last_failure_local and last_failure_local["status"] == "failed" and self.retry_attempts > 1:
+                            error_msg = last_failure_local.get("error", "Unknown error")
+                            last_failure_local["error"] = f"{error_msg} (after {self.retry_attempts} attempts)"
+
+                        return last_failure_local or {
+                            "status": "failed",
+                            "track": track,
+                            "error": f"[{service_label}] Unknown error",
+                            "service": service_name,
+                        }
+
+                    last_failure = None
+
+                    for service_index, service_name in enumerate(services_sequence):
+                        service_label = service_label_map.get(service_name, service_name.capitalize())
+
+                        if service_index > 0:
+                            self.progress.emit(
+                                f"Trying fallback via {service_label}: {track.title} - {track.artists}",
+                                0,
+                            )
+
+                        result = perform_service_with_retries(service_name)
+
+                        if result["status"] in ("success", "skipped"):
+                            return result
+
+                        if result["status"] == "stopped":
+                            return result
+
+                        last_failure = result
+
+                        if service_index < len(services_sequence) - 1:
+                            next_service = services_sequence[service_index + 1]
+                            next_label = service_label_map.get(next_service, next_service.capitalize())
+                            error_msg = result.get("error", "Unknown error")
+                            self.progress.emit(
+                                f"[{service_label}] Failed for {track.title} - {track.artists}. Switching to {next_label}. Reason: {error_msg}",
+                                0,
+                            )
+
+                    return last_failure or {
+                        "status": "failed",
+                        "track": track,
+                        "error": "Unknown error",
+                        "service": services_sequence[-1] if services_sequence else None,
+                    }
+
+            futures = {}
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for index, track in enumerate(self.tracks):
+                    if self.is_stopped:
+                        break
+                    futures[executor.submit(download_single_track, index, track)] = index
+
+                for future in as_completed(futures):
+                    if self.is_stopped:
+                        break
+                    result = future.result()
+
+                    if result["status"] == "stopped":
+                        continue
+
+                    with completion_lock:
+                        completed_count += 1
+                        percent = int((completed_count / total_tracks) * 100)
+
+                    track = result["track"]
+
+                    if result["status"] == "success":
+                        self.successful_tracks.append(track)
+                        message = result.get("message") or f"Successfully downloaded: {track.title} - {track.artists}"
+                        self.progress.emit(message, percent)
+                    elif result["status"] == "skipped":
+                        self.skipped_tracks.append(track)
+                        message = result.get("message") or f"Skipped: {track.title} - {track.artists}"
+                        self.progress.emit(message, percent)
+                    elif result["status"] == "failed":
+                        error = result.get("error", "Unknown error")
+                        self.failed_tracks.append((track.title, track.artists, error))
+                        self.progress.emit(
+                            f"Failed to download: {track.title} - {track.artists}\nError: {error}",
+                            percent,
                         )
-                    if self.is_stopped: 
-                        return
 
-                    if downloaded_file and os.path.exists(downloaded_file):
-                        if downloaded_file == new_filepath:
-                            self.progress.emit(f"File already exists: {new_filename}", 0)
-                            self.progress.emit(f"Skipped: {track.title} - {track.artists}", 
-                                        int((i + 1) / total_tracks * 100))
-                            self.skipped_tracks.append(track)
-                            continue
-                        
-                        if downloaded_file != new_filepath:
-                            try:
-                                os.rename(downloaded_file, new_filepath)
-                                self.progress.emit(f"File renamed to: {new_filename}", 0)
-                            except OSError as e:
-                                self.progress.emit(f"Warning: Could not rename file {downloaded_file} to {new_filepath}: {str(e)}", 0)
-                                pass
-                    else:
-                        raise Exception(f"Download failed or file not found: {downloaded_file}")
-                    
-                    self.progress.emit(f"Successfully downloaded: {track.title} - {track.artists}", 
-                                    int((i + 1) / total_tracks * 100))
-                    self.successful_tracks.append(track)
-                except Exception as e:
-                    self.failed_tracks.append((track.title, track.artists, str(e)))
-                    self.progress.emit(f"Failed to download: {track.title} - {track.artists}\nError: {str(e)}", 
-                                    int((i + 1) / total_tracks * 100))
-                    continue
+                if self.is_stopped:
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    return
 
-            if not self.is_stopped:
-                success_message = "Download completed!"
-                if self.failed_tracks:
-                    success_message += f"\n\nFailed downloads: {len(self.failed_tracks)} tracks"
-                if self.successful_tracks:
-                    success_message += f"\n\nSuccessful downloads: {len(self.successful_tracks)} tracks"
-                if self.skipped_tracks:
-                    success_message += f"\n\nSkipped (already exists): {len(self.skipped_tracks)} tracks"
-                self.finished.emit(True, success_message, self.failed_tracks, self.successful_tracks, self.skipped_tracks)
-                
+            success_message = "Download completed!"
+            if self.failed_tracks:
+                success_message += f"\n\nFailed downloads: {len(self.failed_tracks)} tracks"
+            if self.successful_tracks:
+                success_message += f"\n\nSuccessful downloads: {len(self.successful_tracks)} tracks"
+            if self.skipped_tracks:
+                success_message += f"\n\nSkipped (already exists): {len(self.skipped_tracks)} tracks"
+            self.finished.emit(True, success_message, self.failed_tracks, self.successful_tracks, self.skipped_tracks)
+
         except Exception as e:
             self.finished.emit(False, str(e), self.failed_tracks, self.successful_tracks, self.skipped_tracks)
 
@@ -474,6 +739,8 @@ class SpotiFLACGUI(QWidget):
         self.current_theme_color = self.settings.value('theme_color', '#2196F3')
         self.track_list_format = self.settings.value('track_list_format', 'track_artist_date_duration')
         self.date_format = self.settings.value('date_format', 'dd_mm_yyyy')
+        self.download_retry_attempts = self.settings.value('download_retry_attempts', 3, type=int)
+        self.enable_service_fallback = self.settings.value('enable_service_fallback', False, type=bool)
         
         self.elapsed_time = QTime(0, 0, 0)
         self.timer = QTimer(self)
@@ -1034,6 +1301,40 @@ class SpotiFLACGUI(QWidget):
         
         service_fallback_layout.addStretch()
         auth_layout.addLayout(service_fallback_layout)
+
+        download_group = QWidget()
+        download_layout = QVBoxLayout(download_group)
+        download_layout.setSpacing(2)
+        download_layout.setContentsMargins(0, 0, 0, 0)
+
+        download_label = QLabel('Download Settings')
+        download_label.setStyleSheet("font-weight: bold; margin-top: 8px; margin-bottom: 5px;")
+        download_layout.addWidget(download_label)
+
+        retry_layout = QHBoxLayout()
+        retry_label = QLabel('Retry Attempts:')
+        retry_label.setFixedWidth(110)
+
+        self.retry_attempts_spin = QSpinBox()
+        self.retry_attempts_spin.setRange(1, 5)
+        self.retry_attempts_spin.setValue(self.download_retry_attempts)
+        self.retry_attempts_spin.setToolTip("Total attempts per track (including the first try).")
+        self.retry_attempts_spin.valueChanged.connect(self.save_retry_attempts)
+
+        retry_layout.addWidget(retry_label)
+        retry_layout.addWidget(self.retry_attempts_spin)
+        retry_layout.addStretch()
+
+        download_layout.addLayout(retry_layout)
+
+        self.service_fallback_checkbox = QCheckBox('Try Other Services if Primary Fails')
+        self.service_fallback_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.service_fallback_checkbox.setChecked(self.enable_service_fallback)
+        self.service_fallback_checkbox.toggled.connect(self.save_service_fallback)
+        self.service_fallback_checkbox.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+        download_layout.addWidget(self.service_fallback_checkbox)
+
+        auth_layout.addWidget(download_group)
         
         settings_layout.addWidget(auth_group)
         settings_layout.addStretch()
@@ -1302,6 +1603,16 @@ class SpotiFLACGUI(QWidget):
         if self.tracks:
             self.update_track_list_display()
     
+    def save_retry_attempts(self, value):
+        self.download_retry_attempts = int(value)
+        self.settings.setValue('download_retry_attempts', self.download_retry_attempts)
+        self.settings.sync()
+    
+    def save_service_fallback(self, checked):
+        self.enable_service_fallback = bool(checked)
+        self.settings.setValue('enable_service_fallback', self.enable_service_fallback)
+        self.settings.sync()
+
     def save_settings(self):
         self.settings.setValue('output_path', self.output_dir.text().strip())
         self.settings.sync()
@@ -1694,7 +2005,9 @@ class SpotiFLACGUI(QWidget):
             self.use_track_numbers,
             self.use_artist_subfolders,
             self.use_album_subfolders,
-            service
+            service=service,
+            retry_attempts=self.download_retry_attempts,
+            fallback_enabled=self.enable_service_fallback
         )
         self.worker.finished.connect(lambda success, message, failed_tracks, successful_tracks, skipped_tracks: self.on_download_finished(success, message, failed_tracks, successful_tracks, skipped_tracks))
         self.worker.progress.connect(self.update_progress)
