@@ -6,7 +6,7 @@
 <b>SpotiFLAC</b> allows you to download Spotify tracks in true FLAC format through services like Tidal & Deezer.
 </div>
 
-### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/download/v5.1/SpotiFLAC.exe)
+### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/download/v5.2/SpotiFLAC.exe)
 
 ## Screenshots
 
@@ -16,7 +16,7 @@
 
 ![image](https://github.com/user-attachments/assets/7507e58d-e228-4edf-adf7-675731731019)
 
-![image](https://github.com/user-attachments/assets/6191ce73-ea10-41c3-8395-e276faeffe67)
+![image](https://github.com/user-attachments/assets/e81f69f3-1552-4c12-a4e3-2f6d4b322d84)
 
 ## Lossless Audio Check
 
