@@ -213,13 +213,16 @@ class DownloadWorker(QThread):
                         is_paused_callback = lambda: self.is_paused
                         is_stopped_callback = lambda: self.is_stopped
                         
+                        auto_fallback = (self.tidal_api_url == "auto")
+                        
                         download_result_details = downloader.download(
                             query=f"{track.title} {track.artists}", 
                             isrc=track.isrc,
                             output_dir=track_outpath,
                             quality="LOSSLESS", 
                             is_paused_callback=is_paused_callback,
-                            is_stopped_callback=is_stopped_callback
+                            is_stopped_callback=is_stopped_callback,
+                            auto_fallback=auto_fallback
                         )
                         
                         if isinstance(download_result_details, str) and os.path.exists(download_result_details): 
@@ -391,7 +394,7 @@ class ServiceStatusDelegate(QStyledItemDelegate):
 
 class TidalAPIDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
-        item_data = index.data(Qt.ItemDataRole.UserRole)
+        item_data = index.data(Qt.ItemDataRole.UserRole + 1)
         
         super().paint(painter, option, index)
         
@@ -532,7 +535,7 @@ class ServiceComboBox(QComboBox):
 class SpotiFLACGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.current_version = "5.1"
+        self.current_version = "5.2"
         self.tracks = []
         self.all_tracks = []  
         self.successful_downloads = []
@@ -1153,8 +1156,8 @@ class SpotiFLACGUI(QWidget):
         
         self.tidal_api_dropdown = QComboBox()
         self.tidal_api_dropdown.setItemDelegate(TidalAPIDelegate())
-        self.tidal_api_dropdown.addItem("Default (401658)", "https://hifi.401658.xyz")
-        self.tidal_api_dropdown.addItem("Auto-select fastest", "auto")
+        self.tidal_api_dropdown.addItem("Default", "https://hifi.401658.xyz")
+        self.tidal_api_dropdown.addItem("Auto Fallback", "auto")
         self.tidal_api_dropdown.currentIndexChanged.connect(self.on_tidal_api_changed)
         
         self.refresh_api_btn = QPushButton('Refresh')
@@ -1458,7 +1461,7 @@ class SpotiFLACGUI(QWidget):
                     
                     self.tidal_api_dropdown.addItem(label, url)
                     item_index = self.tidal_api_dropdown.count() - 1
-                    self.tidal_api_dropdown.setItemData(item_index, status_data, Qt.ItemDataRole.UserRole)
+                    self.tidal_api_dropdown.setItemData(item_index, status_data, Qt.ItemDataRole.UserRole + 1)
                 
                 self.log_output.append(f"Found {len(apis)} available Tidal APIs")
             else:
@@ -1926,15 +1929,11 @@ class SpotiFLACGUI(QWidget):
         if service == "tidal":
             selected_api = self.tidal_api_dropdown.currentData()
             if selected_api == "auto":
-                apis = TidalDownloader.get_available_apis()
-                if apis:
-                    tidal_api_url = apis[0]['url']
-                    self.log_output.append(f"Auto-selected fastest API: {tidal_api_url}")
-                else:
-                    tidal_api_url = "https://hifi.401658.xyz"
-                    self.log_output.append("Using default API: https://hifi.401658.xyz")
+                tidal_api_url = "auto"
+                self.log_output.append("Using auto fallback mode (will try multiple APIs)")
             else:
                 tidal_api_url = selected_api
+                self.log_output.append(f"Using API: {selected_api}")
         
         self.worker = DownloadWorker(
             tracks_to_download, 

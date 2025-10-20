@@ -385,13 +385,46 @@ class TidalDownloader:
             print(f"Error embedding metadata: {str(e)}")
             return False
 
-    def download(self, query, isrc=None, output_dir=".", quality="LOSSLESS", is_paused_callback=None, is_stopped_callback=None):
+    def download(self, query, isrc=None, output_dir=".", quality="LOSSLESS", is_paused_callback=None, is_stopped_callback=None, auto_fallback=False):
         if output_dir != ".":
             try:
                 os.makedirs(output_dir, exist_ok=True)
             except OSError as e:
                 raise Exception(f"Directory error: {e}")
-                
+        
+        if auto_fallback:
+            apis = self.get_available_apis()
+            if not apis:
+                print("No APIs available for fallback, using current API")
+                return self._download_single(query, isrc, output_dir, quality, is_paused_callback, is_stopped_callback)
+            
+            last_error = None
+            for i, api in enumerate(apis, 1):
+                api_url = api.get('url')
+                try:
+                    print(f"[Auto Fallback {i}/{len(apis)}] Trying: {api_url}")
+                    
+                    fallback_downloader = TidalDownloader(api_url=api_url)
+                    fallback_downloader.set_progress_callback(self.progress_callback)
+                    
+                    result = fallback_downloader._download_single(
+                        query, isrc, output_dir, quality, 
+                        is_paused_callback, is_stopped_callback
+                    )
+                    
+                    print(f"✓ Success with: {api_url}")
+                    return result
+                    
+                except Exception as e:
+                    last_error = str(e)
+                    print(f"✗ Failed with {api_url}: {last_error[:80]}")
+                    continue
+            
+            raise Exception(f"All {len(apis)} APIs failed. Last error: {last_error}")
+        
+        return self._download_single(query, isrc, output_dir, quality, is_paused_callback, is_stopped_callback)
+    
+    def _download_single(self, query, isrc, output_dir, quality, is_paused_callback, is_stopped_callback):
         track_info = self.get_track_info(query, isrc)
         track_id = track_info.get("id")
         
