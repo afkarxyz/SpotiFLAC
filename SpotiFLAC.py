@@ -6,6 +6,7 @@ from pathlib import Path
 import requests
 import re
 import asyncio
+import json
 from packaging import version
 import qdarktheme
 from mutagen.flac import FLAC
@@ -83,7 +84,7 @@ class DownloadWorker(QThread):
     
     def __init__(self, tracks, outpath, is_single_track=False, is_album=False, is_playlist=False,
                  album_or_playlist_name='', filename_format='title_artist', use_track_numbers=True,
-                 use_artist_subfolders=False, use_album_subfolders=False, service="tidal"):
+                 use_artist_subfolders=False, use_album_subfolders=False, service="tidal", tidal_api_url=None):
         super().__init__()
         self.tracks = tracks
         self.outpath = outpath
@@ -96,6 +97,7 @@ class DownloadWorker(QThread):
         self.use_artist_subfolders = use_artist_subfolders
         self.use_album_subfolders = use_album_subfolders
         self.service = service
+        self.tidal_api_url = tidal_api_url
         self.is_paused = False
         self.is_stopped = False
         self.failed_tracks = []
@@ -123,11 +125,11 @@ class DownloadWorker(QThread):
     def run(self):
         try:
             if self.service == "tidal": 
-                downloader = TidalDownloader()            
+                downloader = TidalDownloader(api_url=self.tidal_api_url)            
             elif self.service == "deezer":
                 downloader = DeezerDownloader()
             else:
-                downloader = TidalDownloader()
+                downloader = TidalDownloader(api_url=self.tidal_api_url)
             
             def progress_update(current, total):
                 if total <= 0:
@@ -368,33 +370,7 @@ class UpdateDialog(QDialog):
         self.update_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
 
-class TidalStatusChecker(QThread):
-    status_updated = pyqtSignal(bool)
-    error = pyqtSignal(str)
-
-    def run(self):
-        try:
-            response = requests.get("https://tidal.401658.xyz", timeout=5)
-            is_online = response.status_code == 200 or response.status_code == 429
-            self.status_updated.emit(is_online)
-        except Exception as e:
-            self.error.emit(f"Error checking Tidal (API) status: {str(e)}")
-            self.status_updated.emit(False)
-
-class DeezerStatusChecker(QThread):
-    status_updated = pyqtSignal(bool)
-    error = pyqtSignal(str)
-
-    def run(self):
-        try:
-            response = requests.get("https://deezmate.com/", timeout=5)
-            is_online = response.status_code == 200
-            self.status_updated.emit(is_online)
-        except Exception as e:
-            self.error.emit(f"Error checking Deezer status: {str(e)}")
-            self.status_updated.emit(False)
-
-class StatusIndicatorDelegate(QStyledItemDelegate):
+class ServiceStatusDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         item_data = index.data(Qt.ItemDataRole.UserRole)
         is_online = item_data.get('online', False) if item_data else False
@@ -413,31 +389,75 @@ class StatusIndicatorDelegate(QStyledItemDelegate):
         painter.drawEllipse(circle_x, circle_y, circle_size, circle_size)
         painter.restore()
 
+class TidalAPIDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        item_data = index.data(Qt.ItemDataRole.UserRole)
+        
+        super().paint(painter, option, index)
+        
+        if item_data and isinstance(item_data, dict) and 'status' in item_data:
+            is_online = item_data.get('status') == 'UP'
+            indicator_color = Qt.GlobalColor.green if is_online else Qt.GlobalColor.red
+            
+            circle_size = 6
+            circle_y = option.rect.center().y() - circle_size // 2
+            circle_x = option.rect.right() - circle_size - 5
+            
+            painter.save()
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(indicator_color))
+            painter.drawEllipse(circle_x, circle_y, circle_size, circle_size)
+            painter.restore()
+
+class TidalStatusChecker(QThread):
+    status_updated = pyqtSignal(bool)
+    error = pyqtSignal(str)
+
+    def run(self):
+        try:
+            response = requests.get("https://status.monochrome.tf", timeout=5)
+            is_online = response.status_code == 200
+            self.status_updated.emit(is_online)
+        except Exception as e:
+            self.error.emit(f"Error checking Tidal status: {str(e)}")
+            self.status_updated.emit(False)
+
+class DeezerStatusChecker(QThread):
+    status_updated = pyqtSignal(bool)
+    error = pyqtSignal(str)
+
+    def run(self):
+        try:
+            response = requests.get("https://deezmate.com/", timeout=5)
+            is_online = response.status_code == 200
+            self.status_updated.emit(is_online)
+        except Exception as e:
+            self.error.emit(f"Error checking Deezer status: {str(e)}")
+            self.status_updated.emit(False)
+
 class ServiceComboBox(QComboBox):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setIconSize(QSize(16, 16))
-        self.services_status = {}
-        
-        self.setItemDelegate(StatusIndicatorDelegate())
+        self.setItemDelegate(ServiceStatusDelegate())
         self.setup_items()
         
         self.tidal_status_checker = TidalStatusChecker()
-        self.tidal_status_checker.status_updated.connect(self.update_tidal_service_status) 
-        self.tidal_status_checker.error.connect(lambda e: print(f"Tidal status check error: {e}")) 
+        self.tidal_status_checker.status_updated.connect(self.update_tidal_status)
+        self.tidal_status_checker.error.connect(lambda e: print(f"Tidal status check error: {e}"))
         self.tidal_status_checker.start()
 
         self.tidal_status_timer = QTimer(self)
-        self.tidal_status_timer.timeout.connect(self.refresh_tidal_status) 
-        self.tidal_status_timer.start(60000)  
+        self.tidal_status_timer.timeout.connect(self.refresh_tidal_status)
+        self.tidal_status_timer.start(60000)
         
         self.deezer_status_checker = DeezerStatusChecker()
-        self.deezer_status_checker.status_updated.connect(self.update_deezer_service_status) 
-        self.deezer_status_checker.error.connect(lambda e: print(f"Deezer status check error: {e}")) 
+        self.deezer_status_checker.status_updated.connect(self.update_deezer_status)
+        self.deezer_status_checker.error.connect(lambda e: print(f"Deezer status check error: {e}"))
         self.deezer_status_checker.start()
 
         self.deezer_status_timer = QTimer(self)
-        self.deezer_status_timer.timeout.connect(self.refresh_deezer_status) 
+        self.deezer_status_timer.timeout.connect(self.refresh_deezer_status)
         self.deezer_status_timer.start(60000)  
         
     def setup_items(self):
@@ -463,42 +483,47 @@ class ServiceComboBox(QComboBox):
         pixmap = QPixmap(16, 16)
         pixmap.fill(Qt.GlobalColor.transparent)
         pixmap.save(path)
-
-    def update_service_status(self, service_id, is_online):
+    
+    def update_tidal_status(self, is_online):
         for i in range(self.count()):
-            current_service_id = self.itemData(i, Qt.ItemDataRole.UserRole + 1)
-            if current_service_id == service_id:
+            service_id = self.itemData(i, Qt.ItemDataRole.UserRole + 1)
+            if service_id == 'tidal':
                 service_data = self.itemData(i, Qt.ItemDataRole.UserRole)
                 if isinstance(service_data, dict):
                     service_data['online'] = is_online
                     self.setItemData(i, service_data, Qt.ItemDataRole.UserRole)
-                break 
+                break
         self.update()
-        
-    def update_tidal_service_status(self, is_online): 
-        self.update_service_status('tidal', is_online)
-        
+    
     def refresh_tidal_status(self):
         if hasattr(self, 'tidal_status_checker') and self.tidal_status_checker.isRunning():
             self.tidal_status_checker.quit()
             self.tidal_status_checker.wait()
-            
-        self.tidal_status_checker = TidalStatusChecker() 
-        self.tidal_status_checker.status_updated.connect(self.update_tidal_service_status)
-        self.tidal_status_checker.error.connect(lambda e: print(f"Tidal status check error: {e}")) 
+        
+        self.tidal_status_checker = TidalStatusChecker()
+        self.tidal_status_checker.status_updated.connect(self.update_tidal_status)
+        self.tidal_status_checker.error.connect(lambda e: print(f"Tidal status check error: {e}"))
         self.tidal_status_checker.start()
-        
-    def update_deezer_service_status(self, is_online): 
-        self.update_service_status('deezer', is_online)
-        
+    
+    def update_deezer_status(self, is_online):
+        for i in range(self.count()):
+            service_id = self.itemData(i, Qt.ItemDataRole.UserRole + 1)
+            if service_id == 'deezer':
+                service_data = self.itemData(i, Qt.ItemDataRole.UserRole)
+                if isinstance(service_data, dict):
+                    service_data['online'] = is_online
+                    self.setItemData(i, service_data, Qt.ItemDataRole.UserRole)
+                break
+        self.update()
+    
     def refresh_deezer_status(self):
         if hasattr(self, 'deezer_status_checker') and self.deezer_status_checker.isRunning():
             self.deezer_status_checker.quit()
             self.deezer_status_checker.wait()
-            
-        self.deezer_status_checker = DeezerStatusChecker() 
-        self.deezer_status_checker.status_updated.connect(self.update_deezer_service_status)
-        self.deezer_status_checker.error.connect(lambda e: print(f"Deezer status check error: {e}")) 
+        
+        self.deezer_status_checker = DeezerStatusChecker()
+        self.deezer_status_checker.status_updated.connect(self.update_deezer_status)
+        self.deezer_status_checker.error.connect(lambda e: print(f"Deezer status check error: {e}"))
         self.deezer_status_checker.start()
         
     def currentData(self, role=Qt.ItemDataRole.UserRole + 1):
@@ -507,7 +532,7 @@ class ServiceComboBox(QComboBox):
 class SpotiFLACGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.current_version = "5.0"
+        self.current_version = "5.1"
         self.tracks = []
         self.all_tracks = []  
         self.successful_downloads = []
@@ -522,6 +547,7 @@ class SpotiFLACGUI(QWidget):
         self.use_artist_subfolders = self.settings.value('use_artist_subfolders', False, type=bool)
         self.use_album_subfolders = self.settings.value('use_album_subfolders', False, type=bool)
         self.service = self.settings.value('service', 'tidal')
+        self.tidal_api = self.settings.value('tidal_api', 'https://hifi.401658.xyz')
         self.check_for_updates = self.settings.value('check_for_updates', True, type=bool)
         self.current_theme_color = self.settings.value('theme_color', '#2196F3')
         self.track_list_format = self.settings.value('track_list_format', 'track_artist_date_duration')
@@ -1109,17 +1135,44 @@ class SpotiFLACGUI(QWidget):
         auth_label.setStyleSheet("font-weight: bold; margin-top: 8px; margin-bottom: 5px;")
         auth_layout.addWidget(auth_label)
 
-        service_fallback_layout = QHBoxLayout()
+        service_api_layout = QHBoxLayout()
 
         service_label = QLabel('Service:')
+        service_label.setFixedWidth(60)
         
         self.service_dropdown = ServiceComboBox()
+        self.service_dropdown.setFixedWidth(120)
         self.service_dropdown.currentIndexChanged.connect(self.on_service_changed)
-        service_fallback_layout.addWidget(service_label)
-        service_fallback_layout.addWidget(self.service_dropdown)
         
-        service_fallback_layout.addStretch()
-        auth_layout.addLayout(service_fallback_layout)
+        service_api_layout.addWidget(service_label)
+        service_api_layout.addWidget(self.service_dropdown)
+        service_api_layout.addSpacing(15)
+        
+        self.tidal_api_label = QLabel('Tidal API:')
+        self.tidal_api_label.setFixedWidth(70)
+        
+        self.tidal_api_dropdown = QComboBox()
+        self.tidal_api_dropdown.setItemDelegate(TidalAPIDelegate())
+        self.tidal_api_dropdown.addItem("Default (401658)", "https://hifi.401658.xyz")
+        self.tidal_api_dropdown.addItem("Auto-select fastest", "auto")
+        self.tidal_api_dropdown.currentIndexChanged.connect(self.on_tidal_api_changed)
+        
+        self.refresh_api_btn = QPushButton('Refresh')
+        self.refresh_api_btn.setFixedWidth(80)
+        self.refresh_api_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.refresh_api_btn.clicked.connect(self.refresh_tidal_apis)
+        
+        service_api_layout.addWidget(self.tidal_api_label)
+        service_api_layout.addWidget(self.tidal_api_dropdown)
+        service_api_layout.addSpacing(5)
+        service_api_layout.addWidget(self.refresh_api_btn)
+        service_api_layout.addStretch()
+        
+        auth_layout.addLayout(service_api_layout)
+        
+        self.refresh_tidal_apis()
+        
+        self.update_tidal_api_visibility()
         
         settings_layout.addWidget(auth_group)
         settings_layout.addStretch()
@@ -1128,6 +1181,8 @@ class SpotiFLACGUI(QWidget):
         self.set_combobox_value(self.service_dropdown, self.service)
         self.set_combobox_value(self.track_list_format_dropdown, self.track_list_format)
         self.set_combobox_value(self.date_format_dropdown, self.date_format)
+        
+        self.set_combobox_value(self.tidal_api_dropdown, self.tidal_api)
         
     def setup_theme_tab(self):
         theme_tab = QWidget()
@@ -1361,6 +1416,55 @@ class SpotiFLACGUI(QWidget):
         self.settings.setValue('service', service)
         self.settings.sync()
         self.log_output.append(f"Service changed to: {self.service_dropdown.currentText()}")
+        self.update_tidal_api_visibility()
+    
+    def update_tidal_api_visibility(self):
+        is_tidal = self.service_dropdown.currentData() == 'tidal'
+        self.tidal_api_label.setVisible(is_tidal)
+        self.tidal_api_dropdown.setVisible(is_tidal)
+        self.refresh_api_btn.setVisible(is_tidal)
+    
+    def on_tidal_api_changed(self, index):
+        selected_api = self.tidal_api_dropdown.currentData()
+        if selected_api:
+            self.tidal_api = selected_api
+            self.settings.setValue('tidal_api', selected_api)
+            self.settings.sync()
+            self.log_output.append(f"Tidal API changed to: {self.tidal_api_dropdown.currentText()}")
+    
+    def refresh_tidal_apis(self):
+        try:
+            self.log_output.append("Fetching available Tidal APIs...")
+            apis = TidalDownloader.get_available_apis()
+            
+            while self.tidal_api_dropdown.count() > 2:
+                self.tidal_api_dropdown.removeItem(2)
+            
+            if apis:
+                for api in apis:
+                    url = api.get('url', '')
+                    uptime = api.get('uptime', 0)
+                    avg_time = api.get('avg_response_time', 0)
+                    status = "UP" if api.get('last_check', {}).get('success') else "DOWN"
+                    
+                    domain = url.replace('https://', '').replace('http://', '')
+                    label = f"{domain} ({uptime:.0f}%, {avg_time}ms)"
+                    
+                    status_data = {
+                        'status': status,
+                        'uptime': uptime,
+                        'avg_time': avg_time
+                    }
+                    
+                    self.tidal_api_dropdown.addItem(label, url)
+                    item_index = self.tidal_api_dropdown.count() - 1
+                    self.tidal_api_dropdown.setItemData(item_index, status_data, Qt.ItemDataRole.UserRole)
+                
+                self.log_output.append(f"Found {len(apis)} available Tidal APIs")
+            else:
+                self.log_output.append("No APIs found, using default")
+        except Exception as e:
+            self.log_output.append(f"Error fetching APIs: {str(e)}")
 
     def save_url(self):
         self.settings.setValue('spotify_url', self.spotify_url.text().strip())
@@ -1818,6 +1922,20 @@ class SpotiFLACGUI(QWidget):
     def start_download_worker(self, tracks_to_download, outpath):
         service = self.service_dropdown.currentData()
         
+        tidal_api_url = None
+        if service == "tidal":
+            selected_api = self.tidal_api_dropdown.currentData()
+            if selected_api == "auto":
+                apis = TidalDownloader.get_available_apis()
+                if apis:
+                    tidal_api_url = apis[0]['url']
+                    self.log_output.append(f"Auto-selected fastest API: {tidal_api_url}")
+                else:
+                    tidal_api_url = "https://hifi.401658.xyz"
+                    self.log_output.append("Using default API: https://hifi.401658.xyz")
+            else:
+                tidal_api_url = selected_api
+        
         self.worker = DownloadWorker(
             tracks_to_download, 
             outpath,
@@ -1829,7 +1947,8 @@ class SpotiFLACGUI(QWidget):
             self.use_track_numbers,
             self.use_artist_subfolders,
             self.use_album_subfolders,
-            service
+            service,
+            tidal_api_url
         )
         self.worker.finished.connect(lambda success, message, failed_tracks, successful_tracks, skipped_tracks: self.on_download_finished(success, message, failed_tracks, successful_tracks, skipped_tracks))
         self.worker.progress.connect(self.update_progress)
