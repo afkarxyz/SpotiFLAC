@@ -57,7 +57,7 @@ class TidalDownloader:
             print("No APIs available, using default: https://hifi.401658.xyz")
             return "https://hifi.401658.xyz"
         
-        print("\n=== Available Tidal APIs ===")
+        print("\n=== Available API Instances ===")
         print(f"{'No':<4} {'URL':<40} {'Status':<8} {'Uptime':<8} {'Avg Response':<12}")
         print("-" * 80)
         
@@ -253,6 +253,10 @@ class TidalDownloader:
             return None
 
     def download_file(self, url, filepath, is_paused_callback=None, is_stopped_callback=None):
+        file_dir = os.path.dirname(filepath)
+        if file_dir and not os.path.exists(file_dir):
+            os.makedirs(file_dir, exist_ok=True)
+        
         temp_filepath = filepath + ".part"
         retry_count = 0
         

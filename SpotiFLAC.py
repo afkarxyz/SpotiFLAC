@@ -157,10 +157,12 @@ class DownloadWorker(QThread):
                         if self.use_artist_subfolders:
                             artist_name = track.artists.split(', ')[0] if ', ' in track.artists else track.artists
                             artist_folder = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', artist_name)
+                            artist_folder = artist_folder.rstrip('. ')
                             track_outpath = os.path.join(track_outpath, artist_folder)
                         
                         if self.use_album_subfolders:
                             album_folder = re.sub(r'[<>:"/\\|?*]', lambda m: "'" if m.group() == '"' else '_', track.album)
+                            album_folder = album_folder.rstrip('. ')
                             track_outpath = os.path.join(track_outpath, album_folder)
                         
                         os.makedirs(track_outpath, exist_ok=True)
@@ -535,7 +537,7 @@ class ServiceComboBox(QComboBox):
 class SpotiFLACGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.current_version = "5.2"
+        self.current_version = "5.3"
         self.tracks = []
         self.all_tracks = []  
         self.successful_downloads = []
@@ -1141,18 +1143,18 @@ class SpotiFLACGUI(QWidget):
         service_api_layout = QHBoxLayout()
 
         service_label = QLabel('Service:')
-        service_label.setFixedWidth(60)
+        service_label.setFixedWidth(53)
         
         self.service_dropdown = ServiceComboBox()
-        self.service_dropdown.setFixedWidth(120)
+        self.service_dropdown.setFixedWidth(100)
         self.service_dropdown.currentIndexChanged.connect(self.on_service_changed)
         
         service_api_layout.addWidget(service_label)
         service_api_layout.addWidget(self.service_dropdown)
         service_api_layout.addSpacing(15)
         
-        self.tidal_api_label = QLabel('Tidal API:')
-        self.tidal_api_label.setFixedWidth(70)
+        self.tidal_api_label = QLabel('API Instances:')
+        self.tidal_api_label.setFixedWidth(85)
         
         self.tidal_api_dropdown = QComboBox()
         self.tidal_api_dropdown.setItemDelegate(TidalAPIDelegate())
@@ -1166,10 +1168,9 @@ class SpotiFLACGUI(QWidget):
         self.refresh_api_btn.clicked.connect(self.refresh_tidal_apis)
         
         service_api_layout.addWidget(self.tidal_api_label)
-        service_api_layout.addWidget(self.tidal_api_dropdown)
+        service_api_layout.addWidget(self.tidal_api_dropdown, 1)
         service_api_layout.addSpacing(5)
         service_api_layout.addWidget(self.refresh_api_btn)
-        service_api_layout.addStretch()
         
         auth_layout.addLayout(service_api_layout)
         
@@ -1433,11 +1434,11 @@ class SpotiFLACGUI(QWidget):
             self.tidal_api = selected_api
             self.settings.setValue('tidal_api', selected_api)
             self.settings.sync()
-            self.log_output.append(f"Tidal API changed to: {self.tidal_api_dropdown.currentText()}")
+            self.log_output.append(f"API Instance changed to: {self.tidal_api_dropdown.currentText()}")
     
     def refresh_tidal_apis(self):
         try:
-            self.log_output.append("Fetching available Tidal APIs...")
+            self.log_output.append("Fetching available API instances...")
             apis = TidalDownloader.get_available_apis()
             
             while self.tidal_api_dropdown.count() > 2:
@@ -1463,7 +1464,7 @@ class SpotiFLACGUI(QWidget):
                     item_index = self.tidal_api_dropdown.count() - 1
                     self.tidal_api_dropdown.setItemData(item_index, status_data, Qt.ItemDataRole.UserRole + 1)
                 
-                self.log_output.append(f"Found {len(apis)} available Tidal APIs")
+                self.log_output.append(f"Found {len(apis)} available API instances")
             else:
                 self.log_output.append("No APIs found, using default")
         except Exception as e:
@@ -1914,6 +1915,7 @@ class SpotiFLACGUI(QWidget):
         if self.is_album or self.is_playlist:
             name = self.album_or_playlist_name.strip()
             folder_name = re.sub(r'[<>:"/\\|?*]', '_', name)
+            folder_name = folder_name.rstrip('. ')
             outpath = os.path.join(outpath, folder_name)
             os.makedirs(outpath, exist_ok=True)
 
@@ -1965,6 +1967,7 @@ class SpotiFLACGUI(QWidget):
             
         self.stop_btn.show()
         self.pause_resume_btn.show()
+        self.remove_successful_btn.hide()
         self.progress_bar.show()
         self.progress_bar.setValue(0)
         
