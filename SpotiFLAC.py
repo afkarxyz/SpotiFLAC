@@ -8,7 +8,16 @@ import re
 import asyncio
 import json
 from packaging import version
-import qdarktheme
+try:
+    import qdarktheme
+except ImportError:  # pragma: no cover - optional dependency
+    qdarktheme = None
+
+try:
+    import pyqtdarktheme
+except ImportError:  # pragma: no cover - optional dependency
+    pyqtdarktheme = None
+
 from mutagen.flac import FLAC
 
 from PyQt6.QtWidgets import (
@@ -84,7 +93,8 @@ class DownloadWorker(QThread):
     
     def __init__(self, tracks, outpath, is_single_track=False, is_album=False, is_playlist=False,
                  album_or_playlist_name='', filename_format='title_artist', use_track_numbers=True,
-                 use_artist_subfolders=False, use_album_subfolders=False, service="tidal", tidal_api_url=None):
+                 use_artist_subfolders=False, use_album_subfolders=False, service="tidal", tidal_api_url=None,
+                 deezer_fallback_enabled=False):
         super().__init__()
         self.tracks = tracks
         self.outpath = outpath
@@ -98,11 +108,77 @@ class DownloadWorker(QThread):
         self.use_album_subfolders = use_album_subfolders
         self.service = service
         self.tidal_api_url = tidal_api_url
+        self.deezer_fallback_enabled = deezer_fallback_enabled
         self.is_paused = False
         self.is_stopped = False
         self.failed_tracks = []
         self.successful_tracks = []
         self.skipped_tracks = []
+
+    def attempt_tidal_download(self, track, track_outpath, downloader, new_filename, new_filepath,
+                               auto_fallback, is_paused_callback, is_stopped_callback):
+        if not track.isrc:
+            raise Exception(f"No ISRC found for track: {track.title}. Skipping.")
+
+        self.progress.emit(
+            f"Searching and downloading from Tidal for ISRC: {track.isrc} - {track.title} - {track.artists}",
+            0
+        )
+
+        download_result_details = downloader.download(
+            query=f"{track.title} {track.artists}",
+            isrc=track.isrc,
+            output_dir=track_outpath,
+            quality="LOSSLESS",
+            is_paused_callback=is_paused_callback,
+            is_stopped_callback=is_stopped_callback,
+            auto_fallback=auto_fallback
+        )
+
+        if isinstance(download_result_details, str) and os.path.exists(download_result_details):
+            return download_result_details
+
+        if isinstance(download_result_details, dict):
+            if download_result_details.get("success") is False:
+                error = download_result_details.get("error", "Tidal download failed")
+                if error == "Download stopped by user":
+                    self.progress.emit(f"Download stopped by user for: {track.title}", 0)
+                    raise Exception(error)
+                raise Exception(error)
+            if download_result_details.get("status") in {"all_skipped", "skipped_exists"}:
+                self.progress.emit(f"File already exists or skipped: {new_filename}", 0)
+                self.skipped_tracks.append(track)
+                return new_filepath
+
+        raise Exception(f"Tidal download failed or returned unexpected result: {download_result_details}")
+
+    def attempt_deezer_download(self, track, track_outpath):
+        if not track.isrc:
+            raise Exception(f"No ISRC available for Deezer download: {track.title}")
+
+        self.progress.emit(f"Downloading from Deezer with ISRC: {track.isrc}", 0)
+
+        downloader = DeezerDownloader()
+        downloader.set_progress_callback(lambda current, total: None)
+
+        success = asyncio.run(downloader.download_by_isrc(track.isrc, track_outpath))
+        if not success:
+            raise Exception("Deezer download failed")
+
+        safe_title = "".join(c for c in track.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_artist = "".join(c for c in track.artists if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        expected_filename = f"{safe_artist} - {safe_title}.flac"
+        downloaded_file = os.path.join(track_outpath, expected_filename)
+
+        if not os.path.exists(downloaded_file):
+            import glob
+            flac_files = glob.glob(os.path.join(track_outpath, "*.flac"))
+            if flac_files:
+                downloaded_file = max(flac_files, key=os.path.getctime)
+            else:
+                raise Exception("Downloaded file not found")
+
+        return downloaded_file
 
     def get_flac_isrc(self, filepath):
         try:
@@ -206,41 +282,40 @@ class DownloadWorker(QThread):
                         continue
                     
                     if self.service == "tidal": 
-                        if not track.isrc:
-                            self.progress.emit(f"No ISRC found for track: {track.title}. Skipping.", 0)
-                            self.failed_tracks.append((track.title, track.artists, "No ISRC available"))
-                            continue
-                        
-                        self.progress.emit(f"Searching and downloading from Tidal for ISRC: {track.isrc} - {track.title} - {track.artists}", 0)
                         is_paused_callback = lambda: self.is_paused
                         is_stopped_callback = lambda: self.is_stopped
-                        
                         auto_fallback = (self.tidal_api_url == "auto")
-                        
-                        download_result_details = downloader.download(
-                            query=f"{track.title} {track.artists}", 
-                            isrc=track.isrc,
-                            output_dir=track_outpath,
-                            quality="LOSSLESS", 
-                            is_paused_callback=is_paused_callback,
-                            is_stopped_callback=is_stopped_callback,
-                            auto_fallback=auto_fallback
-                        )
-                        
-                        if isinstance(download_result_details, str) and os.path.exists(download_result_details): 
-                            downloaded_file = download_result_details
-                        elif isinstance(download_result_details, dict) and download_result_details.get("success") == False and download_result_details.get("error") == "Download stopped by user":
-                            self.progress.emit(f"Download stopped by user for: {track.title}",0)
-                            return 
-                        elif isinstance(download_result_details, dict) and download_result_details.get("success") == False:
-                            raise Exception(download_result_details.get("error", "Tidal download failed"))                        
-                        elif isinstance(download_result_details, dict) and (download_result_details.get("status") == "all_skipped" or download_result_details.get("status") == "skipped_exists"):
-                            self.progress.emit(f"File already exists or skipped: {new_filename}",0)
-                            downloaded_file = new_filepath
-                            self.skipped_tracks.append(track)
-                        else: 
-                            downloaded_file = None 
-                            raise Exception(f"Tidal download failed or returned unexpected result: {download_result_details}")
+
+                        try:
+                            downloaded_file = self.attempt_tidal_download(
+                                track,
+                                track_outpath,
+                                downloader,
+                                new_filename,
+                                new_filepath,
+                                auto_fallback,
+                                is_paused_callback,
+                                is_stopped_callback
+                            )
+                        except Exception as tidal_error:
+                            error_message = str(tidal_error)
+                            if error_message == "Download stopped by user":
+                                return
+
+                            if self.deezer_fallback_enabled and not self.is_stopped:
+                                self.progress.emit(
+                                    f"Tidal fehlgeschlagen ({error_message}). Versuche Deezer-Fallback...",
+                                    0
+                                )
+                                try:
+                                    downloaded_file = self.attempt_deezer_download(track, track_outpath)
+                                    self.progress.emit("Deezer-Fallback erfolgreich.", 0)
+                                except Exception as deezer_error:
+                                    raise Exception(
+                                        f"Tidal fehlgeschlagen: {error_message}; Deezer-Fallback fehlgeschlagen: {str(deezer_error)}"
+                                    )
+                            else:
+                                raise Exception(error_message)
                     elif self.service == "deezer":
                         if not track.isrc:
                             self.progress.emit(f"No ISRC found for track: {track.title}. Skipping.", 0)
@@ -552,7 +627,12 @@ class SpotiFLACGUI(QWidget):
         self.use_artist_subfolders = self.settings.value('use_artist_subfolders', False, type=bool)
         self.use_album_subfolders = self.settings.value('use_album_subfolders', False, type=bool)
         self.service = self.settings.value('service', 'tidal')
-        self.tidal_api = self.settings.value('tidal_api', 'https://hifi.401658.xyz')
+        self.tidal_api = self.settings.value('tidal_api', 'auto')
+        if not self.tidal_api or self.tidal_api == 'https://hifi.401658.xyz':
+            self.tidal_api = 'auto'
+            self.settings.setValue('tidal_api', self.tidal_api)
+            self.settings.sync()
+        self.deezer_fallback_enabled = self.settings.value('deezer_fallback', True, type=bool)
         self.check_for_updates = self.settings.value('check_for_updates', True, type=bool)
         self.current_theme_color = self.settings.value('theme_color', '#2196F3')
         self.track_list_format = self.settings.value('track_list_format', 'track_artist_date_duration')
@@ -741,6 +821,12 @@ class SpotiFLACGUI(QWidget):
                     display_parts.append(formatted_date)
                 display_parts.append(duration)
                 display_text = " • ".join(display_parts)
+            elif self.track_list_format == "track_artist_date_duration":
+                display_parts = [f"{i}. {track.title} - {track.artists}"]
+                if formatted_date:
+                    display_parts.append(formatted_date)
+                display_parts.append(duration)
+                display_text = " • ".join(display_parts)
             elif self.track_list_format == "track_artist_date":
                 display_parts = [f"{i}. {track.title} - {track.artists}"]
                 if formatted_date:
@@ -871,7 +957,6 @@ class SpotiFLACGUI(QWidget):
     def setup_track_buttons(self):
         self.btn_layout = QHBoxLayout()
         self.download_btn = QPushButton(' Download')
-        self.download_btn.setIcon(self.get_themed_icon('download.svg'))
         self.delete_btn = QPushButton(' Delete')
         self.delete_btn.setIcon(self.get_themed_icon('trash.svg'))
         
@@ -892,7 +977,6 @@ class SpotiFLACGUI(QWidget):
         single_track_layout.setContentsMargins(0, 0, 0, 0)
         
         self.single_download_btn = QPushButton(' Download')
-        self.single_download_btn.setIcon(self.get_themed_icon('download.svg'))
         self.single_delete_btn = QPushButton(' Delete')
         self.single_delete_btn.setIcon(self.get_themed_icon('trash.svg'))
         
@@ -1141,7 +1225,6 @@ class SpotiFLACGUI(QWidget):
         auth_layout.addWidget(auth_label)
 
         service_api_layout = QHBoxLayout()
-
         service_label = QLabel('Service:')
         service_label.setFixedWidth(53)
         
@@ -1158,8 +1241,7 @@ class SpotiFLACGUI(QWidget):
         
         self.tidal_api_dropdown = QComboBox()
         self.tidal_api_dropdown.setItemDelegate(TidalAPIDelegate())
-        self.tidal_api_dropdown.addItem("Default", "https://hifi.401658.xyz")
-        self.tidal_api_dropdown.addItem("Auto Fallback", "auto")
+        self.tidal_api_dropdown.addItem("Auto Fallback (recommended)", "auto")
         self.tidal_api_dropdown.currentIndexChanged.connect(self.on_tidal_api_changed)
         
         self.refresh_api_btn = QPushButton('Refresh')
@@ -1173,43 +1255,52 @@ class SpotiFLACGUI(QWidget):
         service_api_layout.addWidget(self.refresh_api_btn)
         
         auth_layout.addLayout(service_api_layout)
-        
-        self.refresh_tidal_apis()
-        
-        self.update_tidal_api_visibility()
-        
+
+        self.tidal_api_hint_label = QLabel(
+            "Tip: Auto fallback selects working Tidal proxies automatically. "
+            "Recommended because individual instances often go offline."
+        )
+        self.tidal_api_hint_label.setWordWrap(True)
+        self.tidal_api_hint_label.setStyleSheet("color: #ff9800; font-size: 11px;")
+        auth_layout.addWidget(self.tidal_api_hint_label)
+
+        self.deezer_fallback_checkbox = QCheckBox('Try Deezer automatically if Tidal fails')
+        self.deezer_fallback_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.deezer_fallback_checkbox.setChecked(self.deezer_fallback_enabled)
+        self.deezer_fallback_checkbox.toggled.connect(self.save_deezer_fallback_setting)
+        auth_layout.addWidget(self.deezer_fallback_checkbox)
+
         settings_layout.addWidget(auth_group)
-        settings_layout.addStretch()
         settings_tab.setLayout(settings_layout)
         self.tab_widget.addTab(settings_tab, "Settings")
-        self.set_combobox_value(self.service_dropdown, self.service)
-        self.set_combobox_value(self.track_list_format_dropdown, self.track_list_format)
-        self.set_combobox_value(self.date_format_dropdown, self.date_format)
-        
-        self.set_combobox_value(self.tidal_api_dropdown, self.tidal_api)
-        
+
     def setup_theme_tab(self):
         theme_tab = QWidget()
-        theme_layout = QVBoxLayout()
-        theme_layout.setSpacing(8)
-        theme_layout.setContentsMargins(8, 15, 15, 15)
+        theme_layout = QVBoxLayout(theme_tab)
+        theme_layout.setSpacing(2)
+        theme_layout.setContentsMargins(0, 0, 0, 0)
+
+        theme_label = QLabel('Theme')
+        theme_label.setStyleSheet("font-weight: bold; margin-top: 8px; margin-bottom: 5px;")
+        theme_layout.addWidget(theme_label)
 
         grid_layout = QVBoxLayout()
-        
+        grid_layout.setSpacing(15)
+        grid_layout.setContentsMargins(0, 0, 0, 0)
         self.color_buttons = {}
-        
+
         first_row_palettes = [
-            ("Red", [
-                ("#FFCDD2", "100"), ("#EF9A9A", "200"), ("#E57373", "300"), ("#EF5350", "400"), ("#F44336", "500"), ("#E53935", "600"), ("#D32F2F", "700"), ("#C62828", "800"), ("#B71C1C", "900"), ("#FF8A80", "A100"), ("#FF5252", "A200"), ("#FF1744", "A400"), ("#D50000", "A700")
-            ]),
             ("Pink", [
-                ("#F8BBD0", "100"), ("#F48FB1", "200"), ("#F06292", "300"), ("#EC407A", "400"), ("#E91E63", "500"), ("#D81B60", "600"), ("#C2185B", "700"), ("#AD1457", "800"), ("#880E4F", "900"), ("#FF80AB", "A100"), ("#FF4081", "A200"), ("#F50057", "A400"), ("#C51162", "A700")
+                ("#FFC5C5", "100"), ("#FF99CC", "200"), ("#FF80AB", "300"), ("#FF4081", "400"), ("#F50057", "500"), ("#E91E63", "600"), ("#D81B60", "700"), ("#C51162", "800"), ("#B71C1C", "900"), ("#FF80AB", "A100"), ("#FF4081", "A200"), ("#F50057", "A400"), ("#E91E63", "A700")
             ]),
             ("Purple", [
-                ("#E1BEE7", "100"), ("#CE93D8", "200"), ("#BA68C8", "300"), ("#AB47BC", "400"), ("#9C27B0", "500"), ("#8E24AA", "600"), ("#7B1FA2", "700"), ("#6A1B9A", "800"), ("#4A148C", "900"), ("#EA80FC", "A100"), ("#E040FB", "A200"), ("#D500F9", "A400"), ("#AA00FF", "A700")
+                ("#C7B8EA", "100"), ("#A377D0", "200"), ("#8F5AE2", "300"), ("#7B1FA2", "400"), ("#6A1B9A", "500"), ("#4A148C", "600"), ("#3A0CA3", "700"), ("#2E115F", "800"), ("#1A0CA6", "900"), ("#B388FF", "A100"), ("#7C4DFF", "A200"), ("#651FFF", "A400"), ("#6200EA", "A700")
+            ]),
+            ("Deep Orange", [
+                ("#FFD7BE", "100"), ("#FFC080", "200"), ("#FFA07A", "300"), ("#FF8C00", "400"), ("#FF6F00", "500"), ("#FF3D00", "600"), ("#DD2C00", "700"), ("#C51162", "800"), ("#FFC107", "900"), ("#FFA000", "A100"), ("#FF8F00", "A200"), ("#FF6F00", "A400"), ("#FF3D00", "A700")
             ])
         ]
-        
+
         second_row_palettes = [
             ("Deep Purple", [
                 ("#D1C4E9", "100"), ("#B39DDB", "200"), ("#9575CD", "300"), ("#7E57C2", "400"), ("#673AB7", "500"), ("#5E35B1", "600"), ("#512DA8", "700"), ("#4527A0", "800"), ("#311B92", "900"), ("#B388FF", "A100"), ("#7C4DFF", "A200"), ("#651FFF", "A400"), ("#6200EA", "A700")
@@ -1221,7 +1312,7 @@ class SpotiFLACGUI(QWidget):
                 ("#BBDEFB", "100"), ("#90CAF9", "200"), ("#64B5F6", "300"), ("#42A5F5", "400"), ("#2196F3", "500"), ("#1E88E5", "600"), ("#1976D2", "700"), ("#1565C0", "800"), ("#0D47A1", "900"), ("#82B1FF", "A100"), ("#448AFF", "A200"), ("#2979FF", "A400"), ("#2962FF", "A700")
             ])
         ]
-        
+
         third_row_palettes = [
             ("Light Blue", [
                 ("#B3E5FC", "100"), ("#81D4FA", "200"), ("#4FC3F7", "300"), ("#29B6F6", "400"), ("#03A9F4", "500"), ("#039BE5", "600"), ("#0288D1", "700"), ("#0277BD", "800"), ("#01579B", "900"), ("#80D8FF", "A100"), ("#40C4FF", "A200"), ("#00B0FF", "A400"), ("#0091EA", "A700")
@@ -1233,7 +1324,7 @@ class SpotiFLACGUI(QWidget):
                 ("#B2DFDB", "100"), ("#80CBC4", "200"), ("#4DB6AC", "300"), ("#26A69A", "400"), ("#009688", "500"), ("#00897B", "600"), ("#00796B", "700"), ("#00695C", "800"), ("#004D40", "900"), ("#A7FFEB", "A100"), ("#64FFDA", "A200"), ("#1DE9B6", "A400"), ("#00BFA5", "A700")
             ])
         ]
-        
+
         fourth_row_palettes = [
             ("Green", [
                 ("#C8E6C9", "100"), ("#A5D6A7", "200"), ("#81C784", "300"), ("#66BB6A", "400"), ("#4CAF50", "500"), ("#43A047", "600"), ("#388E3C", "700"), ("#2E7D32", "800"), ("#1B5E20", "900"), ("#B9F6CA", "A100"), ("#69F0AE", "A200"), ("#00E676", "A400"), ("#00C853", "A700")
@@ -1245,7 +1336,7 @@ class SpotiFLACGUI(QWidget):
                 ("#F0F4C3", "100"), ("#E6EE9C", "200"), ("#DCE775", "300"), ("#D4E157", "400"), ("#CDDC39", "500"), ("#C0CA33", "600"), ("#AFB42B", "700"), ("#9E9D24", "800"), ("#827717", "900"), ("#F4FF81", "A100"), ("#EEFF41", "A200"), ("#C6FF00", "A400"), ("#AEEA00", "A700")
             ])
         ]
-        
+
         fifth_row_palettes = [
             ("Yellow", [
                 ("#FFF9C4", "100"), ("#FFF59D", "200"), ("#FFF176", "300"), ("#FFEE58", "400"), ("#FFEB3B", "500"), ("#FDD835", "600"), ("#FBC02D", "700"), ("#F9A825", "800"), ("#F57F17", "900"), ("#FFFF8D", "A100"), ("#FFFF00", "A200"), ("#FFEA00", "A400"), ("#FFD600", "A700")
@@ -1257,30 +1348,30 @@ class SpotiFLACGUI(QWidget):
                 ("#FFE0B2", "100"), ("#FFCC80", "200"), ("#FFB74D", "300"), ("#FFA726", "400"), ("#FF9800", "500"), ("#FB8C00", "600"), ("#F57C00", "700"), ("#EF6C00", "800"), ("#E65100", "900"), ("#FFD180", "A100"), ("#FFAB40", "A200"), ("#FF9100", "A400"), ("#FF6D00", "A700")
             ])
         ]
-        
+
         for row_palettes in [first_row_palettes, second_row_palettes, third_row_palettes, fourth_row_palettes, fifth_row_palettes]:
             row_layout = QHBoxLayout()
             row_layout.setSpacing(15)
-            
+
             for palette_name, colors in row_palettes:
                 column_layout = QVBoxLayout()
                 column_layout.setSpacing(3)
-                
+
                 palette_label = QLabel(palette_name)
                 palette_label.setStyleSheet("margin-bottom: 2px;")
                 palette_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 column_layout.addWidget(palette_label)
-                
+
                 color_buttons_layout = QHBoxLayout()
                 color_buttons_layout.setSpacing(3)
-                
+
                 for color_hex, color_name in colors:
                     color_btn = QPushButton()
                     color_btn.setFixedSize(18, 18)
-                    
+
                     is_current = color_hex == self.current_theme_color
                     border_style = "2px solid #fff" if is_current else "none"
-                    
+
                     color_btn.setStyleSheet(f"""
                         QPushButton {{
                             background-color: {color_hex};
@@ -1297,14 +1388,14 @@ class SpotiFLACGUI(QWidget):
                     color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
                     color_btn.setToolTip(f"{palette_name} {color_name}\n{color_hex}")
                     color_btn.clicked.connect(lambda checked, color=color_hex, btn=color_btn: self.change_theme_color(color, btn))
-                    
+
                     self.color_buttons[color_hex] = color_btn
-                    
+
                     color_buttons_layout.addWidget(color_btn)
-                
+
                 column_layout.addLayout(color_buttons_layout)
                 row_layout.addLayout(column_layout)
-            
+
             grid_layout.addLayout(row_layout)
 
         theme_layout.addLayout(grid_layout)
@@ -1313,6 +1404,42 @@ class SpotiFLACGUI(QWidget):
         theme_tab.setLayout(theme_layout)
         self.tab_widget.addTab(theme_tab, "Theme")
 
+    def setup_about_tab(self):
+        about_tab = QWidget()
+        about_layout = QVBoxLayout()
+        about_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        about_layout.setSpacing(15)
+
+        sections = [
+            ("Check for Updates", "Check", "https://github.com/afkarxyz/SpotiFLAC/releases"),
+            ("Report an Issue", "Report", "https://github.com/afkarxyz/SpotiFLAC/issues")
+        ]
+
+        for title, button_text, url in sections:
+            section_widget = QWidget()
+            section_layout = QVBoxLayout(section_widget)
+            section_layout.setSpacing(10)
+            section_layout.setContentsMargins(0, 0, 0, 0)
+
+            label = QLabel(title)
+            label.setStyleSheet("color: palette(text); font-weight: bold;")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            section_layout.addWidget(label)
+
+            button = QPushButton(button_text)
+            button.setFixedSize(120, 25)
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
+            button.clicked.connect(lambda _, url=url: QDesktopServices.openUrl(QUrl(url if url.startswith(('http://', 'https://')) else f'https://{url}')))
+            section_layout.addWidget(button, alignment=Qt.AlignmentFlag.AlignCenter)
+
+            about_layout.addWidget(section_widget)
+
+        footer_label = QLabel(f"v{self.current_version} | October 2025")
+        about_layout.addWidget(footer_label, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        about_tab.setLayout(about_layout)
+        self.tab_widget.addTab(about_tab, "About")
+            
     def change_theme_color(self, color, clicked_btn=None):
         if hasattr(self, 'color_buttons'):
             for color_hex, btn in self.color_buttons.items():
@@ -1427,6 +1554,10 @@ class SpotiFLACGUI(QWidget):
         self.tidal_api_label.setVisible(is_tidal)
         self.tidal_api_dropdown.setVisible(is_tidal)
         self.refresh_api_btn.setVisible(is_tidal)
+        if hasattr(self, 'tidal_api_hint_label'):
+            self.tidal_api_hint_label.setVisible(is_tidal)
+        if hasattr(self, 'deezer_fallback_checkbox'):
+            self.deezer_fallback_checkbox.setVisible(is_tidal)
     
     def on_tidal_api_changed(self, index):
         selected_api = self.tidal_api_dropdown.currentData()
@@ -1441,8 +1572,8 @@ class SpotiFLACGUI(QWidget):
             self.log_output.append("Fetching available API instances...")
             apis = TidalDownloader.get_available_apis()
             
-            while self.tidal_api_dropdown.count() > 2:
-                self.tidal_api_dropdown.removeItem(2)
+            while self.tidal_api_dropdown.count() > 1:
+                self.tidal_api_dropdown.removeItem(1)
             
             if apis:
                 for api in apis:
@@ -1497,6 +1628,11 @@ class SpotiFLACGUI(QWidget):
     def save_album_subfolder_setting(self):
         self.use_album_subfolders = self.album_subfolder_checkbox.isChecked()
         self.settings.setValue('use_album_subfolders', self.use_album_subfolders)
+        self.settings.sync()
+    
+    def save_deezer_fallback_setting(self):
+        self.deezer_fallback_enabled = self.deezer_fallback_checkbox.isChecked()
+        self.settings.setValue('deezer_fallback', self.deezer_fallback_enabled)
         self.settings.sync()
     
     def save_track_list_format(self):
@@ -1949,7 +2085,8 @@ class SpotiFLACGUI(QWidget):
             self.use_artist_subfolders,
             self.use_album_subfolders,
             service,
-            tidal_api_url
+            tidal_api_url,
+            self.deezer_fallback_enabled
         )
         self.worker.finished.connect(lambda success, message, failed_tracks, successful_tracks, skipped_tracks: self.on_download_finished(success, message, failed_tracks, successful_tracks, skipped_tracks))
         self.worker.progress.connect(self.update_progress)
@@ -2159,13 +2296,25 @@ if __name__ == '__main__':
     settings = QSettings('SpotiFLAC', 'Settings')
     theme_color = settings.value('theme_color', '#2196F3')
     
-    qdarktheme.setup_theme(
-        custom_colors={
-            "[dark]": {
-                "primary": theme_color,
+    if qdarktheme and hasattr(qdarktheme, "setup_theme"):
+        qdarktheme.setup_theme(
+            custom_colors={
+                "[dark]": {
+                    "primary": theme_color,
+                }
             }
-        }
-    )
+        )
+    elif pyqtdarktheme:
+        # Fallback for environments where qdarktheme.setup_theme is unavailable (e.g. Python 3.12)
+        palette = pyqtdarktheme.load_palette("dark")
+        app.setPalette(palette)
+        stylesheet = pyqtdarktheme.load_stylesheet("dark")
+        if theme_color and isinstance(theme_color, str):
+            # Best-effort tweak of primary color within the stylesheet if possible
+            stylesheet = stylesheet.replace("#2196F3", theme_color)
+        app.setStyleSheet(stylesheet)
+    else:
+        print("Warnung: Kein Dark-Theme-Modul verfügbar – UI wird ohne Theme gestartet.")
     ex = SpotiFLACGUI()
     ex.show()
     sys.exit(app.exec())
