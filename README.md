@@ -16,7 +16,7 @@
 
 ![image](https://github.com/user-attachments/assets/7507e58d-e228-4edf-adf7-675731731019)
 
-![image](https://github.com/user-attachments/assets/169da4f1-7b8a-4d50-b72e-c2fe3c51976e)
+![image](https://github.com/user-attachments/assets/d7ad1e5d-b809-403c-b119-ab8db6fe0c79)
 
 ## Lossless Audio Check
 
