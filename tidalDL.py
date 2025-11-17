@@ -23,27 +23,22 @@ class TidalDownloader:
         self.progress_callback = ProgressCallback()
         self.client_id = base64.b64decode("NkJEU1JkcEs5aHFFQlRnVQ==").decode()
         self.client_secret = base64.b64decode("eGV1UG1ZN25icFo5SUliTEFjUTkzc2hrYTFWTmhlVUFxTjZJY3N6alRHOD0=").decode()
-        self.api_url = api_url or "https://hifi.401658.xyz"
+        self.api_url = api_url
     
     @staticmethod
     def get_available_apis():
         try:
-            response = requests.get("https://status.monochrome.tf/api/stream", timeout=10, stream=True)
+            response = requests.get("https://raw.githubusercontent.com/afkarxyz/SpotiFLAC/refs/heads/main/tidal.json", timeout=10)
             
-            for line in response.iter_lines():
-                if line:
-                    line_str = line.decode('utf-8')
-                    if line_str.startswith('data: '):
-                        data = json.loads(line_str[6:])
-                        
-                        api_instances = [
-                            inst for inst in data.get('instances', [])
-                            if inst.get('instance_type') == 'api' and inst.get('last_check', {}).get('success')
-                        ]
-                        
-                        api_instances.sort(key=lambda x: x.get('avg_response_time', 9999))
-                        
-                        return api_instances
+            if response.status_code == 200:
+                api_list = response.json()
+                
+                api_instances = [{"url": f"https://{api}"} for api in api_list]
+                
+                return api_instances
+            else:
+                print(f"Failed to fetch API list: HTTP {response.status_code}")
+                return []
                         
         except Exception as e:
             print(f"Failed to fetch API list: {e}")
@@ -54,46 +49,38 @@ class TidalDownloader:
         apis = TidalDownloader.get_available_apis()
         
         if not apis:
-            print("No APIs available, using default: https://hifi.401658.xyz")
-            return "https://hifi.401658.xyz"
+            raise Exception("No APIs available. Cannot proceed.")
         
         print("\n=== Available API Instances ===")
-        print(f"{'No':<4} {'URL':<40} {'Status':<8} {'Uptime':<8} {'Avg Response':<12}")
-        print("-" * 80)
+        print(f"{'No':<4} {'URL':<50}")
+        print("-" * 60)
         
         for i, api in enumerate(apis, 1):
             url = api.get('url', 'N/A')
-            status = "UP" if api.get('last_check', {}).get('success') else "DOWN"
-            uptime = f"{api.get('uptime', 0):.1f}%"
-            avg_time = f"{api.get('avg_response_time', 0)}ms"
-            
-            print(f"{i:<4} {url:<40} {status:<8} {uptime:<8} {avg_time:<12}")
+            print(f"{i:<4} {url:<50}")
         
-        print("\n0    Use default (https://hifi.401658.xyz)")
-        print("-" * 80)
+        print("-" * 60)
         
         while True:
             try:
-                choice = input(f"\nSelect API (0-{len(apis)}) [1 for fastest]: ").strip()
+                choice = input(f"\nSelect API (1-{len(apis)}) [1]: ").strip()
                 
                 if not choice:
                     choice = "1"
                 
                 choice_num = int(choice)
                 
-                if choice_num == 0:
-                    return "https://hifi.401658.xyz"
-                elif 1 <= choice_num <= len(apis):
+                if 1 <= choice_num <= len(apis):
                     selected_url = apis[choice_num - 1]['url']
                     print(f"\nSelected: {selected_url}")
                     return selected_url
                 else:
-                    print(f"Invalid choice. Please enter 0-{len(apis)}")
+                    print(f"Invalid choice. Please enter 1-{len(apis)}")
             except ValueError:
                 print("Invalid input. Please enter a number.")
             except KeyboardInterrupt:
-                print("\nUsing default API")
-                return "https://hifi.401658.xyz"
+                print("\nCancelled")
+                raise Exception("API selection cancelled")
 
     def set_progress_callback(self, callback):
         self.progress_callback = callback
@@ -399,8 +386,7 @@ class TidalDownloader:
         if auto_fallback:
             apis = self.get_available_apis()
             if not apis:
-                print("No APIs available for fallback, using current API")
-                return self._download_single(query, isrc, output_dir, quality, is_paused_callback, is_stopped_callback)
+                raise Exception("No APIs available for fallback")
             
             last_error = None
             for i, api in enumerate(apis, 1):

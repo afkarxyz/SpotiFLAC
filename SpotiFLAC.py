@@ -125,11 +125,14 @@ class DownloadWorker(QThread):
     def run(self):
         try:
             if self.service == "tidal": 
-                downloader = TidalDownloader(api_url=self.tidal_api_url)            
+                downloader = TidalDownloader(api_url=self.tidal_api_url)
+                deezer_downloader = DeezerDownloader()
             elif self.service == "deezer":
                 downloader = DeezerDownloader()
+                deezer_downloader = None
             else:
                 downloader = TidalDownloader(api_url=self.tidal_api_url)
+                deezer_downloader = DeezerDownloader()
             
             def progress_update(current, total):
                 if total <= 0:
@@ -316,6 +319,46 @@ class DownloadWorker(QThread):
                                     int((i + 1) / total_tracks * 100))
                     self.successful_tracks.append(track)
                 except Exception as e:
+                    if self.service == "tidal" and deezer_downloader and track.isrc:
+                        try:
+                            self.progress.emit(f"Tidal failed, trying Deezer fallback for: {track.title}", 0)
+                            
+                            success = asyncio.run(deezer_downloader.download_by_isrc(track.isrc, track_outpath))
+                            
+                            if success:
+                                safe_title = "".join(c for c in track.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                                safe_artist = "".join(c for c in track.artists if c.isalnum() or c in (' ', '-', '_')).rstrip()
+                                expected_filename = f"{safe_artist} - {safe_title}.flac"
+                                downloaded_file = os.path.join(track_outpath, expected_filename)
+                                
+                                if not os.path.exists(downloaded_file):
+                                    import glob
+                                    flac_files = glob.glob(os.path.join(track_outpath, "*.flac"))
+                                    if flac_files:
+                                        downloaded_file = max(flac_files, key=os.path.getctime)
+                                    else:
+                                        raise Exception("Downloaded file not found")
+                                
+                                if downloaded_file != new_filepath:
+                                    try:
+                                        os.rename(downloaded_file, new_filepath)
+                                        self.progress.emit(f"File renamed to: {new_filename}", 0)
+                                    except OSError:
+                                        pass
+                                
+                                self.progress.emit(f"Successfully downloaded via Deezer fallback: {track.title} - {track.artists}", 
+                                                int((i + 1) / total_tracks * 100))
+                                self.successful_tracks.append(track)
+                                continue
+                            else:
+                                raise Exception("Deezer fallback also failed")
+                        except Exception as deezer_error:
+                            self.progress.emit(f"Deezer fallback also failed: {str(deezer_error)}", 0)
+                            self.failed_tracks.append((track.title, track.artists, f"Tidal: {str(e)}, Deezer: {str(deezer_error)}"))
+                            self.progress.emit(f"Failed to download: {track.title} - {track.artists}\nBoth services failed", 
+                                            int((i + 1) / total_tracks * 100))
+                            continue
+                    
                     self.failed_tracks.append((track.title, track.artists, str(e)))
                     self.progress.emit(f"Failed to download: {track.title} - {track.artists}\nError: {str(e)}", 
                                     int((i + 1) / total_tracks * 100))
@@ -418,11 +461,39 @@ class TidalStatusChecker(QThread):
     status_updated = pyqtSignal(bool)
     error = pyqtSignal(str)
 
+    def check_single_api(self, api):
+        try:
+            url = api.get('url', '')
+            test_response = requests.get(f"{url}/track/?id=251380837&quality=LOSSLESS", timeout=5)
+            return test_response.status_code == 200
+        except:
+            return False
+
     def run(self):
         try:
-            response = requests.get("https://status.monochrome.tf", timeout=5)
-            is_online = response.status_code == 200
-            self.status_updated.emit(is_online)
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            apis = TidalDownloader.get_available_apis()
+            
+            if not apis:
+                self.status_updated.emit(False)
+                return
+            
+            any_online = False
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                futures = {executor.submit(self.check_single_api, api): api for api in apis}
+                
+                for future in as_completed(futures):
+                    try:
+                        if future.result():
+                            any_online = True
+                            for f in futures:
+                                f.cancel()
+                            break
+                    except:
+                        continue
+            
+            self.status_updated.emit(any_online)
         except Exception as e:
             self.error.emit(f"Error checking Tidal status: {str(e)}")
             self.status_updated.emit(False)
@@ -440,6 +511,39 @@ class DeezerStatusChecker(QThread):
             self.error.emit(f"Error checking Deezer status: {str(e)}")
             self.status_updated.emit(False)
 
+class APIStatusChecker(QThread):
+    status_checked = pyqtSignal(str, str)
+    all_completed = pyqtSignal()
+    
+    def __init__(self, apis):
+        super().__init__()
+        self.apis = apis
+    
+    def check_single_api(self, api):
+        url = api.get('url', '')
+        try:
+            test_response = requests.get(f"{url}/track/?id=251380837&quality=LOSSLESS", timeout=5)
+            is_online = test_response.status_code == 200
+            status = 'UP' if is_online else 'DOWN'
+        except:
+            status = 'DOWN'
+        return (url, status)
+    
+    def run(self):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(self.check_single_api, api): api for api in self.apis}
+            
+            for future in as_completed(futures):
+                try:
+                    url, status = future.result()
+                    self.status_checked.emit(url, status)
+                except Exception as e:
+                    print(f"Error checking API: {e}")
+        
+        self.all_completed.emit()
+
 class ServiceComboBox(QComboBox):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -447,23 +551,28 @@ class ServiceComboBox(QComboBox):
         self.setItemDelegate(ServiceStatusDelegate())
         self.setup_items()
         
-        self.tidal_status_checker = TidalStatusChecker()
-        self.tidal_status_checker.status_updated.connect(self.update_tidal_status)
-        self.tidal_status_checker.error.connect(lambda e: print(f"Tidal status check error: {e}"))
-        self.tidal_status_checker.start()
+        QTimer.singleShot(100, self.start_tidal_status_check)
+        QTimer.singleShot(100, self.start_deezer_status_check)
 
         self.tidal_status_timer = QTimer(self)
         self.tidal_status_timer.timeout.connect(self.refresh_tidal_status)
         self.tidal_status_timer.start(60000)
-        
-        self.deezer_status_checker = DeezerStatusChecker()
-        self.deezer_status_checker.status_updated.connect(self.update_deezer_status)
-        self.deezer_status_checker.error.connect(lambda e: print(f"Deezer status check error: {e}"))
-        self.deezer_status_checker.start()
 
         self.deezer_status_timer = QTimer(self)
         self.deezer_status_timer.timeout.connect(self.refresh_deezer_status)
-        self.deezer_status_timer.start(60000)  
+        self.deezer_status_timer.start(60000)
+    
+    def start_tidal_status_check(self):
+        self.tidal_status_checker = TidalStatusChecker()
+        self.tidal_status_checker.status_updated.connect(self.update_tidal_status)
+        self.tidal_status_checker.error.connect(lambda e: print(f"Tidal status check error: {e}"))
+        self.tidal_status_checker.start()
+    
+    def start_deezer_status_check(self):
+        self.deezer_status_checker = DeezerStatusChecker()
+        self.deezer_status_checker.status_updated.connect(self.update_deezer_status)
+        self.deezer_status_checker.error.connect(lambda e: print(f"Deezer status check error: {e}"))
+        self.deezer_status_checker.start()  
         
     def setup_items(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -537,7 +646,7 @@ class ServiceComboBox(QComboBox):
 class SpotiFLACGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.current_version = "5.3"
+        self.current_version = "5.4"
         self.tracks = []
         self.all_tracks = []  
         self.successful_downloads = []
@@ -552,7 +661,7 @@ class SpotiFLACGUI(QWidget):
         self.use_artist_subfolders = self.settings.value('use_artist_subfolders', False, type=bool)
         self.use_album_subfolders = self.settings.value('use_album_subfolders', False, type=bool)
         self.service = self.settings.value('service', 'tidal')
-        self.tidal_api = self.settings.value('tidal_api', 'https://hifi.401658.xyz')
+        self.tidal_api = self.settings.value('tidal_api', 'auto')
         self.check_for_updates = self.settings.value('check_for_updates', True, type=bool)
         self.current_theme_color = self.settings.value('theme_color', '#2196F3')
         self.track_list_format = self.settings.value('track_list_format', 'track_artist_date_duration')
@@ -1141,7 +1250,7 @@ class SpotiFLACGUI(QWidget):
         auth_layout.addWidget(auth_label)
 
         service_api_layout = QHBoxLayout()
-
+        
         service_label = QLabel('Service:')
         service_label.setFixedWidth(53)
         
@@ -1151,14 +1260,16 @@ class SpotiFLACGUI(QWidget):
         
         service_api_layout.addWidget(service_label)
         service_api_layout.addWidget(self.service_dropdown)
-        service_api_layout.addSpacing(15)
+        
+        self.api_spacer = QWidget()
+        self.api_spacer.setFixedWidth(15)
+        service_api_layout.addWidget(self.api_spacer)
         
         self.tidal_api_label = QLabel('API Instances:')
         self.tidal_api_label.setFixedWidth(85)
         
         self.tidal_api_dropdown = QComboBox()
         self.tidal_api_dropdown.setItemDelegate(TidalAPIDelegate())
-        self.tidal_api_dropdown.addItem("Default", "https://hifi.401658.xyz")
         self.tidal_api_dropdown.addItem("Auto Fallback", "auto")
         self.tidal_api_dropdown.currentIndexChanged.connect(self.on_tidal_api_changed)
         
@@ -1168,9 +1279,10 @@ class SpotiFLACGUI(QWidget):
         self.refresh_api_btn.clicked.connect(self.refresh_tidal_apis)
         
         service_api_layout.addWidget(self.tidal_api_label)
-        service_api_layout.addWidget(self.tidal_api_dropdown, 1)
+        service_api_layout.addWidget(self.tidal_api_dropdown, 2)
         service_api_layout.addSpacing(5)
         service_api_layout.addWidget(self.refresh_api_btn)
+        service_api_layout.addStretch(1)
         
         auth_layout.addLayout(service_api_layout)
         
@@ -1408,7 +1520,7 @@ class SpotiFLACGUI(QWidget):
 
             about_layout.addWidget(section_widget)
 
-        footer_label = QLabel(f"v{self.current_version} | October 2025")
+        footer_label = QLabel(f"v{self.current_version} | November 2025")
         about_layout.addWidget(footer_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
         about_tab.setLayout(about_layout)
@@ -1424,6 +1536,7 @@ class SpotiFLACGUI(QWidget):
     
     def update_tidal_api_visibility(self):
         is_tidal = self.service_dropdown.currentData() == 'tidal'
+        self.api_spacer.setVisible(is_tidal)
         self.tidal_api_label.setVisible(is_tidal)
         self.tidal_api_dropdown.setVisible(is_tidal)
         self.refresh_api_btn.setVisible(is_tidal)
@@ -1441,34 +1554,44 @@ class SpotiFLACGUI(QWidget):
             self.log_output.append("Fetching available API instances...")
             apis = TidalDownloader.get_available_apis()
             
-            while self.tidal_api_dropdown.count() > 2:
-                self.tidal_api_dropdown.removeItem(2)
+            while self.tidal_api_dropdown.count() > 1:
+                self.tidal_api_dropdown.removeItem(1)
             
             if apis:
+                self.log_output.append(f"Found {len(apis)} API instances, loading...")
+                
                 for api in apis:
                     url = api.get('url', '')
-                    uptime = api.get('uptime', 0)
-                    avg_time = api.get('avg_response_time', 0)
-                    status = "UP" if api.get('last_check', {}).get('success') else "DOWN"
-                    
                     domain = url.replace('https://', '').replace('http://', '')
-                    label = f"{domain} ({uptime:.0f}%, {avg_time}ms)"
+                    label = domain
                     
-                    status_data = {
-                        'status': status,
-                        'uptime': uptime,
-                        'avg_time': avg_time
-                    }
+                    status_data = {'status': 'CHECKING'}
                     
                     self.tidal_api_dropdown.addItem(label, url)
                     item_index = self.tidal_api_dropdown.count() - 1
                     self.tidal_api_dropdown.setItemData(item_index, status_data, Qt.ItemDataRole.UserRole + 1)
                 
-                self.log_output.append(f"Found {len(apis)} available API instances")
+                self.log_output.append(f"Loaded {len(apis)} API instances, checking status in background...")
+                
+                self.api_status_checker = APIStatusChecker(apis)
+                self.api_status_checker.status_checked.connect(self.on_api_status_checked)
+                self.api_status_checker.all_completed.connect(self.on_all_api_status_completed)
+                self.api_status_checker.start()
             else:
-                self.log_output.append("No APIs found, using default")
+                self.log_output.append("No APIs found")
         except Exception as e:
             self.log_output.append(f"Error fetching APIs: {str(e)}")
+    
+    def on_api_status_checked(self, url, status):
+        for i in range(self.tidal_api_dropdown.count()):
+            if self.tidal_api_dropdown.itemData(i) == url:
+                status_data = {'status': status}
+                self.tidal_api_dropdown.setItemData(i, status_data, Qt.ItemDataRole.UserRole + 1)
+                break
+        self.tidal_api_dropdown.update()
+    
+    def on_all_api_status_completed(self):
+        self.log_output.append("API status check completed")
 
     def save_url(self):
         self.settings.setValue('spotify_url', self.spotify_url.text().strip())
