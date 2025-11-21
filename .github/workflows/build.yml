@@ -258,17 +258,11 @@ jobs:
           # Copy desktop file to usr/share/applications
           cp AppDir/spotiflac.desktop AppDir/usr/share/applications/
 
-          # Create a simple icon (32x32 PNG with text)
-          cat > AppDir/.DirIcon << 'EOF'
-          P3
-          32 32
-          255
-          EOF
-
-          # Fill with a simple color pattern (placeholder icon)
-          for i in {1..1024}; do
-            echo "100 150 200" >> AppDir/.DirIcon
-          done
+          # Create icon using ImageMagick
+          sudo apt-get install -y imagemagick
+          convert -size 256x256 xc:#FFD700 -gravity center -pointsize 80 -fill black -annotate +0+0 "SF" AppDir/spotiflac.png
+          cp AppDir/spotiflac.png AppDir/usr/share/icons/hicolor/256x256/apps/
+          cp AppDir/spotiflac.png AppDir/.DirIcon
 
           # Create AppRun
           cat > AppDir/AppRun << 'EOF'
