@@ -245,7 +245,7 @@ jobs:
           cp build/bin/SpotiFLAC AppDir/usr/bin/spotiflac
 
           # Create desktop file
-          cat > AppDir/usr/share/applications/spotiflac.desktop << 'EOF'
+          cat > AppDir/spotiflac.desktop << 'EOF'
           [Desktop Entry]
           Name=SpotiFLAC
           Exec=spotiflac
@@ -255,12 +255,20 @@ jobs:
           Comment=Get Spotify tracks in true FLAC from Tidal/Deezer
           EOF
 
-          # Copy icon if exists
-          if [ -f "build/appicon.png" ]; then
-            cp build/appicon.png AppDir/usr/share/icons/hicolor/256x256/apps/spotiflac.png
-          elif [ -f "appicon.png" ]; then
-            cp appicon.png AppDir/usr/share/icons/hicolor/256x256/apps/spotiflac.png
-          fi
+          # Copy desktop file to usr/share/applications
+          cp AppDir/spotiflac.desktop AppDir/usr/share/applications/
+
+          # Create a simple icon (32x32 PNG with text)
+          cat > AppDir/.DirIcon << 'EOF'
+          P3
+          32 32
+          255
+          EOF
+
+          # Fill with a simple color pattern (placeholder icon)
+          for i in {1..1024}; do
+            echo "100 150 200" >> AppDir/.DirIcon
+          done
 
           # Create AppRun
           cat > AppDir/AppRun << 'EOF'
@@ -275,7 +283,7 @@ jobs:
 
           # Create AppImage
           mkdir -p dist
-          ARCH=x86_64 ./appimagetool AppDir dist/SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
+          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
