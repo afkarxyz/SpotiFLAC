@@ -1,0 +1,60 @@
+# Wails Build
+build/
+*.exe
+*.dll
+*.dylib
+*.so
+
+# Wails Generated Files
+frontend/wailsjs/
+
+# Go
+*.test
+*.out
+go.work
+go.work.sum
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+.npm
+.yarn
+*.tsbuildinfo
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.old
+
+# Build notes (optional - uncomment if you don't want to commit)
+# BUILD_NOTES.md

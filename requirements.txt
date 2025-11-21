@@ -1,9 +1,0 @@
-PyQt6
-pyqt6-tools
-pyqtdarktheme
-requests
-mutagen
-pyotp
-packaging
-pyinstaller
-DrissionPage
