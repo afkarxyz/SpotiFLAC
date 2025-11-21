@@ -17,11 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Settings as SettingsIcon, FolderOpen } from "lucide-react";
-import { getSettings, getSettingsWithDefaults, saveSettings, type Settings as SettingsType } from "@/lib/settings";
+import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw } from "lucide-react";
+import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, type Settings as SettingsType } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
 import { OpenFolder } from "../../wailsjs/go/main/App";
 
@@ -33,25 +32,47 @@ export function Settings() {
 
   // Apply saved settings
   useEffect(() => {
-    if (savedSettings.darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    applyThemeMode(savedSettings.themeMode);
     applyTheme(savedSettings.theme);
-  }, [savedSettings.darkMode, savedSettings.theme]);
+
+    // Setup listener for system theme changes
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      if (savedSettings.themeMode === "auto") {
+        applyThemeMode("auto");
+        applyTheme(savedSettings.theme);
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
+  }, [savedSettings.themeMode, savedSettings.theme]);
 
   // Apply temp settings for preview when dialog is open
   useEffect(() => {
     if (open) {
-      if (tempSettings.darkMode) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
+      applyThemeMode(tempSettings.themeMode);
       applyTheme(tempSettings.theme);
+
+      // Setup listener for system theme changes during preview
+      const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleChange = () => {
+        if (tempSettings.themeMode === "auto") {
+          applyThemeMode("auto");
+          applyTheme(tempSettings.theme);
+        }
+      };
+
+      mediaQuery.addEventListener("change", handleChange);
+
+      return () => {
+        mediaQuery.removeEventListener("change", handleChange);
+      };
     }
-  }, [open, tempSettings.darkMode, tempSettings.theme]);
+  }, [open, tempSettings.themeMode, tempSettings.theme]);
 
   useEffect(() => {
     // Load settings with defaults from backend on mount
@@ -80,13 +101,19 @@ export function Settings() {
     setOpen(false);
   };
 
+  const handleReset = async () => {
+    const defaultSettings = await resetToDefaultSettings();
+    setTempSettings(defaultSettings);
+    setSavedSettings(defaultSettings);
+    
+    // Apply default theme mode and theme
+    applyThemeMode(defaultSettings.themeMode);
+    applyTheme(defaultSettings.theme);
+  };
+
   const handleCancel = () => {
     // Revert to saved settings
-    if (savedSettings.darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    applyThemeMode(savedSettings.themeMode);
     applyTheme(savedSettings.theme);
     
     setTempSettings(savedSettings);
@@ -96,11 +123,7 @@ export function Settings() {
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       // Dialog is closing, revert to saved settings
-      if (savedSettings.darkMode) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
-      }
+      applyThemeMode(savedSettings.themeMode);
       applyTheme(savedSettings.theme);
       setTempSettings(savedSettings);
     }
@@ -119,8 +142,8 @@ export function Settings() {
     setTempSettings((prev) => ({ ...prev, theme: value }));
   };
 
-  const toggleDarkMode = () => {
-    setTempSettings((prev) => ({ ...prev, darkMode: !prev.darkMode }));
+  const handleThemeModeChange = (value: "auto" | "light" | "dark") => {
+    setTempSettings((prev) => ({ ...prev, themeMode: value }));
   };
 
   const handleBrowseFolder = async () => {
@@ -145,11 +168,11 @@ export function Settings() {
           <SettingsIcon className="h-5 w-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[550px]" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-6 py-4">
+        <div className="grid gap-4 py-2 overflow-y-auto flex-1">
           {/* Download Path */}
           <div className="space-y-2">
             <Label htmlFor="download-path">Download Path</Label>
@@ -186,50 +209,34 @@ export function Settings() {
           </div>
 
           {/* File Settings */}
-          <div className="space-y-4 pt-4 border-t">
-            <h3 className="font-medium">File Settings</h3>
+          <div className="space-y-3 pt-3 border-t">
+            <h3 className="font-medium text-sm">File Settings</h3>
             
             {/* Filename Format */}
-            <div className="space-y-2">
-              <Label>Filename Format</Label>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Filename Format</Label>
               <RadioGroup
                 value={tempSettings.filenameFormat}
                 onValueChange={(value) => setTempSettings(prev => ({ ...prev, filenameFormat: value as any }))}
-                className="flex gap-4"
+                className="flex flex-wrap gap-3"
               >
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1.5">
                   <RadioGroupItem value="title-artist" id="title-artist" />
-                  <Label htmlFor="title-artist" className="cursor-pointer font-normal text-sm">Title - Artist</Label>
+                  <Label htmlFor="title-artist" className="cursor-pointer font-normal text-xs">Title - Artist</Label>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1.5">
                   <RadioGroupItem value="artist-title" id="artist-title" />
-                  <Label htmlFor="artist-title" className="cursor-pointer font-normal text-sm">Artist - Title</Label>
+                  <Label htmlFor="artist-title" className="cursor-pointer font-normal text-xs">Artist - Title</Label>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1.5">
                   <RadioGroupItem value="title" id="title" />
-                  <Label htmlFor="title" className="cursor-pointer font-normal text-sm">Title</Label>
+                  <Label htmlFor="title" className="cursor-pointer font-normal text-xs">Title</Label>
                 </div>
               </RadioGroup>
             </div>
 
             {/* Subfolder Options */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="artist-subfolder"
-                  checked={tempSettings.artistSubfolder}
-                  onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, artistSubfolder: checked as boolean }))}
-                />
-                <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder (Playlist)</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="album-subfolder"
-                  checked={tempSettings.albumSubfolder}
-                  onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, albumSubfolder: checked as boolean }))}
-                />
-                <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder (Playlist)</Label>
-              </div>
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="track-number"
@@ -238,22 +245,43 @@ export function Settings() {
                 />
                 <Label htmlFor="track-number" className="cursor-pointer text-sm">Track Number</Label>
               </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="artist-subfolder"
+                  checked={tempSettings.artistSubfolder}
+                  onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, artistSubfolder: checked as boolean }))}
+                />
+                <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder (Playlist only)</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="album-subfolder"
+                  checked={tempSettings.albumSubfolder}
+                  onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, albumSubfolder: checked as boolean }))}
+                />
+                <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder (Playlist & Discography)</Label>
+              </div>
             </div>
           </div>
 
-          {/* Dark Mode Toggle */}
-          <div className="flex items-center justify-between pt-4 border-t">
-            <Label htmlFor="dark-mode">Dark Mode</Label>
-            <Switch
-              id="dark-mode"
-              checked={tempSettings.darkMode}
-              onCheckedChange={toggleDarkMode}
-            />
+          {/* Theme Mode Selection */}
+          <div className="space-y-1.5 pt-3 border-t">
+            <Label htmlFor="theme-mode" className="text-sm">Theme</Label>
+            <Select value={tempSettings.themeMode} onValueChange={handleThemeModeChange}>
+              <SelectTrigger id="theme-mode">
+                <SelectValue placeholder="Select theme mode" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="light">Light</SelectItem>
+                <SelectItem value="dark">Dark</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Theme Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="theme">Theme Color</Label>
+          {/* Theme Color Selection */}
+          <div className="space-y-1.5">
+            <Label htmlFor="theme" className="text-sm">Theme Color</Label>
             <Select value={tempSettings.theme} onValueChange={handleThemeChange}>
               <SelectTrigger id="theme">
                 <SelectValue placeholder="Select a theme" />
@@ -268,11 +296,20 @@ export function Settings() {
             </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleCancel}>
-            Cancel
+        <DialogFooter className="gap-2 sm:justify-between">
+          <Button variant="outline" onClick={handleReset} size="sm" className="gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset to Default
           </Button>
-          <Button onClick={handleSave}>Save Changes</Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleCancel} size="sm">
+              Cancel
+            </Button>
+            <Button onClick={handleSave} size="sm" className="gap-1.5">
+              <Save className="h-3.5 w-3.5" />
+              Save Changes
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -4,18 +4,18 @@ export interface Settings {
   downloadPath: string;
   downloader: "auto" | "deezer" | "tidal";
   theme: string;
-  darkMode: boolean;
+  themeMode: "auto" | "light" | "dark";
   filenameFormat: "title-artist" | "artist-title" | "title";
   artistSubfolder: boolean;
   albumSubfolder: boolean;
   trackNumber: boolean;
 }
 
-const DEFAULT_SETTINGS: Settings = {
+export const DEFAULT_SETTINGS: Settings = {
   downloadPath: "",
   downloader: "auto",
   theme: "yellow",
-  darkMode: true,
+  themeMode: "auto",
   filenameFormat: "title-artist",
   artistSubfolder: false,
   albumSubfolder: false,
@@ -39,6 +39,11 @@ export function getSettings(): Settings {
     const stored = localStorage.getItem(SETTINGS_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
+      // Migrate old darkMode to themeMode
+      if ('darkMode' in parsed && !('themeMode' in parsed)) {
+        parsed.themeMode = parsed.darkMode ? 'dark' : 'light';
+        delete parsed.darkMode;
+      }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (error) {
@@ -71,4 +76,27 @@ export function updateSettings(partial: Partial<Settings>): Settings {
   const updated = { ...current, ...partial };
   saveSettings(updated);
   return updated;
+}
+
+export async function resetToDefaultSettings(): Promise<Settings> {
+  const defaultPath = await fetchDefaultPath();
+  const defaultSettings = { ...DEFAULT_SETTINGS, downloadPath: defaultPath };
+  saveSettings(defaultSettings);
+  return defaultSettings;
+}
+
+export function applyThemeMode(mode: "auto" | "light" | "dark"): void {
+  if (mode === "auto") {
+    // Check system preference
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (prefersDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  } else if (mode === "dark") {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
 }

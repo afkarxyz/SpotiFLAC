@@ -103,6 +103,8 @@ export interface DownloadRequest {
   output_dir?: string;
   audio_format?: string;
   folder_name?: string;
+  filename_format?: string;
+  track_number?: boolean;
 }
 
 export interface DownloadResponse {

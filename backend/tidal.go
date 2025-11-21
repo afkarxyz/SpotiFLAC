@@ -306,7 +306,7 @@ func (t *TidalDownloader) DownloadFile(url, filepath string) error {
 	return nil
 }
 
-func (t *TidalDownloader) Download(query, isrc, outputDir, quality string) (string, error) {
+func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool) (string, error) {
 	if outputDir != "." {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			return "", fmt.Errorf("directory error: %w", err)
@@ -344,7 +344,9 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality string) (stri
 		trackTitle = fmt.Sprintf("track_%d", trackInfo.ID)
 	}
 
-	outputFilename := filepath.Join(outputDir, fmt.Sprintf("%s - %s.flac", artistName, trackTitle))
+	// Build filename based on format settings
+	filename := buildTidalFilename(trackTitle, artistName, trackInfo.TrackNumber, filenameFormat, includeTrackNumber)
+	outputFilename := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
 		fmt.Printf("File already exists: %s (%.2f MB)\n", outputFilename, float64(fileInfo.Size())/(1024*1024))
@@ -404,7 +406,7 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality string) (stri
 	return outputFilename, nil
 }
 
-func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality string) (string, error) {
+func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool) (string, error) {
 	apis, err := t.GetAvailableAPIs()
 	if err != nil {
 		return "", fmt.Errorf("no APIs available for fallback: %w", err)
@@ -416,7 +418,7 @@ func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality s
 
 		fallbackDownloader := NewTidalDownloader(apiURL)
 
-		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality)
+		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality, filenameFormat, includeTrackNumber)
 		if err == nil {
 			fmt.Printf("✓ Success with: %s\n", apiURL)
 			return result, nil
@@ -431,4 +433,25 @@ func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality s
 	}
 
 	return "", fmt.Errorf("all %d APIs failed. Last error: %v", len(apis), lastError)
+}
+
+func buildTidalFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool) string {
+	var filename string
+
+	// Build base filename based on format
+	switch format {
+	case "artist-title":
+		filename = fmt.Sprintf("%s - %s", artist, title)
+	case "title":
+		filename = title
+	default: // "title-artist"
+		filename = fmt.Sprintf("%s - %s", title, artist)
+	}
+
+	// Add track number prefix if enabled
+	if includeTrackNumber && trackNumber > 0 {
+		filename = fmt.Sprintf("%02d. %s", trackNumber, filename)
+	}
+
+	return filename + ".flac"
 }

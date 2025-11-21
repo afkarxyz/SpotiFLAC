@@ -30,9 +30,9 @@ type DeezerTrack struct {
 		ID   int64  `json:"id"`
 	} `json:"artist"`
 	Album struct {
-		Title   string `json:"title"`
-		ID      int64  `json:"id"`
-		CoverXL string `json:"cover_xl"`
+		Title    string `json:"title"`
+		ID       int64  `json:"id"`
+		CoverXL  string `json:"cover_xl"`
 		CoverBig string `json:"cover_big"`
 	} `json:"album"`
 	Contributors []struct {
@@ -58,7 +58,7 @@ func NewDeezerDownloader() *DeezerDownloader {
 
 func (d *DeezerDownloader) GetTrackByISRC(isrc string) (*DeezerTrack, error) {
 	url := fmt.Sprintf("https://api.deezer.com/2.0/track/isrc:%s", isrc)
-	
+
 	resp, err := d.client.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch track: %w", err)
@@ -83,7 +83,7 @@ func (d *DeezerDownloader) GetTrackByISRC(isrc string) (*DeezerTrack, error) {
 
 func (d *DeezerDownloader) GetDownloadURL(trackID int64) (string, error) {
 	url := fmt.Sprintf("https://api.deezmate.com/dl/%d", trackID)
-	
+
 	resp, err := d.client.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to get download URL: %w", err)
@@ -162,9 +162,30 @@ func sanitizeFilename(name string) string {
 	return sanitized
 }
 
-func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir string) error {
+func buildFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool) string {
+	var filename string
+
+	// Build base filename based on format
+	switch format {
+	case "artist-title":
+		filename = fmt.Sprintf("%s - %s", artist, title)
+	case "title":
+		filename = title
+	default: // "title-artist"
+		filename = fmt.Sprintf("%s - %s", title, artist)
+	}
+
+	// Add track number prefix if enabled
+	if includeTrackNumber && trackNumber > 0 {
+		filename = fmt.Sprintf("%02d. %s", trackNumber, filename)
+	}
+
+	return filename + ".flac"
+}
+
+func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool) error {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
-	
+
 	track, err := d.GetTrackByISRC(isrc)
 	if err != nil {
 		return err
@@ -193,7 +214,9 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir string) error {
 
 	safeArtist := sanitizeFilename(artists)
 	safeTitle := sanitizeFilename(track.Title)
-	filename := fmt.Sprintf("%s - %s.flac", safeArtist, safeTitle)
+
+	// Build filename based on format settings
+	filename := buildFilename(safeTitle, safeArtist, track.TrackPos, filenameFormat, includeTrackNumber)
 	filepath := filepath.Join(outputDir, filename)
 
 	fmt.Println("Downloading FLAC file...")

@@ -17,10 +17,10 @@ import {
 import { fetchSpotifyMetadata, downloadTrack } from "@/lib/api";
 import type { SpotifyMetadataResponse, TrackMetadata } from "@/types/api";
 import { Settings } from "@/components/Settings";
-import { getSettings } from "@/lib/settings";
+import { getSettings, applyThemeMode } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
-import { Download, Search, Loader2, CheckCircle } from "lucide-react";
-import { toast } from "sonner";
+import { Download, Search, CheckCircle, Info } from "lucide-react";
+import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import {
   Pagination,
   PaginationContent,
@@ -29,6 +29,13 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Spinner } from "@/components/ui/spinner";
 
 function App() {
   const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -41,27 +48,42 @@ function App() {
   const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
   const [bulkDownloadType, setBulkDownloadType] = useState<'all' | 'selected' | null>(null);
   const [downloadedTracks, setDownloadedTracks] = useState<Set<string>>(new Set());
+  const [currentDownloadInfo, setCurrentDownloadInfo] = useState<{ name: string; artists: string } | null>(null);
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
   const [timeoutValue, setTimeoutValue] = useState(60);
   const [pendingUrl, setPendingUrl] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasUpdate, setHasUpdate] = useState(false);
+  const [showAlbumDialog, setShowAlbumDialog] = useState(false);
+  const [selectedAlbum, setSelectedAlbum] = useState<{ id: string; name: string; external_urls: string } | null>(null);
   const shouldStopDownloadRef = useRef(false);
   
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "5.5";
+  const CURRENT_VERSION = "5.6";
 
   useEffect(() => {
     const settings = getSettings();
-    if (settings.darkMode) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    applyThemeMode(settings.themeMode);
     applyTheme(settings.theme);
-    
+
+    // Listen for system theme changes when in auto mode
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      const currentSettings = getSettings();
+      if (currentSettings.themeMode === "auto") {
+        applyThemeMode("auto");
+        applyTheme(currentSettings.theme);
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+
     // Check for updates
     checkForUpdates();
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleChange);
+    };
   }, []);
 
   const checkForUpdates = async () => {
@@ -88,21 +110,50 @@ function App() {
     setCurrentPage(1);
   }, [metadata]);
 
-  const downloadWithAutoFallback = async (isrc: string, settings: any, trackName?: string, artistName?: string, folderName?: string) => {
+  const downloadWithAutoFallback = async (
+    isrc: string, 
+    settings: any, 
+    trackName?: string, 
+    artistName?: string, 
+    albumName?: string,
+    playlistName?: string,
+    isArtistDiscography?: boolean
+  ) => {
     let service = settings.downloader;
     
     // Build query for Tidal (title + artist)
     const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
     
-    // Sanitize folder name (remove illegal characters for Windows)
-    const sanitizedFolderName = folderName 
-      ? folderName.replace(/[<>:"/\\|?*]/g, '_').trim()
-      : undefined;
+    // Build output directory based on settings
+    let outputDir = settings.downloadPath;
     
-    // Build output directory with folder name if provided
-    const outputDir = sanitizedFolderName 
-      ? `${settings.downloadPath}\\${sanitizedFolderName}`
-      : settings.downloadPath;
+    // For playlist or artist discography downloads
+    if (playlistName) {
+      const sanitizedPlaylist = playlistName.replace(/[<>:"/\\|?*]/g, '_').trim();
+      outputDir = `${settings.downloadPath}\\${sanitizedPlaylist}`;
+      
+      // For artist discography: only use album subfolder (artist is redundant)
+      if (isArtistDiscography) {
+        // Only add album subfolder if enabled
+        if (settings.albumSubfolder && albumName) {
+          const sanitizedAlbum = albumName.replace(/[<>:"/\\|?*]/g, '_').trim();
+          outputDir = `${outputDir}\\${sanitizedAlbum}`;
+        }
+      } else {
+        // For playlist: use both artist and album subfolders if enabled
+        // Add artist subfolder if enabled
+        if (settings.artistSubfolder && artistName) {
+          const sanitizedArtist = artistName.replace(/[<>:"/\\|?*]/g, '_').trim();
+          outputDir = `${outputDir}\\${sanitizedArtist}`;
+        }
+        
+        // Add album subfolder if enabled
+        if (settings.albumSubfolder && albumName) {
+          const sanitizedAlbum = albumName.replace(/[<>:"/\\|?*]/g, '_').trim();
+          outputDir = `${outputDir}\\${sanitizedAlbum}`;
+        }
+      }
+    }
     
     // If auto mode, try Tidal first
     if (service === "auto") {
@@ -112,6 +163,8 @@ function App() {
           service: "tidal",
           query,
           output_dir: outputDir,
+          filename_format: settings.filenameFormat,
+          track_number: settings.trackNumber,
         });
 
         if (tidalResponse.success) {
@@ -131,6 +184,8 @@ function App() {
       service: service as "deezer" | "tidal",
       query,
       output_dir: outputDir,
+      filename_format: settings.filenameFormat,
+      track_number: settings.trackNumber,
     });
   };
 
@@ -190,7 +245,31 @@ function App() {
     }
   };
 
-  const handleDownloadTrack = async (isrc: string, trackName?: string, artistName?: string) => {
+  const handleAlbumClick = (album: { id: string; name: string; external_urls: string }) => {
+    setSelectedAlbum(album);
+    setShowAlbumDialog(true);
+  };
+
+  const handleConfirmAlbumFetch = async () => {
+    if (!selectedAlbum) return;
+    
+    setShowAlbumDialog(false);
+    setLoading(true);
+    setMetadata(null);
+
+    try {
+      const data = await fetchSpotifyMetadata(selectedAlbum.external_urls);
+      setMetadata(data);
+      toast.success("Album metadata fetched successfully");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to fetch album metadata");
+    } finally {
+      setLoading(false);
+      setSelectedAlbum(null);
+    }
+  };
+
+  const handleDownloadTrack = async (isrc: string, trackName?: string, artistName?: string, albumName?: string) => {
     if (!isrc) {
       toast.error("No ISRC found for this track");
       return;
@@ -200,13 +279,14 @@ function App() {
     setDownloadingTrack(isrc);
     
     try {
-      const response = await downloadWithAutoFallback(isrc, settings, trackName, artistName);
+      // Single track download - no playlist folder
+      const response = await downloadWithAutoFallback(isrc, settings, trackName, artistName, albumName, undefined, false);
 
       if (response.success) {
         toast.success(response.message);
         setDownloadedTracks(prev => new Set(prev).add(isrc));
       } else {
-        toast.error(response.error);
+        toast.error(response.error || "Download failed");
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Download failed");
@@ -230,18 +310,22 @@ function App() {
     let errorCount = 0;
     const total = selectedTracks.length;
 
-    // Get all tracks and folder name from metadata
+    // Get all tracks and playlist/album info from metadata
     let allTracks: TrackMetadata[] = [];
-    let folderName: string | undefined;
+    let playlistName: string | undefined;
+    let isArtistDiscography = false;
     
     if (metadata && "track_list" in metadata) {
       allTracks = metadata.track_list;
       
-      // Get folder name from album or playlist
+      // Get playlist/album name for folder structure
       if ("album_info" in metadata) {
-        folderName = metadata.album_info.name;
+        playlistName = metadata.album_info.name;
       } else if ("playlist_info" in metadata) {
-        folderName = metadata.playlist_info.owner.name;
+        playlistName = metadata.playlist_info.owner.name;
+      } else if ("artist_info" in metadata) {
+        playlistName = metadata.artist_info.name;
+        isArtistDiscography = true;
       }
     }
 
@@ -257,13 +341,20 @@ function App() {
       
       setDownloadingTrack(isrc); // Show spinner on this track
       
+      // Set current download info for progress display
+      if (track) {
+        setCurrentDownloadInfo({ name: track.name, artists: track.artists });
+      }
+      
       try {
         const response = await downloadWithAutoFallback(
           isrc, 
           settings, 
           track?.name, 
           track?.artists,
-          folderName
+          track?.album_name,
+          playlistName,
+          isArtistDiscography
         );
 
         if (response.success) {
@@ -280,6 +371,7 @@ function App() {
     }
 
     setDownloadingTrack(null); // Clear spinner
+    setCurrentDownloadInfo(null); // Clear download info
     setIsDownloading(false);
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false; // Reset flag
@@ -293,7 +385,7 @@ function App() {
     setSelectedTracks([]);
   };
 
-  const handleDownloadAll = async (tracks: TrackMetadata[], folderName?: string) => {
+  const handleDownloadAll = async (tracks: TrackMetadata[], playlistName?: string, isArtistDiscography?: boolean) => {
     const tracksWithIsrc = tracks.filter(track => track.isrc);
 
     if (tracksWithIsrc.length === 0) {
@@ -321,13 +413,18 @@ function App() {
       
       setDownloadingTrack(track.isrc); // Show spinner on this track
       
+      // Set current download info for progress display
+      setCurrentDownloadInfo({ name: track.name, artists: track.artists });
+      
       try {
         const response = await downloadWithAutoFallback(
           track.isrc, 
           settings, 
           track.name, 
           track.artists,
-          folderName
+          track.album_name,
+          playlistName,
+          isArtistDiscography
         );
 
         if (response.success) {
@@ -344,6 +441,7 @@ function App() {
     }
 
     setDownloadingTrack(null); // Clear spinner
+    setCurrentDownloadInfo(null); // Clear download info
     setIsDownloading(false);
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false; // Reset flag
@@ -404,7 +502,7 @@ function App() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          {downloadProgress}% complete ({bulkDownloadType === 'all' ? 'Downloading all tracks' : 'Downloading selected tracks'})
+          {downloadProgress}% - {currentDownloadInfo ? `${currentDownloadInfo.name} - ${currentDownloadInfo.artists}` : 'Preparing download...'}
         </p>
       </div>
     );
@@ -507,7 +605,7 @@ function App() {
                         disabled={isDownloading || downloadingTrack === track.isrc}
                       >
                         {downloadingTrack === track.isrc ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Spinner />
                         ) : (
                           <>
                             <Download className="h-4 w-4 mr-2" />
@@ -607,7 +705,7 @@ function App() {
                   <div className="space-y-2">
                     <Button onClick={() => handleDownloadTrack(track.isrc, track.name, track.artists)} disabled={isDownloading || downloadingTrack === track.isrc}>
                       {downloadingTrack === track.isrc ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Spinner />
                       ) : (
                         <>
                           <Download className="h-4 w-4 mr-2" />
@@ -653,7 +751,7 @@ function App() {
                   <div className="flex gap-2">
                     <Button onClick={() => handleDownloadAll(track_list, album_info.name)} className="gap-2" disabled={isDownloading}>
                       {isDownloading && bulkDownloadType === 'all' ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Spinner />
                       ) : (
                         <Download className="h-4 w-4" />
                       )}
@@ -662,7 +760,7 @@ function App() {
                     {selectedTracks.length > 0 && (
                       <Button onClick={handleDownloadSelected} variant="secondary" className="gap-2" disabled={isDownloading}>
                         {isDownloading && bulkDownloadType === 'selected' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Spinner />
                         ) : (
                           <Download className="h-4 w-4" />
                         )}
@@ -720,7 +818,7 @@ function App() {
                   <div className="flex gap-2">
                     <Button onClick={() => handleDownloadAll(track_list, playlist_info.owner.name)} className="gap-2" disabled={isDownloading}>
                       {isDownloading && bulkDownloadType === 'all' ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Spinner />
                       ) : (
                         <Download className="h-4 w-4" />
                       )}
@@ -729,7 +827,7 @@ function App() {
                     {selectedTracks.length > 0 && (
                       <Button onClick={handleDownloadSelected} variant="secondary" className="gap-2" disabled={isDownloading}>
                         {isDownloading && bulkDownloadType === 'selected' ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                          <Spinner />
                         ) : (
                           <Download className="h-4 w-4" />
                         )}
@@ -794,7 +892,11 @@ function App() {
               <h3 className="text-2xl font-bold">Discography</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                 {album_list.map((album) => (
-                  <div key={album.id} className="group cursor-pointer">
+                  <div 
+                    key={album.id} 
+                    className="group cursor-pointer"
+                    onClick={() => handleAlbumClick({ id: album.id, name: album.name, external_urls: album.external_urls })}
+                  >
                     <div className="relative mb-4">
                       {album.images && (
                         <img
@@ -819,9 +921,9 @@ function App() {
               <div className="flex items-center justify-between">
                 <h3 className="text-2xl font-bold">Popular Tracks</h3>
                 <div className="flex gap-2">
-                  <Button onClick={() => handleDownloadAll(track_list)} size="sm" className="gap-2" disabled={isDownloading}>
+                  <Button onClick={() => handleDownloadAll(track_list, artist_info.name, true)} size="sm" className="gap-2" disabled={isDownloading}>
                     {isDownloading && bulkDownloadType === 'all' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Spinner />
                     ) : (
                       <Download className="h-4 w-4" />
                     )}
@@ -830,7 +932,7 @@ function App() {
                   {selectedTracks.length > 0 && (
                     <Button onClick={handleDownloadSelected} size="sm" variant="secondary" className="gap-2" disabled={isDownloading}>
                       {isDownloading && bulkDownloadType === 'selected' ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <Spinner />
                       ) : (
                         <Download className="h-4 w-4" />
                       )}
@@ -889,8 +991,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <TooltipProvider>
+      <div className="min-h-screen bg-background p-4 md:p-8">
+        <div className="max-w-4xl mx-auto space-y-6">
         <div className="relative">
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-3">
@@ -920,26 +1023,33 @@ function App() {
             </p>
           </div>
           <div className="absolute right-0 top-0 flex gap-2">
-            <Button 
-              variant="outline" 
-              size="icon"
-              asChild
-            >
-              <a 
-                href="https://github.com/afkarxyz/SpotiFLAC/issues" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                aria-label="GitHub Issues"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-5 w-5"
-                  fill="currentColor"
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="icon"
+                  asChild
                 >
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
-              </a>
-            </Button>
+                  <a 
+                    href="https://github.com/afkarxyz/SpotiFLAC/issues" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    aria-label="GitHub Issues"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-5 w-5"
+                      fill="currentColor"
+                    >
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                  </a>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Report bug or request feature</p>
+              </TooltipContent>
+            </Tooltip>
             <Settings />
           </div>
         </div>
@@ -974,16 +1084,53 @@ function App() {
                 Cancel
               </Button>
               <Button onClick={handleConfirmFetch}>
+                <Search className="h-4 w-4 mr-2" />
                 Fetch
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
+        {/* Album Fetch Dialog */}
+        <Dialog open={showAlbumDialog} onOpenChange={setShowAlbumDialog}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Fetch Album</DialogTitle>
+              <DialogDescription>
+                Do you want to fetch metadata for this album?
+              </DialogDescription>
+            </DialogHeader>
+            {selectedAlbum && (
+              <div className="py-4">
+                <p className="font-medium">{selectedAlbum.name}</p>
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAlbumDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmAlbumFetch}>
+                <Search className="h-4 w-4 mr-2" />
+                Fetch Album
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <Card>
-          <CardContent className="pt-6 space-y-4">
+          <CardContent className="px-6 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="spotify-url">Spotify URL</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="spotify-url">Spotify URL</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Supports track, album, playlist, and artist URLs</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <div className="flex gap-2">
                 <Input
                   id="spotify-url"
@@ -995,7 +1142,7 @@ function App() {
                 <Button onClick={handleFetchMetadata} disabled={loading}>
                   {loading ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Spinner />
                       Fetching...
                     </>
                   ) : (
@@ -1006,16 +1153,14 @@ function App() {
                   )}
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground">
-                Supports track, album, playlist, and artist URLs
-              </p>
             </div>
           </CardContent>
         </Card>
 
         {metadata && renderMetadata()}
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
 

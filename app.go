@@ -34,12 +34,14 @@ type SpotifyMetadataRequest struct {
 
 // DownloadRequest represents the request structure for downloading tracks
 type DownloadRequest struct {
-	ISRC        string `json:"isrc"`
-	Service     string `json:"service"`
-	Query       string `json:"query,omitempty"`
-	ApiURL      string `json:"api_url,omitempty"`
-	OutputDir   string `json:"output_dir,omitempty"`
-	AudioFormat string `json:"audio_format,omitempty"`
+	ISRC           string `json:"isrc"`
+	Service        string `json:"service"`
+	Query          string `json:"query,omitempty"`
+	ApiURL         string `json:"api_url,omitempty"`
+	OutputDir      string `json:"output_dir,omitempty"`
+	AudioFormat    string `json:"audio_format,omitempty"`
+	FilenameFormat string `json:"filename_format,omitempty"`
+	TrackNumber    bool   `json:"track_number,omitempty"`
 }
 
 // DownloadResponse represents the response structure for download operations
@@ -103,6 +105,11 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	var err error
 	var filename string
 
+	// Set default filename format if not provided
+	if req.FilenameFormat == "" {
+		req.FilenameFormat = "title-artist"
+	}
+
 	if req.Service == "tidal" {
 		searchQuery := req.Query
 		if searchQuery == "" {
@@ -111,14 +118,14 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 		if req.ApiURL == "" || req.ApiURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
-			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat)
+			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber)
 		} else {
 			downloader := backend.NewTidalDownloader(req.ApiURL)
-			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat)
+			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber)
 		}
 	} else {
 		downloader := backend.NewDeezerDownloader()
-		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir)
+		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber)
 		if err == nil {
 			filename = "Downloaded via Deezer"
 		}
