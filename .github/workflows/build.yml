@@ -65,6 +65,12 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run generate-icon
+
       - name: Build application
         run: wails build -platform windows/amd64
 
@@ -126,6 +132,12 @@ jobs:
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run generate-icon
 
       - name: Build application
         run: wails build -platform darwin/universal
@@ -204,10 +216,16 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libfuse2
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run generate-icon
 
       - name: Build application
         run: wails build -platform linux/amd64
