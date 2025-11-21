@@ -1,22 +1,16 @@
 [![GitHub All Releases](https://img.shields.io/github/downloads/afkarxyz/SpotiFLAC/total?style=for-the-badge)](https://github.com/afkarxyz/SpotiFLAC/releases)
 
-![SpotiFLAC](https://github.com/user-attachments/assets/b4c4f403-edbd-4a71-b74b-c7d433d47d06)
+![Image](https://github.com/user-attachments/assets/a6e92fdd-2944-45c1-83e8-e23a26c827af)
 
 <div align="center">
-<b>SpotiFLAC</b> allows you to download Spotify tracks in true FLAC format through services like Tidal & Deezer.
+Get Spotify tracks in true FLAC from Tidal/Deezer — no account required.
 </div>
 
 ### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/latest/download/SpotiFLAC.exe)
 
-## Screenshots
+## Screenshot
 
-![image](https://github.com/user-attachments/assets/416fca55-b885-45c0-af2a-b8b7ce5d5ef3)
-
-![image](https://github.com/user-attachments/assets/f9b11da4-dbc3-435e-8954-5627ebe2ccdc)
-
-![image](https://github.com/user-attachments/assets/7507e58d-e228-4edf-adf7-675731731019)
-
-![image](https://github.com/user-attachments/assets/d7ad1e5d-b809-403c-b119-ab8db6fe0c79)
+![Image](https://github.com/user-attachments/assets/f93ff2bd-cb95-4950-925d-82ce50d09917)
 
 ## Lossless Audio Check
 
