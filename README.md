@@ -3,14 +3,19 @@
 ![Image](https://github.com/user-attachments/assets/a6e92fdd-2944-45c1-83e8-e23a26c827af)
 
 <div align="center">
-Get Spotify tracks in true FLAC from Tidal/Deezer — no account required.
-</div>
 
-### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/latest/download/SpotiFLAC.exe)
+Get Spotify tracks in true FLAC from Tidal/Deezer — no account required.
+<br><br>
+
+![Windows](https://img.shields.io/badge/Windows-10%2B-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![macOS](https://img.shields.io/badge/macOS-10.13%2B-000000?style=for-the-badge&logo=apple&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-Any-FCC624?style=for-the-badge&logo=linux&logoColor=white)
+
+</div>
 
 ## Screenshot
 
-![Image](https://github.com/user-attachments/assets/f93ff2bd-cb95-4950-925d-82ce50d09917)
+![Image](https://github.com/user-attachments/assets/0e1338a6-244d-4e6b-9224-fd9549a585ed)
 
 ## Lossless Audio Check
 
@@ -18,4 +23,4 @@ Get Spotify tracks in true FLAC from Tidal/Deezer — no account required.
 
 ![image](https://github.com/user-attachments/assets/7649e6e1-d5d1-49b3-b83f-965d44651d05)
 
-#### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/download/v0/FLAC-Checker.zip) FLAC Checker
+### [Download](https://github.com/afkarxyz/SpotiFLAC/releases/download/v0/FLAC-Checker.zip)
