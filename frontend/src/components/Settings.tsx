@@ -22,7 +22,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw } from "lucide-react";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, type Settings as SettingsType } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
-import { OpenFolder } from "../../wailsjs/go/main/App";
+import { SelectFolder } from "../../wailsjs/go/main/App";
 
 export function Settings() {
   const [open, setOpen] = useState(false);
@@ -147,17 +147,19 @@ export function Settings() {
   };
 
   const handleBrowseFolder = async () => {
-    if (!tempSettings.downloadPath) {
-      alert("Please enter a download path first");
-      return;
-    }
-
     try {
-      // Call backend to open folder in file explorer
-      await OpenFolder(tempSettings.downloadPath);
+      // Call backend to open folder selection dialog
+      const selectedPath = await SelectFolder(tempSettings.downloadPath || "");
+      console.log("Selected path:", selectedPath);
+      
+      if (selectedPath && selectedPath.trim() !== "") {
+        setTempSettings((prev) => ({ ...prev, downloadPath: selectedPath }));
+      } else {
+        console.log("No folder selected or user cancelled");
+      }
     } catch (error) {
-      console.error("Error opening folder:", error);
-      alert(`Error opening folder: ${error}`);
+      console.error("Error selecting folder:", error);
+      alert(`Error selecting folder: ${error}`);
     }
   };
 
@@ -184,8 +186,8 @@ export function Settings() {
                 placeholder="C:\Users\YourUsername\Music"
               />
               <Button type="button" onClick={handleBrowseFolder}>
-                <FolderOpen className="h-4 w-4" />
-                Open
+                <FolderOpen className="h-4 w-4 mr-2" />
+                Browse
               </Button>
             </div>
           </div>

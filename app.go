@@ -159,6 +159,11 @@ func (a *App) OpenFolder(path string) error {
 	return nil
 }
 
+// SelectFolder opens a folder selection dialog and returns the selected path
+func (a *App) SelectFolder(defaultPath string) (string, error) {
+	return backend.SelectFolderDialog(a.ctx, defaultPath)
+}
+
 // GetDefaults returns the default configuration
 func (a *App) GetDefaults() map[string]string {
 	return map[string]string{

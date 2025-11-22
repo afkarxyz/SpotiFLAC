@@ -19,7 +19,7 @@ import type { SpotifyMetadataResponse, TrackMetadata } from "@/types/api";
 import { Settings } from "@/components/Settings";
 import { getSettings, applyThemeMode } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
-import { Download, Search, CheckCircle, Info } from "lucide-react";
+import { Download, Search, CheckCircle, Info, XCircle, ArrowUpDown, StopCircle, FolderOpen } from "lucide-react";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import {
   Pagination,
@@ -36,7 +36,15 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { joinPath, sanitizePath } from "./lib/utils";
+import { OpenFolder } from "../wailsjs/go/main/App";
 
 function App() {
   const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -57,6 +65,7 @@ function App() {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [showAlbumDialog, setShowAlbumDialog] = useState(false);
   const [selectedAlbum, setSelectedAlbum] = useState<{ id: string; name: string; external_urls: string } | null>(null);
+  const [sortBy, setSortBy] = useState<string>("default");
   const shouldStopDownloadRef = useRef(false);
   
   const ITEMS_PER_PAGE = 50;
@@ -104,10 +113,11 @@ function App() {
   };
 
   useEffect(() => {
-    // Clear selection, search, downloaded tracks, and reset page when metadata changes
+    // Clear selection, search, downloaded tracks, sort, and reset page when metadata changes
     setSelectedTracks([]);
     setSearchQuery("");
     setDownloadedTracks(new Set());
+    setSortBy("default");
     setCurrentPage(1);
   }, [metadata]);
 
@@ -485,6 +495,21 @@ function App() {
     toast.info('Stopping download...');
   };
 
+  const handleOpenFolder = async () => {
+    const settings = getSettings();
+    if (!settings.downloadPath) {
+      toast.error("Download path not set");
+      return;
+    }
+
+    try {
+      await OpenFolder(settings.downloadPath);
+    } catch (error) {
+      console.error("Error opening folder:", error);
+      toast.error(`Error opening folder: ${error}`);
+    }
+  };
+
   const renderDownloadProgress = () => {
     if (!isDownloading) return null;
     
@@ -497,6 +522,7 @@ function App() {
             size="sm" 
             onClick={handleStopDownload}
           >
+            <StopCircle className="h-4 w-4 mr-2" />
             Stop
           </Button>
         </div>
@@ -508,7 +534,7 @@ function App() {
   };
 
   const renderTrackList = (tracks: TrackMetadata[], showCheckboxes: boolean = false, hideAlbumColumn: boolean = false) => {
-    const filteredTracks = tracks.filter(track => {
+    let filteredTracks = tracks.filter(track => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
       return (
@@ -517,6 +543,33 @@ function App() {
         track.album_name.toLowerCase().includes(query)
       );
     });
+
+    // Apply sorting
+    if (sortBy === "title-asc") {
+      filteredTracks = [...filteredTracks].sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === "title-desc") {
+      filteredTracks = [...filteredTracks].sort((a, b) => b.name.localeCompare(a.name));
+    } else if (sortBy === "artist-asc") {
+      filteredTracks = [...filteredTracks].sort((a, b) => a.artists.localeCompare(b.artists));
+    } else if (sortBy === "artist-desc") {
+      filteredTracks = [...filteredTracks].sort((a, b) => b.artists.localeCompare(a.artists));
+    } else if (sortBy === "duration-asc") {
+      filteredTracks = [...filteredTracks].sort((a, b) => a.duration_ms - b.duration_ms);
+    } else if (sortBy === "duration-desc") {
+      filteredTracks = [...filteredTracks].sort((a, b) => b.duration_ms - a.duration_ms);
+    } else if (sortBy === "downloaded") {
+      filteredTracks = [...filteredTracks].sort((a, b) => {
+        const aDownloaded = downloadedTracks.has(a.isrc);
+        const bDownloaded = downloadedTracks.has(b.isrc);
+        return (bDownloaded ? 1 : 0) - (aDownloaded ? 1 : 0);
+      });
+    } else if (sortBy === "not-downloaded") {
+      filteredTracks = [...filteredTracks].sort((a, b) => {
+        const aDownloaded = downloadedTracks.has(a.isrc);
+        const bDownloaded = downloadedTracks.has(b.isrc);
+        return (aDownloaded ? 1 : 0) - (bDownloaded ? 1 : 0);
+      });
+    }
 
     // Pagination
     const totalPages = Math.ceil(filteredTracks.length / ITEMS_PER_PAGE);
@@ -676,7 +729,7 @@ function App() {
       const { track } = metadata;
       return (
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="px-6">
             <div className="flex gap-6 items-start">
               {track.images && (
                 <img
@@ -726,7 +779,7 @@ function App() {
       return (
         <div className="space-y-6">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="px-6">
               <div className="flex gap-6 items-start">
                 {album_info.images && (
                   <img
@@ -766,6 +819,12 @@ function App() {
                         Download Selected ({selectedTracks.length})
                       </Button>
                     )}
+                    {downloadedTracks.size > 0 && (
+                      <Button onClick={handleOpenFolder} variant="outline" className="gap-2">
+                        <FolderOpen className="h-4 w-4" />
+                        Open Folder
+                      </Button>
+                    )}
                   </div>
                   {renderDownloadProgress()}
                 </div>
@@ -773,14 +832,33 @@ function App() {
             </CardContent>
           </Card>
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tracks..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tracks..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[200px]">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="title-asc">Title (A-Z)</SelectItem>
+                  <SelectItem value="title-desc">Title (Z-A)</SelectItem>
+                  <SelectItem value="artist-asc">Artist (A-Z)</SelectItem>
+                  <SelectItem value="artist-desc">Artist (Z-A)</SelectItem>
+                  <SelectItem value="duration-asc">Duration (Short)</SelectItem>
+                  <SelectItem value="duration-desc">Duration (Long)</SelectItem>
+                  <SelectItem value="downloaded">Downloaded</SelectItem>
+                  <SelectItem value="not-downloaded">Not Downloaded</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {renderTrackList(track_list, true, true)}
           </div>
@@ -793,7 +871,7 @@ function App() {
       return (
         <div className="space-y-6">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="px-6">
               <div className="flex gap-6 items-start">
                 {playlist_info.owner.images && (
                   <img
@@ -833,6 +911,12 @@ function App() {
                         Download Selected ({selectedTracks.length})
                       </Button>
                     )}
+                    {downloadedTracks.size > 0 && (
+                      <Button onClick={handleOpenFolder} variant="outline" className="gap-2">
+                        <FolderOpen className="h-4 w-4" />
+                        Open Folder
+                      </Button>
+                    )}
                   </div>
                   {renderDownloadProgress()}
                 </div>
@@ -840,14 +924,33 @@ function App() {
             </CardContent>
           </Card>
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search tracks..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search tracks..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[200px]">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="title-asc">Title (A-Z)</SelectItem>
+                  <SelectItem value="title-desc">Title (Z-A)</SelectItem>
+                  <SelectItem value="artist-asc">Artist (A-Z)</SelectItem>
+                  <SelectItem value="artist-desc">Artist (Z-A)</SelectItem>
+                  <SelectItem value="duration-asc">Duration (Short)</SelectItem>
+                  <SelectItem value="duration-desc">Duration (Long)</SelectItem>
+                  <SelectItem value="downloaded">Downloaded</SelectItem>
+                  <SelectItem value="not-downloaded">Not Downloaded</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             {renderTrackList(track_list, true)}
           </div>
@@ -860,7 +963,7 @@ function App() {
       return (
         <div className="space-y-6">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="px-6">
               <div className="flex gap-6 items-start">
                 {artist_info.images && (
                   <img
@@ -938,17 +1041,42 @@ function App() {
                       Download Selected ({selectedTracks.length})
                     </Button>
                   )}
+                  {downloadedTracks.size > 0 && (
+                    <Button onClick={handleOpenFolder} size="sm" variant="outline" className="gap-2">
+                      <FolderOpen className="h-4 w-4" />
+                      Open Folder
+                    </Button>
+                  )}
                 </div>
               </div>
               {renderDownloadProgress()}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search tracks..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  className="pl-10"
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search tracks..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[200px]">
+                    <ArrowUpDown className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Default</SelectItem>
+                    <SelectItem value="title-asc">Title (A-Z)</SelectItem>
+                    <SelectItem value="title-desc">Title (Z-A)</SelectItem>
+                    <SelectItem value="artist-asc">Artist (A-Z)</SelectItem>
+                    <SelectItem value="artist-desc">Artist (Z-A)</SelectItem>
+                    <SelectItem value="duration-asc">Duration (Short)</SelectItem>
+                    <SelectItem value="duration-desc">Duration (Long)</SelectItem>
+                    <SelectItem value="downloaded">Downloaded</SelectItem>
+                    <SelectItem value="not-downloaded">Not Downloaded</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               {renderTrackList(track_list, true)}
             </div>
@@ -996,8 +1124,8 @@ function App() {
         <div className="relative">
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center gap-3">
-              <img src="/icon.svg" alt="SpotiFLAC" className="w-12 h-12" />
-              <h1 className="text-4xl font-bold">SpotiFLAC</h1>
+              <img src="/icon.svg" alt="SpotiFLAC" className="w-12 h-12 cursor-pointer" onClick={() => window.location.reload()} />
+              <h1 className="text-4xl font-bold cursor-pointer" onClick={() => window.location.reload()}>SpotiFLAC</h1>
               <div className="relative">
                 <Badge variant="default" asChild>
                   <a 
@@ -1117,7 +1245,7 @@ function App() {
         </Dialog>
 
         <Card>
-          <CardContent className="px-6 space-y-4">
+          <CardContent className="px-6 py-6 space-y-4">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <Label htmlFor="spotify-url">Spotify URL</Label>
@@ -1131,13 +1259,25 @@ function App() {
                 </Tooltip>
               </div>
               <div className="flex gap-2">
-                <Input
-                  id="spotify-url"
-                  placeholder="https://open.spotify.com/..."
-                  value={spotifyUrl}
-                  onChange={(e) => setSpotifyUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleFetchMetadata()}
-                />
+                <div className="relative flex-1">
+                  <Input
+                    id="spotify-url"
+                    placeholder="https://open.spotify.com/..."
+                    value={spotifyUrl}
+                    onChange={(e) => setSpotifyUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleFetchMetadata()}
+                    className="pr-8"
+                  />
+                  {spotifyUrl && (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      onClick={() => setSpotifyUrl("")}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
                 <Button onClick={handleFetchMetadata} disabled={loading}>
                   {loading ? (
                     <>
