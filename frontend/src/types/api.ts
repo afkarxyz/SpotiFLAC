@@ -97,8 +97,11 @@ export type SpotifyMetadataResponse =
 
 export interface DownloadRequest {
   isrc: string;
-  service: "deezer" | "tidal";
+  service: "deezer" | "tidal" | "qobuz";
   query?: string;
+  track_name?: string;
+  artist_name?: string;
+  album_name?: string;
   api_url?: string;
   output_dir?: string;
   audio_format?: string;

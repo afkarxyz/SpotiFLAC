@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -57,7 +58,9 @@ func NewDeezerDownloader() *DeezerDownloader {
 }
 
 func (d *DeezerDownloader) GetTrackByISRC(isrc string) (*DeezerTrack, error) {
-	url := fmt.Sprintf("https://api.deezer.com/2.0/track/isrc:%s", isrc)
+	// Decode base64 API URL
+	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkuZGVlemVyLmNvbS8yLjAvdHJhY2svaXNyYzo=")
+	url := fmt.Sprintf("%s%s", string(apiBase), isrc)
 
 	resp, err := d.client.Get(url)
 	if err != nil {
@@ -82,7 +85,9 @@ func (d *DeezerDownloader) GetTrackByISRC(isrc string) (*DeezerTrack, error) {
 }
 
 func (d *DeezerDownloader) GetDownloadURL(trackID int64) (string, error) {
-	url := fmt.Sprintf("https://api.deezmate.com/dl/%d", trackID)
+	// Decode base64 API URL
+	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkuZGVlem1hdGUuY29tL2RsLw==")
+	url := fmt.Sprintf("%s%d", string(apiBase), trackID)
 
 	resp, err := d.client.Get(url)
 	if err != nil {
@@ -183,7 +188,7 @@ func buildFilename(title, artist string, trackNumber int, format string, include
 	return filename + ".flac"
 }
 
-func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool) error {
+func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) error {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	track, err := d.GetTrackByISRC(isrc)
@@ -191,21 +196,36 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 		return err
 	}
 
-	artists := track.Artist.Name
-	if len(track.Contributors) > 0 {
-		var mainArtists []string
-		for _, contrib := range track.Contributors {
-			if contrib.Role == "Main" {
-				mainArtists = append(mainArtists, contrib.Name)
+	// Use Spotify metadata if provided, otherwise fallback to Deezer metadata
+	artists := spotifyArtistName
+	trackTitle := spotifyTrackName
+	albumTitle := spotifyAlbumName
+
+	if artists == "" {
+		artists = track.Artist.Name
+		if len(track.Contributors) > 0 {
+			var mainArtists []string
+			for _, contrib := range track.Contributors {
+				if contrib.Role == "Main" {
+					mainArtists = append(mainArtists, contrib.Name)
+				}
 			}
-		}
-		if len(mainArtists) > 0 {
-			artists = strings.Join(mainArtists, ", ")
+			if len(mainArtists) > 0 {
+				artists = strings.Join(mainArtists, ", ")
+			}
 		}
 	}
 
-	fmt.Printf("Found track: %s - %s\n", artists, track.Title)
-	fmt.Printf("Album: %s\n", track.Album.Title)
+	if trackTitle == "" {
+		trackTitle = track.Title
+	}
+
+	if albumTitle == "" {
+		albumTitle = track.Album.Title
+	}
+
+	fmt.Printf("Found track: %s - %s\n", artists, trackTitle)
+	fmt.Printf("Album: %s\n", albumTitle)
 
 	downloadURL, err := d.GetDownloadURL(track.ID)
 	if err != nil {
@@ -213,7 +233,7 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 	}
 
 	safeArtist := sanitizeFilename(artists)
-	safeTitle := sanitizeFilename(track.Title)
+	safeTitle := sanitizeFilename(trackTitle)
 
 	// Build filename based on format settings
 	filename := buildFilename(safeTitle, safeArtist, track.TrackPos, filenameFormat, includeTrackNumber)
@@ -239,9 +259,9 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 
 	fmt.Println("Embedding metadata and cover art...")
 	metadata := Metadata{
-		Title:       track.Title,
+		Title:       trackTitle,
 		Artist:      artists,
-		Album:       track.Album.Title,
+		Album:       albumTitle,
 		Date:        track.ReleaseDate,
 		TrackNumber: track.TrackPos,
 		DiscNumber:  track.DiskNumber,

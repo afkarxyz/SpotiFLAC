@@ -81,7 +81,9 @@ func NewTidalDownloader(apiURL string) *TidalDownloader {
 }
 
 func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
-	resp, err := http.Get("https://raw.githubusercontent.com/afkarxyz/SpotiFLAC/refs/heads/main/tidal.json")
+	// Decode base64 API URL
+	apiURL, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Fma2FyeHl6L1Nwb3RpRkxBQy9yZWZzL2hlYWRzL21haW4vdGlkYWwuanNvbg==")
+	resp, err := http.Get(string(apiURL))
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch API list: %w", err)
 	}
@@ -107,7 +109,9 @@ func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
 func (t *TidalDownloader) GetAccessToken() (string, error) {
 	data := fmt.Sprintf("client_id=%s&grant_type=client_credentials", t.clientID)
 
-	req, err := http.NewRequest("POST", "https://auth.tidal.com/v1/oauth2/token", strings.NewReader(data))
+	// Decode base64 API URL
+	authURL, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hdXRoLnRpZGFsLmNvbS92MS9vYXV0aDIvdG9rZW4=")
+	req, err := http.NewRequest("POST", string(authURL), strings.NewReader(data))
 	if err != nil {
 		return "", err
 	}
@@ -142,8 +146,9 @@ func (t *TidalDownloader) SearchTracks(query string) (*TidalSearchResponse, erro
 		return nil, fmt.Errorf("failed to get access token: %w", err)
 	}
 
-	// URL encode the query parameter
-	searchURL := fmt.Sprintf("https://api.tidal.com/v1/search/tracks?query=%s&limit=25&offset=0&countryCode=US", url.QueryEscape(query))
+	// Decode base64 API URL and encode the query parameter
+	searchBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkudGlkYWwuY29tL3YxL3NlYXJjaC90cmFja3M/cXVlcnk9")
+	searchURL := fmt.Sprintf("%s%s&limit=25&offset=0&countryCode=US", string(searchBase), url.QueryEscape(query))
 
 	req, err := http.NewRequest("GET", searchURL, nil)
 	if err != nil {
@@ -265,7 +270,9 @@ func (t *TidalDownloader) GetDownloadURL(trackID int64, quality string) (string,
 
 func (t *TidalDownloader) DownloadAlbumArt(albumID string) ([]byte, error) {
 	albumID = strings.ReplaceAll(albumID, "-", "/")
-	artURL := fmt.Sprintf("https://resources.tidal.com/images/%s/1280x1280.jpg", albumID)
+	// Decode base64 API URL
+	imageBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9yZXNvdXJjZXMudGlkYWwuY29tL2ltYWdlcy8=")
+	artURL := fmt.Sprintf("%s%s/1280x1280.jpg", string(imageBase), albumID)
 
 	resp, err := t.client.Get(artURL)
 	if err != nil {
@@ -306,7 +313,7 @@ func (t *TidalDownloader) DownloadFile(url, filepath string) error {
 	return nil
 }
 
-func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool) (string, error) {
+func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
 	if outputDir != "." {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			return "", fmt.Errorf("directory error: %w", err)
@@ -322,26 +329,40 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 		return "", fmt.Errorf("no track ID found")
 	}
 
-	var artists []string
-	if len(trackInfo.Artists) > 0 {
-		for _, artist := range trackInfo.Artists {
-			if artist.Name != "" {
-				artists = append(artists, artist.Name)
-			}
-		}
-	} else if trackInfo.Artist.Name != "" {
-		artists = append(artists, trackInfo.Artist.Name)
-	}
+	// Use Spotify metadata if provided, otherwise fallback to Tidal metadata
+	artistName := spotifyArtistName
+	trackTitle := spotifyTrackName
+	albumTitle := spotifyAlbumName
 
-	artistName := "Unknown Artist"
-	if len(artists) > 0 {
-		artistName = strings.Join(artists, ", ")
+	if artistName == "" {
+		var artists []string
+		if len(trackInfo.Artists) > 0 {
+			for _, artist := range trackInfo.Artists {
+				if artist.Name != "" {
+					artists = append(artists, artist.Name)
+				}
+			}
+		} else if trackInfo.Artist.Name != "" {
+			artists = append(artists, trackInfo.Artist.Name)
+		}
+
+		artistName = "Unknown Artist"
+		if len(artists) > 0 {
+			artistName = strings.Join(artists, ", ")
+		}
 	}
 	artistName = sanitizeFilename(artistName)
 
-	trackTitle := sanitizeFilename(trackInfo.Title)
 	if trackTitle == "" {
-		trackTitle = fmt.Sprintf("track_%d", trackInfo.ID)
+		trackTitle = trackInfo.Title
+		if trackTitle == "" {
+			trackTitle = fmt.Sprintf("track_%d", trackInfo.ID)
+		}
+	}
+	trackTitle = sanitizeFilename(trackTitle)
+
+	if albumTitle == "" {
+		albumTitle = trackInfo.Album.Title
 	}
 
 	// Build filename based on format settings
@@ -387,9 +408,9 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 	}
 
 	metadata := Metadata{
-		Title:       trackInfo.Title,
+		Title:       trackTitle,
 		Artist:      artistName,
-		Album:       trackInfo.Album.Title,
+		Album:       albumTitle,
 		Date:        releaseYear,
 		TrackNumber: trackInfo.TrackNumber,
 		DiscNumber:  trackInfo.VolumeNumber,
@@ -406,7 +427,7 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 	return outputFilename, nil
 }
 
-func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool) (string, error) {
+func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
 	apis, err := t.GetAvailableAPIs()
 	if err != nil {
 		return "", fmt.Errorf("no APIs available for fallback: %w", err)
@@ -418,7 +439,7 @@ func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, 
 
 		fallbackDownloader := NewTidalDownloader(apiURL)
 
-		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality, filenameFormat, includeTrackNumber)
+		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality, filenameFormat, includeTrackNumber, spotifyTrackName, spotifyArtistName, spotifyAlbumName)
 		if err == nil {
 			fmt.Printf("✓ Success with: %s\n", apiURL)
 			return result, nil

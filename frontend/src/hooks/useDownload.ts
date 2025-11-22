@@ -52,11 +52,15 @@ export function useDownload() {
     }
 
     if (service === "auto") {
+      // Try Tidal first
       try {
         const tidalResponse = await downloadTrack({
           isrc,
           service: "tidal",
           query,
+          track_name: trackName,
+          artist_name: artistName,
+          album_name: albumName,
           output_dir: outputDir,
           filename_format: settings.filenameFormat,
           track_number: settings.trackNumber,
@@ -65,17 +69,42 @@ export function useDownload() {
         if (tidalResponse.success) {
           return tidalResponse;
         }
-
-        service = "deezer";
       } catch (tidalErr) {
-        service = "deezer";
+        // Tidal failed, continue to Deezer
       }
+
+      // Try Deezer second
+      try {
+        const deezerResponse = await downloadTrack({
+          isrc,
+          service: "deezer",
+          query,
+          track_name: trackName,
+          artist_name: artistName,
+          album_name: albumName,
+          output_dir: outputDir,
+          filename_format: settings.filenameFormat,
+          track_number: settings.trackNumber,
+        });
+
+        if (deezerResponse.success) {
+          return deezerResponse;
+        }
+      } catch (deezerErr) {
+        // Deezer failed, continue to Qobuz
+      }
+
+      // Try Qobuz as last fallback
+      service = "qobuz";
     }
 
     return await downloadTrack({
       isrc,
-      service: service as "deezer" | "tidal",
+      service: service as "deezer" | "tidal" | "qobuz",
       query,
+      track_name: trackName,
+      artist_name: artistName,
+      album_name: albumName,
       output_dir: outputDir,
       filename_format: settings.filenameFormat,
       track_number: settings.trackNumber,

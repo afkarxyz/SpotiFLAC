@@ -37,6 +37,9 @@ type DownloadRequest struct {
 	ISRC           string `json:"isrc"`
 	Service        string `json:"service"`
 	Query          string `json:"query,omitempty"`
+	TrackName      string `json:"track_name,omitempty"`
+	ArtistName     string `json:"artist_name,omitempty"`
+	AlbumName      string `json:"album_name,omitempty"`
 	ApiURL         string `json:"api_url,omitempty"`
 	OutputDir      string `json:"output_dir,omitempty"`
 	AudioFormat    string `json:"audio_format,omitempty"`
@@ -118,14 +121,20 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 		if req.ApiURL == "" || req.ApiURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
-			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber)
+			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
 		} else {
 			downloader := backend.NewTidalDownloader(req.ApiURL)
-			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber)
+			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
+		}
+	} else if req.Service == "qobuz" {
+		downloader := backend.NewQobuzDownloader()
+		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
+		if err == nil {
+			filename = "Downloaded via Qobuz"
 		}
 	} else {
 		downloader := backend.NewDeezerDownloader()
-		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber)
+		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
 		if err == nil {
 			filename = "Downloaded via Deezer"
 		}
