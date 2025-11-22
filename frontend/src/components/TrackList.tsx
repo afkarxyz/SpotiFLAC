@@ -187,13 +187,14 @@ export function TrackList({
                           onDownloadTrack(track.isrc, track.name, track.artists, track.album_name)
                         }
                         size="sm"
+                        className="gap-1.5"
                         disabled={isDownloading || downloadingTrack === track.isrc}
                       >
                         {downloadingTrack === track.isrc ? (
                           <Spinner />
                         ) : (
                           <>
-                            <Download className="h-4 w-4 mr-2" />
+                            <Download className="h-4 w-4" />
                             Download
                           </>
                         )}

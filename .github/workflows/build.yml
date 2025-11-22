@@ -233,22 +233,17 @@ jobs:
       - name: Build application
         run: wails build -platform linux/amd64
 
-      - name: Download appimagetool
+      - name: Download linuxdeploy and appimagetool
         run: |
-          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool
+          wget -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          chmod +x linuxdeploy
 
       - name: Create AppImage
         run: |
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-
-          # Copy binary
-          cp build/bin/SpotiFLAC AppDir/usr/bin/spotiflac
+          mkdir -p AppDir
 
           # Create desktop file
-          cat > AppDir/spotiflac.desktop << 'EOF'
+          cat > spotiflac.desktop << 'EOF'
           [Desktop Entry]
           Name=SpotiFLAC
           Exec=spotiflac
@@ -258,38 +253,58 @@ jobs:
           Comment=Get Spotify tracks in true FLAC from Tidal/Deezer
           EOF
 
-          # Copy desktop file to usr/share/applications
-          cp AppDir/spotiflac.desktop AppDir/usr/share/applications/
-
-          # Use existing icon from build or convert SVG to PNG
+          # Create icon in multiple sizes for better compatibility
           if [ -f "build/appicon.png" ]; then
-            # Resize to 256x256 if needed
-            convert build/appicon.png -resize 256x256 AppDir/spotiflac.png
+            cp build/appicon.png spotiflac-256.png
           elif [ -f "frontend/public/icon.svg" ]; then
-            # Convert SVG to PNG
-            convert -background none -size 256x256 frontend/public/icon.svg AppDir/spotiflac.png
+            convert -background none -size 256x256 frontend/public/icon.svg spotiflac-256.png
           else
-            # Fallback: create simple icon
-            convert -size 256x256 radial-gradient:#FFD700-#FFA500 AppDir/spotiflac.png
+            echo "Warning: No icon found, building without icon"
+            touch spotiflac-256.png  # Create empty file to prevent errors
           fi
 
-          cp AppDir/spotiflac.png AppDir/usr/share/icons/hicolor/256x256/apps/
-          cp AppDir/spotiflac.png AppDir/.DirIcon
+          # Create additional icon sizes only if icon exists
+          if [ -s spotiflac-256.png ]; then
+            convert spotiflac-256.png -resize 128x128 spotiflac-128.png
+            convert spotiflac-256.png -resize 64x64 spotiflac-64.png
+            convert spotiflac-256.png -resize 48x48 spotiflac-48.png
+            convert spotiflac-256.png -resize 32x32 spotiflac-32.png
+            convert spotiflac-256.png -resize 16x16 spotiflac-16.png
+          fi
 
-          # Create AppRun
-          cat > AppDir/AppRun << 'EOF'
-          #!/bin/sh
-          SELF=$(readlink -f "$0")
-          HERE=${SELF%/*}
-          export PATH="${HERE}/usr/bin/:${PATH}"
-          export LD_LIBRARY_PATH="${HERE}/usr/lib/:${LD_LIBRARY_PATH}"
-          exec "${HERE}/usr/bin/spotiflac" "$@"
-          EOF
-          chmod +x AppDir/AppRun
-
-          # Create AppImage
+          # Use linuxdeploy to create AppImage
+          # Bundle only uncommon libraries (webkit2gtk), exclude common ones (GTK, glib)
           mkdir -p dist
-          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
+          ./linuxdeploy \
+            --appdir AppDir \
+            --executable build/bin/SpotiFLAC \
+            --desktop-file spotiflac.desktop \
+            --icon-file spotiflac-256.png \
+            --icon-file spotiflac-128.png \
+            --icon-file spotiflac-64.png \
+            --icon-file spotiflac-48.png \
+            --icon-file spotiflac-32.png \
+            --icon-file spotiflac-16.png \
+            --exclude-library "libgtk-3.so*" \
+            --exclude-library "libgdk-3.so*" \
+            --exclude-library "libglib-2.0.so*" \
+            --exclude-library "libgobject-2.0.so*" \
+            --exclude-library "libgio-2.0.so*" \
+            --exclude-library "libpango-1.0.so*" \
+            --exclude-library "libcairo.so*" \
+            --exclude-library "libX11.so*" \
+            --exclude-library "libXext.so*" \
+            --exclude-library "libXrender.so*" \
+            --exclude-library "libfontconfig.so*" \
+            --exclude-library "libfreetype.so*" \
+            --exclude-library "libpthread.so*" \
+            --exclude-library "libdl.so*" \
+            --exclude-library "libm.so*" \
+            --exclude-library "libc.so*" \
+            --output appimage
+
+          # Rename to match version
+          mv SpotiFLAC*.AppImage dist/SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

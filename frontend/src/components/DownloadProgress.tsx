@@ -13,8 +13,8 @@ export function DownloadProgress({ progress, currentTrack, onStop }: DownloadPro
     <div className="w-full space-y-2 mt-4">
       <div className="flex items-center gap-2">
         <Progress value={progress} className="h-2 flex-1" />
-        <Button variant="destructive" size="sm" onClick={onStop}>
-          <StopCircle className="h-4 w-4 mr-2" />
+        <Button variant="destructive" size="sm" onClick={onStop} className="gap-1.5">
+          <StopCircle className="h-4 w-4" />
           Stop
         </Button>
       </div>

@@ -172,7 +172,7 @@ func sanitizeFilename(name string) string {
 	return sanitized
 }
 
-func buildFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool) string {
+func buildFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int) string {
 	var filename string
 
 	// Build base filename based on format
@@ -186,14 +186,15 @@ func buildFilename(title, artist string, trackNumber int, format string, include
 	}
 
 	// Add track number prefix if enabled
-	if includeTrackNumber && trackNumber > 0 {
-		filename = fmt.Sprintf("%02d. %s", trackNumber, filename)
+	// Only use track number for bulk downloads (when position > 0)
+	if includeTrackNumber && position > 0 {
+		filename = fmt.Sprintf("%02d. %s", position, filename)
 	}
 
 	return filename + ".flac"
 }
 
-func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) error {
+func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) error {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	track, err := d.GetTrackByISRC(isrc)
@@ -241,7 +242,7 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 	safeTitle := sanitizeFilename(trackTitle)
 
 	// Build filename based on format settings
-	filename := buildFilename(safeTitle, safeArtist, track.TrackPos, filenameFormat, includeTrackNumber)
+	filename := buildFilename(safeTitle, safeArtist, track.TrackPos, filenameFormat, includeTrackNumber, position)
 	filepath := filepath.Join(outputDir, filename)
 
 	fmt.Println("Downloading FLAC file...")
@@ -263,12 +264,18 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 	}
 
 	fmt.Println("Embedding metadata and cover art...")
+	// Only use track number for bulk downloads (when position > 0)
+	trackNumberToEmbed := 0
+	if position > 0 {
+		trackNumberToEmbed = position
+	}
+
 	metadata := Metadata{
 		Title:       trackTitle,
 		Artist:      artists,
 		Album:       albumTitle,
 		Date:        track.ReleaseDate,
-		TrackNumber: track.TrackPos,
+		TrackNumber: trackNumberToEmbed,
 		DiscNumber:  track.DiskNumber,
 		ISRC:        track.ISRC,
 	}

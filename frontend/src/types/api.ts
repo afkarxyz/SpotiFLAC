@@ -108,6 +108,7 @@ export interface DownloadRequest {
   folder_name?: string;
   filename_format?: string;
   track_number?: boolean;
+  position?: number;
 }
 
 export interface DownloadResponse {

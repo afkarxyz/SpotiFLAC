@@ -24,7 +24,8 @@ export function useDownload() {
     artistName?: string,
     albumName?: string,
     playlistName?: string,
-    isArtistDiscography?: boolean
+    isArtistDiscography?: boolean,
+    position?: number
   ) => {
     let service = settings.downloader;
 
@@ -64,6 +65,7 @@ export function useDownload() {
           output_dir: outputDir,
           filename_format: settings.filenameFormat,
           track_number: settings.trackNumber,
+          position,
         });
 
         if (tidalResponse.success) {
@@ -85,6 +87,7 @@ export function useDownload() {
           output_dir: outputDir,
           filename_format: settings.filenameFormat,
           track_number: settings.trackNumber,
+          position,
         });
 
         if (deezerResponse.success) {
@@ -108,6 +111,7 @@ export function useDownload() {
       output_dir: outputDir,
       filename_format: settings.filenameFormat,
       track_number: settings.trackNumber,
+      position,
     });
   };
 
@@ -126,6 +130,7 @@ export function useDownload() {
     setDownloadingTrack(isrc);
 
     try {
+      // Single track download - no position parameter
       const response = await downloadWithAutoFallback(
         isrc,
         settings,
@@ -133,7 +138,8 @@ export function useDownload() {
         artistName,
         albumName,
         undefined,
-        false
+        false,
+        undefined // Don't pass position for single track
       );
 
       if (response.success) {
@@ -187,6 +193,7 @@ export function useDownload() {
       }
 
       try {
+        // Use sequential numbering (1, 2, 3...) for selected tracks
         const response = await downloadWithAutoFallback(
           isrc,
           settings,
@@ -194,7 +201,8 @@ export function useDownload() {
           track?.artists,
           track?.album_name,
           playlistName,
-          isArtistDiscography
+          isArtistDiscography,
+          i + 1 // Sequential position based on selection order
         );
 
         if (response.success) {
@@ -265,7 +273,8 @@ export function useDownload() {
           track.artists,
           track.album_name,
           playlistName,
-          isArtistDiscography
+          isArtistDiscography,
+          i + 1
         );
 
         if (response.success) {

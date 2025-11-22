@@ -18,6 +18,7 @@ import { OpenFolder } from "../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 
 // Components
+import { TitleBar } from "@/components/TitleBar";
 import { Header } from "@/components/Header";
 import { SearchBar } from "@/components/SearchBar";
 import { TrackInfo } from "@/components/TrackInfo";
@@ -259,9 +260,11 @@ function App() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen bg-background p-4 md:p-8">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} />
+      <div className="min-h-screen bg-background flex flex-col">
+        <TitleBar />
+        <div className="flex-1 p-4 md:p-8">
+          <div className="max-w-4xl mx-auto space-y-6">
+            <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} />
           
           {/* Download Progress Toast */}
           <DownloadProgressToast />
@@ -344,7 +347,8 @@ function App() {
             onFetch={handleFetchMetadata}
           />
 
-          {metadata.metadata && renderMetadata()}
+            {metadata.metadata && renderMetadata()}
+          </div>
         </div>
       </div>
     </TooltipProvider>

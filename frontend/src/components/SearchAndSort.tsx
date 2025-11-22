@@ -33,8 +33,8 @@ export function SearchAndSort({
         />
       </div>
       <Select value={sortBy} onValueChange={onSortChange}>
-        <SelectTrigger className="w-[200px]">
-          <ArrowUpDown className="h-4 w-4 mr-2" />
+        <SelectTrigger className="w-[200px] gap-1.5">
+          <ArrowUpDown className="h-4 w-4" />
           <SelectValue placeholder="Sort by" />
         </SelectTrigger>
         <SelectContent>

@@ -19,7 +19,8 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw, Info } from "lucide-react";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, type Settings as SettingsType } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder } from "../../wailsjs/go/main/App";
@@ -191,98 +192,132 @@ export function Settings() {
           <SettingsIcon className="h-5 w-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[85vh] flex flex-col" aria-describedby={undefined}>
+      <DialogContent className="sm:max-w-[700px] flex flex-col" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-2 overflow-y-auto flex-1">
-          {/* Download Path */}
-          <div className="space-y-2">
-            <Label htmlFor="download-path">Download Path</Label>
-            <div className="flex gap-2">
-              <Input
-                id="download-path"
-                value={tempSettings.downloadPath}
-                onChange={(e) => handleDownloadPathChange(e.target.value)}
-                placeholder="C:\Users\YourUsername\Music"
-              />
-              <Button type="button" onClick={handleBrowseFolder}>
-                <FolderOpen className="h-4 w-4 mr-2" />
-                Browse
-              </Button>
+        <div className="grid grid-cols-2 gap-6 py-2">
+          {/* Left Column */}
+          <div className="space-y-4">
+            {/* Download Path */}
+            <div className="space-y-2">
+              <Label htmlFor="download-path">Download Path</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="download-path"
+                  value={tempSettings.downloadPath}
+                  onChange={(e) => handleDownloadPathChange(e.target.value)}
+                  placeholder="C:\Users\YourUsername\Music"
+                />
+                <Button type="button" onClick={handleBrowseFolder} className="gap-1.5">
+                  <FolderOpen className="h-4 w-4" />
+                  Browse
+                </Button>
+              </div>
+            </div>
+
+            {/* Source Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="downloader">Source</Label>
+              <Select
+                value={tempSettings.downloader}
+                onValueChange={handleDownloaderChange}
+              >
+                <SelectTrigger id="downloader">
+                  <SelectValue placeholder="Select a source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="tidal">
+                    <span className="flex items-center">
+                      <TidalIcon />
+                      Tidal
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="deezer">
+                    <span className="flex items-center">
+                      <DeezerIcon />
+                      Deezer
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="qobuz">
+                    <span className="flex items-center">
+                      <QobuzIcon />
+                      Qobuz
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Theme Mode Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="theme-mode">Theme</Label>
+              <Select value={tempSettings.themeMode} onValueChange={handleThemeModeChange}>
+                <SelectTrigger id="theme-mode">
+                  <SelectValue placeholder="Select theme mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Theme Color Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="theme">Theme Color</Label>
+              <Select value={tempSettings.theme} onValueChange={handleThemeChange}>
+                <SelectTrigger id="theme">
+                  <SelectValue placeholder="Select a theme" />
+                </SelectTrigger>
+                <SelectContent>
+                  {themes.map((theme) => (
+                    <SelectItem key={theme.name} value={theme.name}>
+                      <span className="flex items-center gap-2">
+                        <span 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: theme.cssVars.light.primary }}
+                        />
+                        {theme.label}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          {/* Source Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="downloader">Source</Label>
-            <Select
-              value={tempSettings.downloader}
-              onValueChange={handleDownloaderChange}
-            >
-              <SelectTrigger id="downloader">
-                <SelectValue placeholder="Select a source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">
-                  <span className="flex items-center">
-                    <TidalIcon />
-                    <DeezerIcon />
-                    <QobuzIcon />
-                    Auto (Tidal → Deezer → Qobuz)
-                  </span>
-                </SelectItem>
-                <SelectItem value="tidal">
-                  <span className="flex items-center">
-                    <TidalIcon />
-                    Tidal
-                  </span>
-                </SelectItem>
-                <SelectItem value="deezer">
-                  <span className="flex items-center">
-                    <DeezerIcon />
-                    Deezer
-                  </span>
-                </SelectItem>
-                <SelectItem value="qobuz">
-                  <span className="flex items-center">
-                    <QobuzIcon />
-                    Qobuz
-                  </span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* File Settings */}
-          <div className="space-y-3 pt-3 border-t">
-            <h3 className="font-medium text-sm">File Settings</h3>
-            
+          {/* Right Column */}
+          <div className="space-y-4">
             {/* Filename Format */}
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-sm">Filename Format</Label>
               <RadioGroup
                 value={tempSettings.filenameFormat}
                 onValueChange={(value) => setTempSettings(prev => ({ ...prev, filenameFormat: value as any }))}
-                className="flex flex-wrap gap-3"
               >
-                <div className="flex items-center space-x-1.5">
+                <div className="flex items-center space-x-2">
                   <RadioGroupItem value="title-artist" id="title-artist" />
-                  <Label htmlFor="title-artist" className="cursor-pointer font-normal text-xs">Title - Artist</Label>
+                  <Label htmlFor="title-artist" className="cursor-pointer font-normal text-sm">Title - Artist</Label>
                 </div>
-                <div className="flex items-center space-x-1.5">
+                <div className="flex items-center space-x-2">
                   <RadioGroupItem value="artist-title" id="artist-title" />
-                  <Label htmlFor="artist-title" className="cursor-pointer font-normal text-xs">Artist - Title</Label>
+                  <Label htmlFor="artist-title" className="cursor-pointer font-normal text-sm">Artist - Title</Label>
                 </div>
-                <div className="flex items-center space-x-1.5">
+                <div className="flex items-center space-x-2">
                   <RadioGroupItem value="title" id="title" />
-                  <Label htmlFor="title" className="cursor-pointer font-normal text-xs">Title</Label>
+                  <Label htmlFor="title" className="cursor-pointer font-normal text-sm">Title</Label>
                 </div>
               </RadioGroup>
             </div>
 
-            {/* Subfolder Options */}
+            <div className="border-t" />
+
+            {/* Folder Settings */}
             <div className="space-y-2">
+              <h3 className="font-medium text-sm">Folder Settings</h3>
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="track-number"
@@ -290,6 +325,14 @@ export function Settings() {
                   onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, trackNumber: checked as boolean }))}
                 />
                 <Label htmlFor="track-number" className="cursor-pointer text-sm">Track Number</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p className="text-xs whitespace-nowrap">Adds track numbers based on the order in the album, playlist, or discography list</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -308,38 +351,6 @@ export function Settings() {
                 <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder (Playlist & Discography)</Label>
               </div>
             </div>
-          </div>
-
-          {/* Theme Mode Selection */}
-          <div className="space-y-1.5 pt-3 border-t">
-            <Label htmlFor="theme-mode" className="text-sm">Theme</Label>
-            <Select value={tempSettings.themeMode} onValueChange={handleThemeModeChange}>
-              <SelectTrigger id="theme-mode">
-                <SelectValue placeholder="Select theme mode" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto</SelectItem>
-                <SelectItem value="light">Light</SelectItem>
-                <SelectItem value="dark">Dark</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Theme Color Selection */}
-          <div className="space-y-1.5">
-            <Label htmlFor="theme" className="text-sm">Theme Color</Label>
-            <Select value={tempSettings.theme} onValueChange={handleThemeChange}>
-              <SelectTrigger id="theme">
-                <SelectValue placeholder="Select a theme" />
-              </SelectTrigger>
-              <SelectContent>
-                {themes.map((theme) => (
-                  <SelectItem key={theme.name} value={theme.name}>
-                    {theme.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         </div>
         <DialogFooter className="gap-2 sm:justify-between">

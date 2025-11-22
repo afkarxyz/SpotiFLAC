@@ -222,7 +222,7 @@ func (q *QobuzDownloader) DownloadCoverArt(coverURL, filepath string) error {
 	return err
 }
 
-func buildQobuzFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool) string {
+func buildQobuzFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int) string {
 	var filename string
 
 	// Build base filename based on format
@@ -236,14 +236,15 @@ func buildQobuzFilename(title, artist string, trackNumber int, format string, in
 	}
 
 	// Add track number prefix if enabled
-	if includeTrackNumber && trackNumber > 0 {
-		filename = fmt.Sprintf("%02d. %s", trackNumber, filename)
+	// Only use track number for bulk downloads (when position > 0)
+	if includeTrackNumber && position > 0 {
+		filename = fmt.Sprintf("%02d. %s", position, filename)
 	}
 
 	return filename + ".flac"
 }
 
-func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) error {
+func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) error {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	// Create output directory if it doesn't exist
@@ -311,7 +312,7 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	safeTitle := sanitizeFilename(trackTitle)
 
 	// Build filename based on format settings
-	filename := buildQobuzFilename(safeTitle, safeArtist, track.TrackNumber, filenameFormat, includeTrackNumber)
+	filename := buildQobuzFilename(safeTitle, safeArtist, track.TrackNumber, filenameFormat, includeTrackNumber, position)
 	filepath := filepath.Join(outputDir, filename)
 
 	fmt.Printf("Downloading FLAC file to: %s\n", filepath)
@@ -339,12 +340,18 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 		releaseYear = track.ReleaseDateOriginal[:4]
 	}
 
+	// Only use track number for bulk downloads (when position > 0)
+	trackNumberToEmbed := 0
+	if position > 0 {
+		trackNumberToEmbed = position
+	}
+
 	metadata := Metadata{
 		Title:       trackTitle,
 		Artist:      artists,
 		Album:       albumTitle,
 		Date:        releaseYear,
-		TrackNumber: track.TrackNumber,
+		TrackNumber: trackNumberToEmbed,
 		DiscNumber:  track.MediaNumber,
 		ISRC:        track.ISRC,
 	}

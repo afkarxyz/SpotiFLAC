@@ -333,7 +333,7 @@ func (t *TidalDownloader) DownloadFile(url, filepath string) error {
 	return nil
 }
 
-func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
+func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
 	if outputDir != "." {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			return "", fmt.Errorf("directory error: %w", err)
@@ -386,7 +386,7 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 	}
 
 	// Build filename based on format settings
-	filename := buildTidalFilename(trackTitle, artistName, trackInfo.TrackNumber, filenameFormat, includeTrackNumber)
+	filename := buildTidalFilename(trackTitle, artistName, trackInfo.TrackNumber, filenameFormat, includeTrackNumber, position)
 	outputFilename := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
@@ -427,12 +427,18 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 		releaseYear = trackInfo.Album.ReleaseDate[:4]
 	}
 
+	// Only use track number for bulk downloads (when position > 0)
+	trackNumberToEmbed := 0
+	if position > 0 {
+		trackNumberToEmbed = position
+	}
+
 	metadata := Metadata{
 		Title:       trackTitle,
 		Artist:      artistName,
 		Album:       albumTitle,
 		Date:        releaseYear,
-		TrackNumber: trackInfo.TrackNumber,
+		TrackNumber: trackNumberToEmbed,
 		DiscNumber:  trackInfo.VolumeNumber,
 		ISRC:        trackInfo.ISRC,
 	}
@@ -447,7 +453,7 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 	return outputFilename, nil
 }
 
-func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
+func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
 	apis, err := t.GetAvailableAPIs()
 	if err != nil {
 		return "", fmt.Errorf("no APIs available for fallback: %w", err)
@@ -459,7 +465,7 @@ func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, 
 
 		fallbackDownloader := NewTidalDownloader(apiURL)
 
-		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality, filenameFormat, includeTrackNumber, spotifyTrackName, spotifyArtistName, spotifyAlbumName)
+		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName)
 		if err == nil {
 			fmt.Printf("✓ Success with: %s\n", apiURL)
 			return result, nil
@@ -476,7 +482,7 @@ func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, 
 	return "", fmt.Errorf("all %d APIs failed. Last error: %v", len(apis), lastError)
 }
 
-func buildTidalFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool) string {
+func buildTidalFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int) string {
 	var filename string
 
 	// Build base filename based on format
@@ -490,8 +496,9 @@ func buildTidalFilename(title, artist string, trackNumber int, format string, in
 	}
 
 	// Add track number prefix if enabled
-	if includeTrackNumber && trackNumber > 0 {
-		filename = fmt.Sprintf("%02d. %s", trackNumber, filename)
+	// Only use track number for bulk downloads (when position > 0)
+	if includeTrackNumber && position > 0 {
+		filename = fmt.Sprintf("%02d. %s", position, filename)
 	}
 
 	return filename + ".flac"

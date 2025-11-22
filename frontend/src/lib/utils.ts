@@ -18,11 +18,23 @@ export function sanitizePath(input: string, os: string): string {
 
 export function joinPath(os: string, ...parts: string[]): string {
   const sep = os === "Windows" ? "\\" : "/";
-
-  return parts
-    .filter(Boolean)
-    .map(p => p.replace(/^[/\\]+|[/\\]+$/g, ""))
+  
+  const filtered = parts.filter(Boolean);
+  if (filtered.length === 0) return "";
+  
+  const joined = filtered
+    .map((p, i) => {
+      // For first part, only remove trailing slashes (preserve leading slash for absolute paths)
+      if (i === 0) {
+        return p.replace(/[/\\]+$/g, "");
+      }
+      // For other parts, remove both leading and trailing slashes
+      return p.replace(/^[/\\]+|[/\\]+$/g, "");
+    })
+    .filter(Boolean) // Remove empty strings after trimming
     .join(sep);
+  
+  return joined;
 }
 
 export function buildOutputPath(settings: Settings, folder?: string) {

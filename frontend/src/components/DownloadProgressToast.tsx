@@ -9,13 +9,20 @@ export function DownloadProgressToast() {
   }
 
   return (
-    <div className="fixed top-4 left-4 z-50 animate-in slide-in-from-left-5 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left-5">
+    <div className="fixed bottom-4 left-4 z-50 animate-in slide-in-from-bottom-5 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-5">
       <div className="bg-background border rounded-lg shadow-lg p-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Download className="h-4 w-4 text-primary animate-bounce" />
-          <p className="text-sm font-medium">
-            {progress.mb_downloaded.toFixed(2)} MB
-          </p>
+          <div className="flex flex-col">
+            <p className="text-sm font-medium">
+              {progress.mb_downloaded.toFixed(2)} MB
+            </p>
+            {progress.speed_mbps > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {progress.speed_mbps.toFixed(2)} MB/s
+              </p>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -45,6 +45,7 @@ type DownloadRequest struct {
 	AudioFormat    string `json:"audio_format,omitempty"`
 	FilenameFormat string `json:"filename_format,omitempty"`
 	TrackNumber    bool   `json:"track_number,omitempty"`
+	Position       int    `json:"position,omitempty"` // Position in playlist/album (1-based)
 }
 
 // DownloadResponse represents the response structure for download operations
@@ -125,20 +126,20 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 		if req.ApiURL == "" || req.ApiURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
-			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
+			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
 		} else {
 			downloader := backend.NewTidalDownloader(req.ApiURL)
-			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
+			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
 		}
 	} else if req.Service == "qobuz" {
 		downloader := backend.NewQobuzDownloader()
-		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
+		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
 		if err == nil {
 			filename = "Downloaded via Qobuz"
 		}
 	} else {
 		downloader := backend.NewDeezerDownloader()
-		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.TrackName, req.ArtistName, req.AlbumName)
+		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
 		if err == nil {
 			filename = "Downloaded via Deezer"
 		}
@@ -187,4 +188,10 @@ func (a *App) GetDefaults() map[string]string {
 // GetDownloadProgress returns current download progress
 func (a *App) GetDownloadProgress() backend.ProgressInfo {
 	return backend.GetDownloadProgress()
+}
+
+// Quit closes the application
+func (a *App) Quit() {
+	// You can add cleanup logic here if needed
+	panic("quit") // This will trigger Wails to close the app
 }

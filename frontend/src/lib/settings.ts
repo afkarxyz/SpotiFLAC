@@ -12,6 +12,15 @@ export interface Settings {
   operatingSystem: "Windows" | "linux/MacOS"
 }
 
+// Auto-detect operating system
+function detectOS(): "Windows" | "linux/MacOS" {
+  const platform = window.navigator.platform.toLowerCase();
+  if (platform.includes('win')) {
+    return "Windows";
+  }
+  return "linux/MacOS";
+}
+
 export const DEFAULT_SETTINGS: Settings = {
   downloadPath: "",
   downloader: "auto",
@@ -21,7 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   artistSubfolder: false,
   albumSubfolder: false,
   trackNumber: false,
-  operatingSystem: "Windows"
+  operatingSystem: detectOS()
 };
 
 async function fetchDefaultPath(): Promise<string> {
@@ -46,6 +55,8 @@ export function getSettings(): Settings {
         parsed.themeMode = parsed.darkMode ? 'dark' : 'light';
         delete parsed.darkMode;
       }
+      // Always use detected OS (don't persist it)
+      parsed.operatingSystem = detectOS();
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (error) {

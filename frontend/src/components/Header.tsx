@@ -68,7 +68,7 @@ export function Header({ version, hasUpdate }: HeaderProps) {
               </a>
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
+          <TooltipContent side="left">
             <p>Report bug or request feature</p>
           </TooltipContent>
         </Tooltip>
