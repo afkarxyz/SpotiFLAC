@@ -11,7 +11,7 @@
   },
   "info": {
     "productName": "SpotiFLAC",
-    "productVersion": "5.7"
+    "productVersion": "5.8"
   },
   "wailsjsdir": "./frontend",
   "assetdir": "./frontend/dist",

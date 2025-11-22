@@ -40,7 +40,7 @@ function App() {
   const [hasUpdate, setHasUpdate] = useState(false);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "5.7";
+  const CURRENT_VERSION = "5.8";
 
   const download = useDownload();
   const metadata = useMetadata();
