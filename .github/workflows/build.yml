@@ -216,7 +216,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick
 
           # Create symlink for webkit2gtk-4.0 -> webkit2gtk-4.1 (Ubuntu 24.04 compatibility)
           sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
@@ -330,6 +330,8 @@ jobs:
           prerelease: false
           generate_release_notes: false
           body: |
+            ## Changelog
+
             ## Downloads
 
             - `SpotiFLAC-${{ steps.version.outputs.version }}.exe` - Windows
