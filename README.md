@@ -17,7 +17,7 @@ Get Spotify tracks in true FLAC from Tidal/Deezer — no account required.
 
 ## Screenshot
 
-![Image](https://github.com/user-attachments/assets/0e1338a6-244d-4e6b-9224-fd9549a585ed)
+![Image](https://github.com/user-attachments/assets/d8bfb49c-58be-4092-9bf4-6e6a5d4b944a)
 
 ## Lossless Audio Check
 
