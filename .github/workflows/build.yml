@@ -55,6 +55,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
@@ -123,6 +124,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
@@ -206,6 +208,7 @@ jobs:
           echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
 
       - name: Setup pnpm cache
+        continue-on-error: true
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
@@ -242,11 +245,11 @@ jobs:
         run: |
           mkdir -p AppDir
 
-          # Create desktop file
+          # Create desktop file (Exec must match binary name)
           cat > spotiflac.desktop << 'EOF'
           [Desktop Entry]
           Name=SpotiFLAC
-          Exec=spotiflac
+          Exec=SpotiFLAC
           Icon=spotiflac
           Type=Application
           Categories=Audio;AudioVideo;
