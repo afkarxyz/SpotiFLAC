@@ -253,24 +253,15 @@ jobs:
           Comment=Get Spotify tracks in true FLAC from Tidal/Deezer
           EOF
 
-          # Create icon in multiple sizes for better compatibility
+          # Create icon from build or SVG
           if [ -f "build/appicon.png" ]; then
             # Resize to 256x256 (build/appicon.png might be 1024x1024)
-            convert build/appicon.png -resize 256x256 spotiflac-256.png
+            convert build/appicon.png -resize 256x256 spotiflac.png
           elif [ -f "frontend/public/icon.svg" ]; then
-            convert -background none -size 256x256 frontend/public/icon.svg spotiflac-256.png
+            convert -background none -size 256x256 frontend/public/icon.svg spotiflac.png
           else
-            echo "Warning: No icon found, building without icon"
-            touch spotiflac-256.png  # Create empty file to prevent errors
-          fi
-
-          # Create additional icon sizes only if icon exists
-          if [ -s spotiflac-256.png ]; then
-            convert spotiflac-256.png -resize 128x128 spotiflac-128.png
-            convert spotiflac-256.png -resize 64x64 spotiflac-64.png
-            convert spotiflac-256.png -resize 48x48 spotiflac-48.png
-            convert spotiflac-256.png -resize 32x32 spotiflac-32.png
-            convert spotiflac-256.png -resize 16x16 spotiflac-16.png
+            echo "Error: No icon found"
+            exit 1
           fi
 
           # Use linuxdeploy to create AppImage
@@ -280,12 +271,7 @@ jobs:
             --appdir AppDir \
             --executable build/bin/SpotiFLAC \
             --desktop-file spotiflac.desktop \
-            --icon-file spotiflac-256.png \
-            --icon-file spotiflac-128.png \
-            --icon-file spotiflac-64.png \
-            --icon-file spotiflac-48.png \
-            --icon-file spotiflac-32.png \
-            --icon-file spotiflac-16.png \
+            --icon-file spotiflac.png \
             --exclude-library "libgtk-3.so*" \
             --exclude-library "libgdk-3.so*" \
             --exclude-library "libglib-2.0.so*" \
