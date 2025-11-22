@@ -36,6 +36,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
+import { joinPath, sanitizePath } from "./lib/utils";
 
 function App() {
   const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -124,33 +125,28 @@ function App() {
     // Build query for Tidal (title + artist)
     const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
     
-    // Build output directory based on settings
+    const os = settings.operatingSystem;
+
+    // Base download path
     let outputDir = settings.downloadPath;
-    
-    // For playlist or artist discography downloads
+
+    // Playlist or discography
     if (playlistName) {
-      const sanitizedPlaylist = playlistName.replace(/[<>:"/\\|?*]/g, '_').trim();
-      outputDir = `${settings.downloadPath}\\${sanitizedPlaylist}`;
-      
-      // For artist discography: only use album subfolder (artist is redundant)
+      outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+
       if (isArtistDiscography) {
-        // Only add album subfolder if enabled
+        // Only album subfolder
         if (settings.albumSubfolder && albumName) {
-          const sanitizedAlbum = albumName.replace(/[<>:"/\\|?*]/g, '_').trim();
-          outputDir = `${outputDir}\\${sanitizedAlbum}`;
+          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
         }
       } else {
-        // For playlist: use both artist and album subfolders if enabled
-        // Add artist subfolder if enabled
+        // Playlist rules:
         if (settings.artistSubfolder && artistName) {
-          const sanitizedArtist = artistName.replace(/[<>:"/\\|?*]/g, '_').trim();
-          outputDir = `${outputDir}\\${sanitizedArtist}`;
+          outputDir = joinPath(os, outputDir, sanitizePath(artistName, os));
         }
-        
-        // Add album subfolder if enabled
+
         if (settings.albumSubfolder && albumName) {
-          const sanitizedAlbum = albumName.replace(/[<>:"/\\|?*]/g, '_').trim();
-          outputDir = `${outputDir}\\${sanitizedAlbum}`;
+          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
         }
       }
     }
