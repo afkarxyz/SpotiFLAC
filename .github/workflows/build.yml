@@ -258,9 +258,18 @@ jobs:
           # Copy desktop file to usr/share/applications
           cp AppDir/spotiflac.desktop AppDir/usr/share/applications/
 
-          # Create icon using ImageMagick
-          sudo apt-get install -y imagemagick
-          convert -size 256x256 xc:#FFD700 -gravity center -pointsize 80 -fill black -annotate +0+0 "SF" AppDir/spotiflac.png
+          # Use existing icon from build or convert SVG to PNG
+          if [ -f "build/appicon.png" ]; then
+            # Resize to 256x256 if needed
+            convert build/appicon.png -resize 256x256 AppDir/spotiflac.png
+          elif [ -f "frontend/public/icon.svg" ]; then
+            # Convert SVG to PNG
+            convert -background none -size 256x256 frontend/public/icon.svg AppDir/spotiflac.png
+          else
+            # Fallback: create simple icon
+            convert -size 256x256 radial-gradient:#FFD700-#FFA500 AppDir/spotiflac.png
+          fi
+
           cp AppDir/spotiflac.png AppDir/usr/share/icons/hicolor/256x256/apps/
           cp AppDir/spotiflac.png AppDir/.DirIcon
 
