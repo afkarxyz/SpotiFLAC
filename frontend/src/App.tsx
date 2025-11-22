@@ -115,6 +115,7 @@ function App() {
     settings: any, 
     trackName?: string, 
     artistName?: string, 
+    
     albumName?: string,
     playlistName?: string,
     isArtistDiscography?: boolean
