@@ -1,0 +1,29 @@
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { StopCircle } from "lucide-react";
+
+interface DownloadProgressProps {
+  progress: number;
+  currentTrack: { name: string; artists: string } | null;
+  onStop: () => void;
+}
+
+export function DownloadProgress({ progress, currentTrack, onStop }: DownloadProgressProps) {
+  return (
+    <div className="w-full space-y-2 mt-4">
+      <div className="flex items-center gap-2">
+        <Progress value={progress} className="h-2 flex-1" />
+        <Button variant="destructive" size="sm" onClick={onStop}>
+          <StopCircle className="h-4 w-4 mr-2" />
+          Stop
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {progress}% -{" "}
+        {currentTrack
+          ? `${currentTrack.name} - ${currentTrack.artists}`
+          : "Preparing download..."}
+      </p>
+    </div>
+  );
+}
