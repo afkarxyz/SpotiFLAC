@@ -29,6 +29,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { buildOutputPath } from "./lib/utils";
 
 function App() {
   const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -95,14 +96,8 @@ function App() {
     const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
     
     // Sanitize folder name (remove illegal characters for Windows)
-    const sanitizedFolderName = folderName 
-      ? folderName.replace(/[<>:"/\\|?*]/g, '_').trim()
-      : undefined;
-    
     // Build output directory with folder name if provided
-    const outputDir = sanitizedFolderName 
-      ? `${settings.downloadPath}\\${sanitizedFolderName}`
-      : settings.downloadPath;
+    const outputDir = buildOutputPath(settings, folderName);
     
     // If auto mode, try Tidal first
     if (service === "auto") {

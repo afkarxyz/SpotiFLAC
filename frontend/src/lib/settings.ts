@@ -9,6 +9,7 @@ export interface Settings {
   artistSubfolder: boolean;
   albumSubfolder: boolean;
   trackNumber: boolean;
+  operatingSystem: "Windows" | "linux/MacOS"
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -20,16 +21,20 @@ const DEFAULT_SETTINGS: Settings = {
   artistSubfolder: false,
   albumSubfolder: false,
   trackNumber: false,
+  operatingSystem: "Windows"
 };
+
+// TODO: add mac/linux defaults
+const DEFAULT_PATH : string = "C:\\Users\\Public\\Music"; 
 
 async function fetchDefaultPath(): Promise<string> {
   try {
     const data = await GetDefaults();
-    return data.downloadPath || "C:\\Users\\Public\\Music";
+    return data.downloadPath || DEFAULT_PATH
   } catch (error) {
     console.error("Failed to fetch default path:", error);
   }
-  return "C:\\Users\\Public\\Music";
+  return DEFAULT_PATH;
 }
 
 const SETTINGS_KEY = "spotiflac-settings";
