@@ -125,10 +125,13 @@ function App() {
     // Build query for Tidal (title + artist)
     const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
     
+    // Build output directory based on settings
     const os = settings.operatingSystem;
 
     // Base download path
     let outputDir = settings.downloadPath;
+
+    // For playlist or artist discography downloads
 
     // Playlist or discography
     if (playlistName) {
