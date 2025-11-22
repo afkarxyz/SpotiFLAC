@@ -24,6 +24,7 @@ import { TrackInfo } from "@/components/TrackInfo";
 import { AlbumInfo } from "@/components/AlbumInfo";
 import { PlaylistInfo } from "@/components/PlaylistInfo";
 import { ArtistInfo } from "@/components/ArtistInfo";
+import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 
 // Hooks
 import { useDownload } from "@/hooks/useDownload";
@@ -261,6 +262,9 @@ function App() {
       <div className="min-h-screen bg-background p-4 md:p-8">
         <div className="max-w-4xl mx-auto space-y-6">
           <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} />
+          
+          {/* Download Progress Toast */}
+          <DownloadProgressToast />
 
           {/* Timeout Dialog */}
           <Dialog

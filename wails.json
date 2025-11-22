@@ -7,15 +7,11 @@
   "frontend:dev:watcher": "pnpm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "afkarxyz",
-    "email": "hi@afkarxyz.fun"
+    "name": "afkarxyz"
   },
   "info": {
-    "companyName": "afkarxyz",
     "productName": "SpotiFLAC",
-    "productVersion": "5.7",
-    "copyright": "Copyright © 2025",
-    "comments": "Get Spotify tracks in true FLAC from Tidal/Deezer — no account required."
+    "productVersion": "5.7"
   },
   "wailsjsdir": "./frontend",
   "assetdir": "./frontend/dist",

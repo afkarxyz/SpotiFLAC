@@ -83,7 +83,22 @@ func NewTidalDownloader(apiURL string) *TidalDownloader {
 func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
 	// Decode base64 API URL
 	apiURL, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Fma2FyeHl6L1Nwb3RpRkxBQy9yZWZzL2hlYWRzL21haW4vdGlkYWwuanNvbg==")
-	resp, err := http.Get(string(apiURL))
+
+	// Add cache-busting parameter with current timestamp
+	urlWithCacheBust := fmt.Sprintf("%s?t=%d", string(apiURL), time.Now().Unix())
+
+	// Create request with cache bypass headers
+	req, err := http.NewRequest("GET", urlWithCacheBust, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add headers to bypass cache
+	req.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	req.Header.Set("Pragma", "no-cache")
+	req.Header.Set("Expires", "0")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch API list: %w", err)
 	}
@@ -304,10 +319,15 @@ func (t *TidalDownloader) DownloadFile(url, filepath string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	// Use progress writer to track download
+	pw := NewProgressWriter(out)
+	_, err = io.Copy(pw, resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
+
+	// Print final size
+	fmt.Printf("\rDownloaded: %.2f MB (Complete)\n", float64(pw.GetTotal())/(1024*1024))
 
 	fmt.Println("Download complete")
 	return nil

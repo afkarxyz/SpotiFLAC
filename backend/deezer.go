@@ -124,11 +124,16 @@ func (d *DeezerDownloader) DownloadFile(url, filepath string) error {
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
+	fmt.Println("Downloading...")
+	// Use progress writer to track download
+	pw := NewProgressWriter(out)
+	_, err = io.Copy(pw, resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
+	// Print final size
+	fmt.Printf("\rDownloaded: %.2f MB (Complete)\n", float64(pw.GetTotal())/(1024*1024))
 	return nil
 }
 

@@ -113,6 +113,10 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.FilenameFormat = "title-artist"
 	}
 
+	// Set downloading state
+	backend.SetDownloading(true)
+	defer backend.SetDownloading(false)
+
 	if req.Service == "tidal" {
 		searchQuery := req.Query
 		if searchQuery == "" {
@@ -178,4 +182,9 @@ func (a *App) GetDefaults() map[string]string {
 	return map[string]string{
 		"downloadPath": backend.GetDefaultMusicPath(),
 	}
+}
+
+// GetDownloadProgress returns current download progress
+func (a *App) GetDownloadProgress() backend.ProgressInfo {
+	return backend.GetDownloadProgress()
 }
