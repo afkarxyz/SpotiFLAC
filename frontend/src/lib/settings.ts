@@ -2,7 +2,7 @@ import { GetDefaults } from "../../wailsjs/go/main/App";
 
 export interface Settings {
   downloadPath: string;
-  downloader: "auto" | "deezer" | "tidal" | "qobuz";
+  downloader: "auto" | "deezer" | "tidal" | "qobuz" | "amazon";
   theme: string;
   themeMode: "auto" | "light" | "dark";
   filenameFormat: "title-artist" | "artist-title" | "title";

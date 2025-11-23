@@ -9,6 +9,7 @@ export interface TrackMetadata {
   external_urls: string;
   isrc: string;
   album_type?: string;
+  spotify_id?: string;
 }
 
 export interface TrackResponse {
@@ -97,7 +98,7 @@ export type SpotifyMetadataResponse =
 
 export interface DownloadRequest {
   isrc: string;
-  service: "deezer" | "tidal" | "qobuz";
+  service: "deezer" | "tidal" | "qobuz" | "amazon";
   query?: string;
   track_name?: string;
   artist_name?: string;
@@ -110,6 +111,7 @@ export interface DownloadRequest {
   track_number?: boolean;
   position?: number;
   use_album_track_number?: boolean;
+  spotify_id?: string;
 }
 
 export interface DownloadResponse {

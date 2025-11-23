@@ -25,7 +25,8 @@ export function useDownload() {
     albumName?: string,
     playlistName?: string,
     isArtistDiscography?: boolean,
-    position?: number
+    position?: number,
+    spotifyId?: string
   ) => {
     let service = settings.downloader;
 
@@ -108,7 +109,7 @@ export function useDownload() {
 
     return await downloadTrack({
       isrc,
-      service: service as "deezer" | "tidal" | "qobuz",
+      service: service as "deezer" | "tidal" | "qobuz" | "amazon",
       query,
       track_name: trackName,
       artist_name: artistName,
@@ -118,6 +119,7 @@ export function useDownload() {
       track_number: settings.trackNumber,
       position,
       use_album_track_number: useAlbumTrackNumber,
+      spotify_id: spotifyId,
     });
   };
 
@@ -125,7 +127,8 @@ export function useDownload() {
     isrc: string,
     trackName?: string,
     artistName?: string,
-    albumName?: string
+    albumName?: string,
+    spotifyId?: string
   ) => {
     if (!isrc) {
       toast.error("No ISRC found for this track");
@@ -145,7 +148,8 @@ export function useDownload() {
         albumName,
         undefined,
         false,
-        undefined // Don't pass position for single track
+        undefined, // Don't pass position for single track
+        spotifyId
       );
 
       if (response.success) {
@@ -212,7 +216,8 @@ export function useDownload() {
           track?.album_name,
           playlistName,
           isArtistDiscography,
-          i + 1 // Sequential position based on selection order
+          i + 1, // Sequential position based on selection order
+          track?.spotify_id
         );
 
         if (response.success) {
@@ -284,7 +289,8 @@ export function useDownload() {
           track.album_name,
           playlistName,
           isArtistDiscography,
-          i + 1
+          i + 1,
+          track.spotify_id
         );
 
         if (response.success) {

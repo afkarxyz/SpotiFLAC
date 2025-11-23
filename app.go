@@ -50,6 +50,7 @@ type DownloadRequest struct {
 	TrackNumber         bool   `json:"track_number,omitempty"`
 	Position            int    `json:"position,omitempty"`               // Position in playlist/album (1-based)
 	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
+	SpotifyID           string `json:"spotify_id,omitempty"`             // Spotify track ID for Amazon Music
 }
 
 // DownloadResponse represents the response structure for download operations
@@ -138,7 +139,16 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	backend.SetDownloading(true)
 	defer backend.SetDownloading(false)
 
-	if req.Service == "tidal" {
+	if req.Service == "amazon" {
+		if req.SpotifyID == "" {
+			return DownloadResponse{
+				Success: false,
+				Error:   "Spotify ID is required for Amazon Music",
+			}, fmt.Errorf("Spotify ID is required for Amazon Music")
+		}
+		downloader := backend.NewAmazonDownloader()
+		filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+	} else if req.Service == "tidal" {
 		searchQuery := req.Query
 		if searchQuery == "" {
 			searchQuery = req.ISRC

@@ -78,13 +78,13 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p dist
-          Copy-Item -Path "build\bin\SpotiFLAC.exe" -Destination "dist\SpotiFLAC-${{ steps.version.outputs.version }}.exe"
+          Copy-Item -Path "build\bin\SpotiFLAC.exe" -Destination "dist\SpotiFLAC.exe"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-portable
-          path: dist/SpotiFLAC-${{ steps.version.outputs.version }}.exe
+          path: dist/SpotiFLAC.exe
           retention-days: 7
 
   build-macos:
@@ -159,16 +159,16 @@ jobs:
             --icon "SpotiFLAC.app" 175 120 \
             --hide-extension "SpotiFLAC.app" \
             --app-drop-link 425 120 \
-            "dist/SpotiFLAC-${{ steps.version.outputs.version }}.dmg" \
+            "dist/SpotiFLAC.dmg" \
             "build/bin/SpotiFLAC.app" || \
           # Fallback to hdiutil if create-dmg fails
-          hdiutil create -volname SpotiFLAC -srcfolder build/bin/SpotiFLAC.app -ov -format UDZO dist/SpotiFLAC-${{ steps.version.outputs.version }}.dmg
+          hdiutil create -volname SpotiFLAC -srcfolder build/bin/SpotiFLAC.app -ov -format UDZO dist/SpotiFLAC.dmg
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-portable
-          path: dist/SpotiFLAC-${{ steps.version.outputs.version }}.dmg
+          path: dist/SpotiFLAC.dmg
           retention-days: 7
 
   build-linux:
@@ -291,13 +291,13 @@ jobs:
 
           # Create AppImage
           mkdir -p dist
-          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
+          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiFLAC.AppImage
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-portable
-          path: dist/SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
+          path: dist/SpotiFLAC.AppImage
           retention-days: 7
 
   create-release:
@@ -336,9 +336,9 @@ jobs:
 
             ## Downloads
 
-            - `SpotiFLAC-${{ steps.version.outputs.version }}.exe` - Windows
-            - `SpotiFLAC-${{ steps.version.outputs.version }}.dmg` - macOS
-            - `SpotiFLAC-${{ steps.version.outputs.version }}.AppImage` - Linux
+            - `SpotiFLAC.exe` - Windows
+            - `SpotiFLAC.dmg` - macOS
+            - `SpotiFLAC.AppImage` - Linux
 
             <details>
             <summary><b>Linux Requirements</b></summary>
@@ -362,8 +362,8 @@ jobs:
 
             After installing the dependency, make the AppImage executable:
             ```bash
-            chmod +x SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
-            ./SpotiFLAC-${{ steps.version.outputs.version }}.AppImage
+            chmod +x SpotiFLAC.AppImage
+            ./SpotiFLAC.AppImage
             ```
 
             </details>

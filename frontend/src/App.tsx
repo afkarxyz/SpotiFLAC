@@ -40,7 +40,7 @@ function App() {
   const [hasUpdate, setHasUpdate] = useState(false);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "5.9";
+  const CURRENT_VERSION = "6.0";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -78,7 +78,7 @@ function App() {
   const checkForUpdates = async () => {
     try {
       const response = await fetch(
-        "https://raw.githubusercontent.com/afkarxyz/SpotiFLAC/refs/heads/main/version.json"
+        "https://cdn.jsdelivr.net/gh/afkarxyz/SpotiFLAC@refs/heads/main/version.json"
       );
       const data = await response.json();
       const latestVersion = data.version;

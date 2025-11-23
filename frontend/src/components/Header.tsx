@@ -49,7 +49,7 @@ export function Header({ version, hasUpdate }: HeaderProps) {
           </div>
         </div>
         <p className="text-muted-foreground">
-          Get Spotify tracks in true FLAC from Tidal, Deezer & Qobuz — no account required.
+          Get Spotify tracks in true FLAC from Tidal, Deezer, Qobuz & Amazon Music — no account required.
         </p>
       </div>
       <div className="absolute right-0 top-0 flex gap-2">

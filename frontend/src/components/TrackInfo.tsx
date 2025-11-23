@@ -9,7 +9,7 @@ interface TrackInfoProps {
   isDownloading: boolean;
   downloadingTrack: string | null;
   isDownloaded: boolean;
-  onDownload: (isrc: string, name: string, artists: string) => void;
+  onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string) => void;
   onOpenFolder: () => void;
 }
 
@@ -50,7 +50,7 @@ export function TrackInfo({
             {track.isrc && (
               <div className="flex gap-2">
                 <Button
-                  onClick={() => onDownload(track.isrc, track.name, track.artists)}
+                  onClick={() => onDownload(track.isrc, track.name, track.artists, track.album_name, track.spotify_id)}
                   disabled={isDownloading || downloadingTrack === track.isrc}
                 >
                   {downloadingTrack === track.isrc ? (

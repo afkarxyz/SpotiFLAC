@@ -66,6 +66,7 @@ type TrackMetadata struct {
 	TrackNumber int    `json:"track_number"`
 	ExternalURL string `json:"external_urls"`
 	ISRC        string `json:"isrc"`
+	SpotifyID   string `json:"spotify_id,omitempty"`
 }
 
 // AlbumTrackMetadata holds per-track info for album / playlist formatting.
@@ -80,6 +81,7 @@ type AlbumTrackMetadata struct {
 	ExternalURL string `json:"external_urls"`
 	ISRC        string `json:"isrc"`
 	AlbumType   string `json:"album_type,omitempty"`
+	SpotifyID   string `json:"spotify_id,omitempty"`
 }
 
 type TrackResponse struct {
@@ -487,6 +489,7 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 			TrackNumber: item.Track.TrackNumber,
 			ExternalURL: item.Track.ExternalURL.Spotify,
 			ISRC:        item.Track.ExternalID.ISRC,
+			SpotifyID:   item.Track.ID,
 		})
 	}
 
@@ -523,6 +526,7 @@ func (c *SpotifyMetadataClient) formatAlbumData(ctx context.Context, raw *albumR
 			TrackNumber: item.TrackNumber,
 			ExternalURL: item.ExternalURL.Spotify,
 			ISRC:        isrc,
+			SpotifyID:   item.ID,
 		})
 	}
 
@@ -588,6 +592,7 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 				TrackNumber: tr.TrackNumber,
 				ExternalURL: tr.ExternalURL.Spotify,
 				ISRC:        isrc,
+				SpotifyID:   tr.ID,
 			})
 		}
 	}
@@ -628,6 +633,7 @@ func formatTrackData(raw *trackFull) TrackResponse {
 			TrackNumber: raw.TrackNumber,
 			ExternalURL: raw.ExternalURL.Spotify,
 			ISRC:        raw.ExternalID.ISRC,
+			SpotifyID:   raw.ID,
 		},
 	}
 }
