@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputWithContext } from "@/components/ui/input-with-context";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -203,7 +203,7 @@ export function Settings() {
             <div className="space-y-2">
               <Label htmlFor="download-path">Download Path</Label>
               <div className="flex gap-2">
-                <Input
+                <InputWithContext
                   id="download-path"
                   value={tempSettings.downloadPath}
                   onChange={(e) => handleDownloadPathChange(e.target.value)}
@@ -329,8 +329,8 @@ export function Settings() {
                   <TooltipTrigger asChild>
                     <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p className="text-xs whitespace-nowrap">Adds track numbers based on the order in the album, playlist, or discography list</p>
+                  <TooltipContent side="top" className="max-w-xs">
+                    <p className="text-xs text-center">Adds track numbers to filenames. Uses album track numbers when Album Subfolder is enabled, otherwise uses playlist position</p>
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -340,7 +340,7 @@ export function Settings() {
                   checked={tempSettings.artistSubfolder}
                   onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, artistSubfolder: checked as boolean }))}
                 />
-                <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder (Playlist only)</Label>
+                <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder <span className="font-normal">(Playlist only)</span></Label>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -348,7 +348,7 @@ export function Settings() {
                   checked={tempSettings.albumSubfolder}
                   onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, albumSubfolder: checked as boolean }))}
                 />
-                <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder (Playlist & Discography)</Label>
+                <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder <span className="font-normal">(Playlist & Discography)</span></Label>
               </div>
             </div>
           </div>

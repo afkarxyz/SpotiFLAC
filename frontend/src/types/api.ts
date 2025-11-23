@@ -109,6 +109,7 @@ export interface DownloadRequest {
   filename_format?: string;
   track_number?: boolean;
   position?: number;
+  use_album_track_number?: boolean;
 }
 
 export interface DownloadResponse {
@@ -116,6 +117,7 @@ export interface DownloadResponse {
   message: string;
   file?: string;
   error?: string;
+  already_exists?: boolean;
 }
 
 export interface HealthResponse {

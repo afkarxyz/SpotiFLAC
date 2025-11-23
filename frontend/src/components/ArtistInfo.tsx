@@ -146,7 +146,6 @@ export function ArtistInfo({
               <Button
                 onClick={onDownloadAll}
                 size="sm"
-                className="gap-2"
                 disabled={isDownloading}
               >
                 {isDownloading && bulkDownloadType === "all" ? (
@@ -161,7 +160,6 @@ export function ArtistInfo({
                   onClick={onDownloadSelected}
                   size="sm"
                   variant="secondary"
-                  className="gap-2"
                   disabled={isDownloading}
                 >
                   {isDownloading && bulkDownloadType === "selected" ? (
@@ -173,7 +171,7 @@ export function ArtistInfo({
                 </Button>
               )}
               {downloadedTracks.size > 0 && (
-                <Button onClick={onOpenFolder} size="sm" variant="outline" className="gap-1.5">
+                <Button onClick={onOpenFolder} size="sm" variant="outline">
                   <FolderOpen className="h-4 w-4" />
                   Open Folder
                 </Button>

@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -162,17 +161,7 @@ func (d *DeezerDownloader) DownloadCoverArt(coverURL, filepath string) error {
 	return err
 }
 
-func sanitizeFilename(name string) string {
-	re := regexp.MustCompile(`[<>:"/\\|?*]`)
-	sanitized := re.ReplaceAllString(name, "_")
-	sanitized = strings.TrimSpace(sanitized)
-	if sanitized == "" {
-		return "Unknown"
-	}
-	return sanitized
-}
-
-func buildFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int) string {
+func buildFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
 	var filename string
 
 	// Build base filename based on format
@@ -186,20 +175,24 @@ func buildFilename(title, artist string, trackNumber int, format string, include
 	}
 
 	// Add track number prefix if enabled
-	// Only use track number for bulk downloads (when position > 0)
 	if includeTrackNumber && position > 0 {
-		filename = fmt.Sprintf("%02d. %s", position, filename)
+		// Use album track number if in album folder structure, otherwise use playlist position
+		numberToUse := position
+		if useAlbumTrackNumber && trackNumber > 0 {
+			numberToUse = trackNumber
+		}
+		filename = fmt.Sprintf("%02d. %s", numberToUse, filename)
 	}
 
 	return filename + ".flac"
 }
 
-func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) error {
+func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	track, err := d.GetTrackByISRC(isrc)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Use Spotify metadata if provided, otherwise fallback to Deezer metadata
@@ -235,19 +228,24 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 
 	downloadURL, err := d.GetDownloadURL(track.ID)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	safeArtist := sanitizeFilename(artists)
 	safeTitle := sanitizeFilename(trackTitle)
 
 	// Build filename based on format settings
-	filename := buildFilename(safeTitle, safeArtist, track.TrackPos, filenameFormat, includeTrackNumber, position)
+	filename := buildFilename(safeTitle, safeArtist, track.TrackPos, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filepath := filepath.Join(outputDir, filename)
+
+	if fileInfo, err := os.Stat(filepath); err == nil && fileInfo.Size() > 0 {
+		fmt.Printf("File already exists: %s (%.2f MB)\n", filepath, float64(fileInfo.Size())/(1024*1024))
+		return "EXISTS:" + filepath, nil
+	}
 
 	fmt.Println("Downloading FLAC file...")
 	if err := d.DownloadFile(downloadURL, filepath); err != nil {
-		return err
+		return "", err
 	}
 
 	fmt.Printf("Downloaded: %s\n", filepath)
@@ -264,10 +262,14 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 	}
 
 	fmt.Println("Embedding metadata and cover art...")
-	// Only use track number for bulk downloads (when position > 0)
+	// Use album track number if in album folder structure, otherwise use playlist position
 	trackNumberToEmbed := 0
 	if position > 0 {
-		trackNumberToEmbed = position
+		if useAlbumTrackNumber && track.TrackPos > 0 {
+			trackNumberToEmbed = track.TrackPos
+		} else {
+			trackNumberToEmbed = position
+		}
 	}
 
 	metadata := Metadata{
@@ -281,9 +283,9 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 	}
 
 	if err := EmbedMetadata(filepath, metadata, coverPath); err != nil {
-		return fmt.Errorf("failed to embed metadata: %w", err)
+		return "", fmt.Errorf("failed to embed metadata: %w", err)
 	}
 
 	fmt.Println("Metadata embedded successfully!")
-	return nil
+	return filepath, nil
 }

@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"spotiflac/backend"
+	"strings"
 	"time"
 )
 
@@ -34,26 +37,28 @@ type SpotifyMetadataRequest struct {
 
 // DownloadRequest represents the request structure for downloading tracks
 type DownloadRequest struct {
-	ISRC           string `json:"isrc"`
-	Service        string `json:"service"`
-	Query          string `json:"query,omitempty"`
-	TrackName      string `json:"track_name,omitempty"`
-	ArtistName     string `json:"artist_name,omitempty"`
-	AlbumName      string `json:"album_name,omitempty"`
-	ApiURL         string `json:"api_url,omitempty"`
-	OutputDir      string `json:"output_dir,omitempty"`
-	AudioFormat    string `json:"audio_format,omitempty"`
-	FilenameFormat string `json:"filename_format,omitempty"`
-	TrackNumber    bool   `json:"track_number,omitempty"`
-	Position       int    `json:"position,omitempty"` // Position in playlist/album (1-based)
+	ISRC                string `json:"isrc"`
+	Service             string `json:"service"`
+	Query               string `json:"query,omitempty"`
+	TrackName           string `json:"track_name,omitempty"`
+	ArtistName          string `json:"artist_name,omitempty"`
+	AlbumName           string `json:"album_name,omitempty"`
+	ApiURL              string `json:"api_url,omitempty"`
+	OutputDir           string `json:"output_dir,omitempty"`
+	AudioFormat         string `json:"audio_format,omitempty"`
+	FilenameFormat      string `json:"filename_format,omitempty"`
+	TrackNumber         bool   `json:"track_number,omitempty"`
+	Position            int    `json:"position,omitempty"`               // Position in playlist/album (1-based)
+	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
 }
 
 // DownloadResponse represents the response structure for download operations
 type DownloadResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	File    string `json:"file,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Success       bool   `json:"success"`
+	Message       string `json:"message"`
+	File          string `json:"file,omitempty"`
+	Error         string `json:"error,omitempty"`
+	AlreadyExists bool   `json:"already_exists,omitempty"`
 }
 
 // GetSpotifyMetadata fetches metadata from Spotify
@@ -114,6 +119,21 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.FilenameFormat = "title-artist"
 	}
 
+	// Early check: if we have track metadata, check if file already exists
+	if req.TrackName != "" && req.ArtistName != "" {
+		expectedFilename := backend.BuildExpectedFilename(req.TrackName, req.ArtistName, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber)
+		expectedPath := filepath.Join(req.OutputDir, expectedFilename)
+
+		if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
+			return DownloadResponse{
+				Success:       true,
+				Message:       "File already exists",
+				File:          expectedPath,
+				AlreadyExists: true,
+			}, nil
+		}
+	}
+
 	// Set downloading state
 	backend.SetDownloading(true)
 	defer backend.SetDownloading(false)
@@ -126,23 +146,17 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 		if req.ApiURL == "" || req.ApiURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
-			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
+			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
 		} else {
 			downloader := backend.NewTidalDownloader(req.ApiURL)
-			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
+			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
 		}
 	} else if req.Service == "qobuz" {
 		downloader := backend.NewQobuzDownloader()
-		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
-		if err == nil {
-			filename = "Downloaded via Qobuz"
-		}
+		filename, err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
 	} else {
 		downloader := backend.NewDeezerDownloader()
-		err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName)
-		if err == nil {
-			filename = "Downloaded via Deezer"
-		}
+		filename, err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
 	}
 
 	if err != nil {
@@ -152,10 +166,23 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}, err
 	}
 
+	// Check if file already existed
+	alreadyExists := false
+	if strings.HasPrefix(filename, "EXISTS:") {
+		alreadyExists = true
+		filename = strings.TrimPrefix(filename, "EXISTS:")
+	}
+
+	message := "Download completed successfully"
+	if alreadyExists {
+		message = "File already exists"
+	}
+
 	return DownloadResponse{
-		Success: true,
-		Message: "Download completed successfully",
-		File:    filename,
+		Success:       true,
+		Message:       message,
+		File:          filename,
+		AlreadyExists: alreadyExists,
 	}, nil
 }
 

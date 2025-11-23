@@ -33,6 +33,7 @@ export function useDownload() {
     const os = settings.operatingSystem;
 
     let outputDir = settings.downloadPath;
+    let useAlbumTrackNumber = false;
 
     if (playlistName) {
       outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
@@ -40,6 +41,7 @@ export function useDownload() {
       if (isArtistDiscography) {
         if (settings.albumSubfolder && albumName) {
           outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
+          useAlbumTrackNumber = true; // Use album track number for discography with album subfolder
         }
       } else {
         if (settings.artistSubfolder && artistName) {
@@ -48,6 +50,7 @@ export function useDownload() {
 
         if (settings.albumSubfolder && albumName) {
           outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
+          useAlbumTrackNumber = true; // Use album track number when both artist and album subfolders are used
         }
       }
     }
@@ -66,6 +69,7 @@ export function useDownload() {
           filename_format: settings.filenameFormat,
           track_number: settings.trackNumber,
           position,
+          use_album_track_number: useAlbumTrackNumber,
         });
 
         if (tidalResponse.success) {
@@ -88,6 +92,7 @@ export function useDownload() {
           filename_format: settings.filenameFormat,
           track_number: settings.trackNumber,
           position,
+          use_album_track_number: useAlbumTrackNumber,
         });
 
         if (deezerResponse.success) {
@@ -112,6 +117,7 @@ export function useDownload() {
       filename_format: settings.filenameFormat,
       track_number: settings.trackNumber,
       position,
+      use_album_track_number: useAlbumTrackNumber,
     });
   };
 
@@ -143,7 +149,11 @@ export function useDownload() {
       );
 
       if (response.success) {
-        toast.success(response.message);
+        if (response.already_exists) {
+          toast.info(response.message);
+        } else {
+          toast.success(response.message);
+        }
         setDownloadedTracks((prev) => new Set(prev).add(isrc));
       } else {
         toast.error(response.error || "Download failed");

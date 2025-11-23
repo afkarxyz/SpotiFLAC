@@ -40,7 +40,7 @@ function App() {
   const [hasUpdate, setHasUpdate] = useState(false);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "5.8";
+  const CURRENT_VERSION = "5.9";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -307,7 +307,7 @@ function App() {
                   Cancel
                 </Button>
                 <Button onClick={metadata.handleConfirmFetch}>
-                  <Search className="h-4 w-4 mr-2" />
+                  <Search className="h-4 w-4" />
                   Fetch
                 </Button>
               </DialogFooter>
@@ -333,7 +333,7 @@ function App() {
                   Cancel
                 </Button>
                 <Button onClick={metadata.handleConfirmAlbumFetch}>
-                  <Search className="h-4 w-4 mr-2" />
+                  <Search className="h-4 w-4" />
                   Fetch Album
                 </Button>
               </DialogFooter>

@@ -333,7 +333,7 @@ func (t *TidalDownloader) DownloadFile(url, filepath string) error {
 	return nil
 }
 
-func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
+func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
 	if outputDir != "." {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
 			return "", fmt.Errorf("directory error: %w", err)
@@ -386,12 +386,12 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 	}
 
 	// Build filename based on format settings
-	filename := buildTidalFilename(trackTitle, artistName, trackInfo.TrackNumber, filenameFormat, includeTrackNumber, position)
+	filename := buildTidalFilename(trackTitle, artistName, trackInfo.TrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	outputFilename := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
 		fmt.Printf("File already exists: %s (%.2f MB)\n", outputFilename, float64(fileInfo.Size())/(1024*1024))
-		return outputFilename, nil
+		return "EXISTS:" + outputFilename, nil
 	}
 
 	downloadURL, err := t.GetDownloadURL(trackInfo.ID, quality)
@@ -427,10 +427,14 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 		releaseYear = trackInfo.Album.ReleaseDate[:4]
 	}
 
-	// Only use track number for bulk downloads (when position > 0)
+	// Use album track number if in album folder structure, otherwise use playlist position
 	trackNumberToEmbed := 0
 	if position > 0 {
-		trackNumberToEmbed = position
+		if useAlbumTrackNumber && trackInfo.TrackNumber > 0 {
+			trackNumberToEmbed = trackInfo.TrackNumber
+		} else {
+			trackNumberToEmbed = position
+		}
 	}
 
 	metadata := Metadata{
@@ -453,7 +457,7 @@ func (t *TidalDownloader) Download(query, isrc, outputDir, quality, filenameForm
 	return outputFilename, nil
 }
 
-func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) (string, error) {
+func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
 	apis, err := t.GetAvailableAPIs()
 	if err != nil {
 		return "", fmt.Errorf("no APIs available for fallback: %w", err)
@@ -465,7 +469,7 @@ func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, 
 
 		fallbackDownloader := NewTidalDownloader(apiURL)
 
-		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName)
+		result, err := fallbackDownloader.Download(query, isrc, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useAlbumTrackNumber)
 		if err == nil {
 			fmt.Printf("✓ Success with: %s\n", apiURL)
 			return result, nil
@@ -482,7 +486,7 @@ func (t *TidalDownloader) DownloadWithFallback(query, isrc, outputDir, quality, 
 	return "", fmt.Errorf("all %d APIs failed. Last error: %v", len(apis), lastError)
 }
 
-func buildTidalFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int) string {
+func buildTidalFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
 	var filename string
 
 	// Build base filename based on format
@@ -496,9 +500,13 @@ func buildTidalFilename(title, artist string, trackNumber int, format string, in
 	}
 
 	// Add track number prefix if enabled
-	// Only use track number for bulk downloads (when position > 0)
 	if includeTrackNumber && position > 0 {
-		filename = fmt.Sprintf("%02d. %s", position, filename)
+		// Use album track number if in album folder structure, otherwise use playlist position
+		numberToUse := position
+		if useAlbumTrackNumber && trackNumber > 0 {
+			numberToUse = trackNumber
+		}
+		filename = fmt.Sprintf("%02d. %s", numberToUse, filename)
 	}
 
 	return filename + ".flac"

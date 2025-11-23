@@ -29,7 +29,7 @@ const (
 	trackBaseURL          = "https://api.spotify.com/v1/tracks/%s"
 	artistBaseURL         = "https://api.spotify.com/v1/artists/%s"
 	artistAlbumsBaseURL   = "https://api.spotify.com/v1/artists/%s/albums"
-	secretBytesRemotePath = "https://raw.githubusercontent.com/afkarxyz/secretBytes/refs/heads/main/secrets/secretBytes.json"
+	secretBytesRemotePath = "https://cdn.jsdelivr.net/gh/afkarxyz/secretBytes@refs/heads/main/secrets/secretBytes.json"
 )
 
 var (
@@ -873,8 +873,16 @@ func (c *SpotifyMetadataClient) generateTOTP(ctx context.Context) (string, int64
 }
 
 func (c *SpotifyMetadataClient) fetchSecretBytes(ctx context.Context) ([]secretEntry, bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, secretBytesRemotePath, nil)
+	// Add cache busting parameter with current timestamp
+	urlWithCacheBust := fmt.Sprintf("%s?t=%d", secretBytesRemotePath, time.Now().Unix())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlWithCacheBust, nil)
 	if err == nil {
+		// Add headers to bypass cache
+		req.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		req.Header.Set("Pragma", "no-cache")
+		req.Header.Set("Expires", "0")
+
 		resp, err := c.httpClient.Do(req)
 		if err == nil {
 			body, readErr := io.ReadAll(resp.Body)

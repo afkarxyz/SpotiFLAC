@@ -222,7 +222,7 @@ func (q *QobuzDownloader) DownloadCoverArt(coverURL, filepath string) error {
 	return err
 }
 
-func buildQobuzFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int) string {
+func buildQobuzFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
 	var filename string
 
 	// Build base filename based on format
@@ -236,27 +236,31 @@ func buildQobuzFilename(title, artist string, trackNumber int, format string, in
 	}
 
 	// Add track number prefix if enabled
-	// Only use track number for bulk downloads (when position > 0)
 	if includeTrackNumber && position > 0 {
-		filename = fmt.Sprintf("%02d. %s", position, filename)
+		// Use album track number if in album folder structure, otherwise use playlist position
+		numberToUse := position
+		if useAlbumTrackNumber && trackNumber > 0 {
+			numberToUse = trackNumber
+		}
+		filename = fmt.Sprintf("%02d. %s", numberToUse, filename)
 	}
 
 	return filename + ".flac"
 }
 
-func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string) error {
+func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	// Create output directory if it doesn't exist
 	if outputDir != "." {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
+			return "", fmt.Errorf("failed to create output directory: %w", err)
 		}
 	}
 
 	track, err := q.SearchByISRC(isrc)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Use Spotify metadata if provided, otherwise fallback to Qobuz metadata
@@ -294,11 +298,11 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	fmt.Println("Getting download URL...")
 	downloadURL, err := q.GetDownloadURL(track.ID, quality)
 	if err != nil {
-		return fmt.Errorf("failed to get download URL: %w", err)
+		return "", fmt.Errorf("failed to get download URL: %w", err)
 	}
 
 	if downloadURL == "" {
-		return fmt.Errorf("received empty download URL")
+		return "", fmt.Errorf("received empty download URL")
 	}
 
 	// Show partial URL for security
@@ -312,12 +316,17 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	safeTitle := sanitizeFilename(trackTitle)
 
 	// Build filename based on format settings
-	filename := buildQobuzFilename(safeTitle, safeArtist, track.TrackNumber, filenameFormat, includeTrackNumber, position)
+	filename := buildQobuzFilename(safeTitle, safeArtist, track.TrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filepath := filepath.Join(outputDir, filename)
+
+	if fileInfo, err := os.Stat(filepath); err == nil && fileInfo.Size() > 0 {
+		fmt.Printf("File already exists: %s (%.2f MB)\n", filepath, float64(fileInfo.Size())/(1024*1024))
+		return "EXISTS:" + filepath, nil
+	}
 
 	fmt.Printf("Downloading FLAC file to: %s\n", filepath)
 	if err := q.DownloadFile(downloadURL, filepath); err != nil {
-		return fmt.Errorf("failed to download file: %w", err)
+		return "", fmt.Errorf("failed to download file: %w", err)
 	}
 
 	fmt.Printf("Downloaded: %s\n", filepath)
@@ -340,10 +349,14 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 		releaseYear = track.ReleaseDateOriginal[:4]
 	}
 
-	// Only use track number for bulk downloads (when position > 0)
+	// Use album track number if in album folder structure, otherwise use playlist position
 	trackNumberToEmbed := 0
 	if position > 0 {
-		trackNumberToEmbed = position
+		if useAlbumTrackNumber && track.TrackNumber > 0 {
+			trackNumberToEmbed = track.TrackNumber
+		} else {
+			trackNumberToEmbed = position
+		}
 	}
 
 	metadata := Metadata{
@@ -357,9 +370,9 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	}
 
 	if err := EmbedMetadata(filepath, metadata, coverPath); err != nil {
-		return fmt.Errorf("failed to embed metadata: %w", err)
+		return "", fmt.Errorf("failed to embed metadata: %w", err)
 	}
 
 	fmt.Println("Metadata embedded successfully!")
-	return nil
+	return filepath, nil
 }

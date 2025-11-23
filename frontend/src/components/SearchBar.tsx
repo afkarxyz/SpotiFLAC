@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { InputWithContext } from "@/components/ui/input-with-context";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Search, Info, XCircle } from "lucide-react";
@@ -35,7 +35,7 @@ export function SearchBar({ url, loading, onUrlChange, onFetch }: SearchBarProps
           </div>
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Input
+              <InputWithContext
                 id="spotify-url"
                 placeholder="https://open.spotify.com/..."
                 value={url}

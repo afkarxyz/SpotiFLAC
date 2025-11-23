@@ -91,7 +91,6 @@ export function AlbumInfo({
               <div className="flex gap-2">
                 <Button
                   onClick={onDownloadAll}
-                  className="gap-2"
                   disabled={isDownloading}
                 >
                   {isDownloading && bulkDownloadType === "all" ? (
@@ -105,7 +104,6 @@ export function AlbumInfo({
                   <Button
                     onClick={onDownloadSelected}
                     variant="secondary"
-                    className="gap-2"
                     disabled={isDownloading}
                   >
                     {isDownloading && bulkDownloadType === "selected" ? (
@@ -117,7 +115,7 @@ export function AlbumInfo({
                   </Button>
                 )}
                 {downloadedTracks.size > 0 && (
-                  <Button onClick={onOpenFolder} variant="outline" className="gap-1.5">
+                  <Button onClick={onOpenFolder} variant="outline">
                     <FolderOpen className="h-4 w-4" />
                     Open Folder
                   </Button>

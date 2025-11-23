@@ -13,12 +13,12 @@ export function DownloadProgressToast() {
       <div className="bg-background border rounded-lg shadow-lg p-3">
         <div className="flex items-center gap-3">
           <Download className="h-4 w-4 text-primary animate-bounce" />
-          <div className="flex flex-col">
-            <p className="text-sm font-medium">
+          <div className="flex flex-col min-w-[80px]">
+            <p className="text-sm font-medium font-mono tabular-nums">
               {progress.mb_downloaded.toFixed(2)} MB
             </p>
             {progress.speed_mbps > 0 && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground font-mono tabular-nums">
                 {progress.speed_mbps.toFixed(2)} MB/s
               </p>
             )}

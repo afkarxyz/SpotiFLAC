@@ -51,7 +51,6 @@ export function TrackInfo({
               <div className="flex gap-2">
                 <Button
                   onClick={() => onDownload(track.isrc, track.name, track.artists)}
-                  className="gap-1.5"
                   disabled={isDownloading || downloadingTrack === track.isrc}
                 >
                   {downloadingTrack === track.isrc ? (
@@ -64,7 +63,7 @@ export function TrackInfo({
                   )}
                 </Button>
                 {isDownloaded && (
-                  <Button onClick={onOpenFolder} variant="outline" className="gap-1.5">
+                  <Button onClick={onOpenFolder} variant="outline">
                     <FolderOpen className="h-4 w-4" />
                     Open Folder
                   </Button>
