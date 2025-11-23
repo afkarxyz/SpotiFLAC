@@ -4,7 +4,7 @@
 
 <div align="center">
 
-Get Spotify tracks in true FLAC from Tidal, Deezer & Qobuz — no account required.
+Get Spotify tracks in true FLAC from Tidal, Deezer, Qobuz & Amazon Music — no account required.
 
 <br><br>
 
