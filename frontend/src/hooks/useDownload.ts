@@ -11,6 +11,7 @@ export function useDownload() {
   const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
   const [bulkDownloadType, setBulkDownloadType] = useState<"all" | "selected" | null>(null);
   const [downloadedTracks, setDownloadedTracks] = useState<Set<string>>(new Set());
+  const [failedTracks, setFailedTracks] = useState<Set<string>>(new Set());
   const [currentDownloadInfo, setCurrentDownloadInfo] = useState<{
     name: string;
     artists: string;
@@ -57,50 +58,100 @@ export function useDownload() {
     }
 
     if (service === "auto") {
-      // Try Tidal first
-      try {
-        const tidalResponse = await downloadTrack({
-          isrc,
-          service: "tidal",
-          query,
-          track_name: trackName,
-          artist_name: artistName,
-          album_name: albumName,
-          output_dir: outputDir,
-          filename_format: settings.filenameFormat,
-          track_number: settings.trackNumber,
-          position,
-          use_album_track_number: useAlbumTrackNumber,
-        });
-
-        if (tidalResponse.success) {
-          return tidalResponse;
+      // Get all streaming URLs once from song.link API
+      let streamingURLs: any = null;
+      if (spotifyId) {
+        try {
+          const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
+          const urlsJson = await GetStreamingURLs(spotifyId);
+          streamingURLs = JSON.parse(urlsJson);
+        } catch (err) {
+          console.error("Failed to get streaming URLs:", err);
         }
-      } catch (tidalErr) {
-        // Tidal failed, continue to Deezer
+      }
+
+      // Try Tidal first
+      if (streamingURLs?.tidal_url) {
+        try {
+          const tidalResponse = await downloadTrack({
+            isrc,
+            service: "tidal",
+            query,
+            track_name: trackName,
+            artist_name: artistName,
+            album_name: albumName,
+            output_dir: outputDir,
+            filename_format: settings.filenameFormat,
+            track_number: settings.trackNumber,
+            position,
+            use_album_track_number: useAlbumTrackNumber,
+            spotify_id: spotifyId,
+            service_url: streamingURLs.tidal_url,
+          });
+
+          if (tidalResponse.success) {
+            return tidalResponse;
+          }
+          console.log("Tidal failed, trying Deezer...");
+        } catch (tidalErr) {
+          console.log("Tidal error:", tidalErr);
+        }
       }
 
       // Try Deezer second
-      try {
-        const deezerResponse = await downloadTrack({
-          isrc,
-          service: "deezer",
-          query,
-          track_name: trackName,
-          artist_name: artistName,
-          album_name: albumName,
-          output_dir: outputDir,
-          filename_format: settings.filenameFormat,
-          track_number: settings.trackNumber,
-          position,
-          use_album_track_number: useAlbumTrackNumber,
-        });
+      if (streamingURLs?.deezer_url) {
+        try {
+          const deezerResponse = await downloadTrack({
+            isrc,
+            service: "deezer",
+            query,
+            track_name: trackName,
+            artist_name: artistName,
+            album_name: albumName,
+            output_dir: outputDir,
+            filename_format: settings.filenameFormat,
+            track_number: settings.trackNumber,
+            position,
+            use_album_track_number: useAlbumTrackNumber,
+            spotify_id: spotifyId,
+            service_url: streamingURLs.deezer_url,
+          });
 
-        if (deezerResponse.success) {
-          return deezerResponse;
+          if (deezerResponse.success) {
+            return deezerResponse;
+          }
+          console.log("Deezer failed, trying Amazon...");
+        } catch (deezerErr) {
+          console.log("Deezer error:", deezerErr);
         }
-      } catch (deezerErr) {
-        // Deezer failed, continue to Qobuz
+      }
+
+      // Try Amazon third
+      if (streamingURLs?.amazon_url) {
+        try {
+          const amazonResponse = await downloadTrack({
+            isrc,
+            service: "amazon",
+            query,
+            track_name: trackName,
+            artist_name: artistName,
+            album_name: albumName,
+            output_dir: outputDir,
+            filename_format: settings.filenameFormat,
+            track_number: settings.trackNumber,
+            position,
+            use_album_track_number: useAlbumTrackNumber,
+            spotify_id: spotifyId,
+            service_url: streamingURLs.amazon_url,
+          });
+
+          if (amazonResponse.success) {
+            return amazonResponse;
+          }
+          console.log("Amazon failed, trying Qobuz...");
+        } catch (amazonErr) {
+          console.log("Amazon error:", amazonErr);
+        }
       }
 
       // Try Qobuz as last fallback
@@ -187,6 +238,7 @@ export function useDownload() {
 
     let successCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
     const total = selectedTracks.length;
 
     for (let i = 0; i < selectedTracks.length; i++) {
@@ -221,13 +273,25 @@ export function useDownload() {
         );
 
         if (response.success) {
-          successCount++;
+          if (response.already_exists) {
+            skippedCount++;
+            console.log(`Skipped: ${track?.name} - ${track?.artists} (already exists)`);
+          } else {
+            successCount++;
+          }
           setDownloadedTracks((prev) => new Set(prev).add(isrc));
+          setFailedTracks((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(isrc); // Remove from failed if it was there
+            return newSet;
+          });
         } else {
           errorCount++;
+          setFailedTracks((prev) => new Set(prev).add(isrc));
         }
       } catch (err) {
         errorCount++;
+        setFailedTracks((prev) => new Set(prev).add(isrc));
       }
 
       setDownloadProgress(Math.round(((i + 1) / total) * 100));
@@ -239,10 +303,22 @@ export function useDownload() {
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
 
-    if (errorCount === 0) {
+    // Build summary message
+    if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
+    } else if (errorCount === 0 && successCount === 0) {
+      // All skipped
+      toast.info(`${skippedCount} tracks already exist`);
+    } else if (errorCount === 0) {
+      // Mix of downloaded and skipped
+      toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
     } else {
-      toast.warning(`Downloaded ${successCount} tracks, ${errorCount} failed`);
+      // Has errors
+      const parts = [];
+      if (successCount > 0) parts.push(`${successCount} downloaded`);
+      if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
+      parts.push(`${errorCount} failed`);
+      toast.warning(parts.join(", "));
     }
   };
 
@@ -265,6 +341,7 @@ export function useDownload() {
 
     let successCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
     const total = tracksWithIsrc.length;
 
     for (let i = 0; i < tracksWithIsrc.length; i++) {
@@ -294,13 +371,25 @@ export function useDownload() {
         );
 
         if (response.success) {
-          successCount++;
+          if (response.already_exists) {
+            skippedCount++;
+            console.log(`Skipped: ${track.name} - ${track.artists} (already exists)`);
+          } else {
+            successCount++;
+          }
           setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
+          setFailedTracks((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(track.isrc); // Remove from failed if it was there
+            return newSet;
+          });
         } else {
           errorCount++;
+          setFailedTracks((prev) => new Set(prev).add(track.isrc));
         }
       } catch (err) {
         errorCount++;
+        setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
 
       setDownloadProgress(Math.round(((i + 1) / total) * 100));
@@ -312,10 +401,22 @@ export function useDownload() {
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
 
-    if (errorCount === 0) {
+    // Build summary message
+    if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
+    } else if (errorCount === 0 && successCount === 0) {
+      // All skipped
+      toast.info(`${skippedCount} tracks already exist`);
+    } else if (errorCount === 0) {
+      // Mix of downloaded and skipped
+      toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
     } else {
-      toast.warning(`Downloaded ${successCount} tracks, ${errorCount} failed`);
+      // Has errors
+      const parts = [];
+      if (successCount > 0) parts.push(`${successCount} downloaded`);
+      if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
+      parts.push(`${errorCount} failed`);
+      toast.warning(parts.join(", "));
     }
   };
 
@@ -326,6 +427,7 @@ export function useDownload() {
 
   const resetDownloadedTracks = () => {
     setDownloadedTracks(new Set());
+    setFailedTracks(new Set());
   };
 
   return {
@@ -334,6 +436,7 @@ export function useDownload() {
     downloadingTrack,
     bulkDownloadType,
     downloadedTracks,
+    failedTracks,
     currentDownloadInfo,
     handleDownloadTrack,
     handleDownloadSelected,

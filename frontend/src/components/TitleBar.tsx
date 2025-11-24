@@ -27,7 +27,7 @@ export function TitleBar() {
       />
       
       {/* Window control buttons */}
-      <div className="absolute top-4 left-4 z-50 flex gap-2">
+      <div className="fixed top-4 left-4 z-50 flex gap-2">
         <button
           onClick={handleClose}
           onMouseEnter={() => setHoveredButton("close")}

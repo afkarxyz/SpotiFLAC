@@ -112,6 +112,7 @@ export interface DownloadRequest {
   position?: number;
   use_album_track_number?: boolean;
   spotify_id?: string;
+  service_url?: string;
 }
 
 export interface DownloadResponse {

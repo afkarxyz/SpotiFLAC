@@ -356,7 +356,7 @@ func (a *AmazonDownloader) DownloadFromService(amazonURL, outputDir string) (str
 	return "", fmt.Errorf("all regions failed. Last error: %v", lastError)
 }
 
-func (a *AmazonDownloader) DownloadBySpotifyID(spotifyTrackID, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
 	// Create output directory if needed
 	if outputDir != "." {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
@@ -364,11 +364,18 @@ func (a *AmazonDownloader) DownloadBySpotifyID(spotifyTrackID, outputDir, filena
 		}
 	}
 
-	// Get Amazon URL from Spotify track ID
-	amazonURL, err := a.GetAmazonURLFromSpotify(spotifyTrackID)
-	if err != nil {
-		return "", err
+	// Check if file with expected name already exists (Amazon doesn't provide ISRC before download)
+	if spotifyTrackName != "" && spotifyArtistName != "" {
+		expectedFilename := BuildExpectedFilename(spotifyTrackName, spotifyArtistName, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+		expectedPath := filepath.Join(outputDir, expectedFilename)
+
+		if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
+			fmt.Printf("File already exists: %s (%.2f MB)\n", expectedPath, float64(fileInfo.Size())/(1024*1024))
+			return "EXISTS:" + expectedPath, nil
+		}
 	}
+
+	fmt.Printf("Using Amazon URL: %s\n", amazonURL)
 
 	// Download from service
 	filePath, err := a.DownloadFromService(amazonURL, outputDir)
@@ -410,5 +417,16 @@ func (a *AmazonDownloader) DownloadBySpotifyID(spotifyTrackID, outputDir, filena
 	}
 
 	fmt.Println("Done")
+	fmt.Println("✓ Downloaded successfully from Amazon Music")
 	return filePath, nil
+}
+
+func (a *AmazonDownloader) DownloadBySpotifyID(spotifyTrackID, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+	// Get Amazon URL from Spotify track ID
+	amazonURL, err := a.GetAmazonURLFromSpotify(spotifyTrackID)
+	if err != nil {
+		return "", err
+	}
+
+	return a.DownloadByURL(amazonURL, outputDir, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useAlbumTrackNumber)
 }

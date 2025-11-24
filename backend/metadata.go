@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/go-flac/flacpicture"
 	"github.com/go-flac/flacvorbis"
@@ -110,4 +111,74 @@ func embedCoverArt(f *flac.File, coverPath string) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// ReadISRCFromFile reads ISRC metadata from a FLAC file
+func ReadISRCFromFile(filepath string) (string, error) {
+	if !fileExists(filepath) {
+		return "", fmt.Errorf("file does not exist")
+	}
+
+	f, err := flac.ParseFile(filepath)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse FLAC file: %w", err)
+	}
+
+	// Find VorbisComment block
+	for _, block := range f.Meta {
+		if block.Type == flac.VorbisComment {
+			cmt, err := flacvorbis.ParseFromMetaDataBlock(*block)
+			if err != nil {
+				continue
+			}
+
+			// Get ISRC field
+			isrcValues, err := cmt.Get(flacvorbis.FIELD_ISRC)
+			if err == nil && len(isrcValues) > 0 {
+				return isrcValues[0], nil
+			}
+		}
+	}
+
+	return "", nil // No ISRC found
+}
+
+// CheckISRCExists checks if a file with the given ISRC already exists in the directory
+func CheckISRCExists(outputDir string, targetISRC string) (string, bool) {
+	if targetISRC == "" {
+		return "", false
+	}
+
+	// Read all .flac files in directory
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return "", false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		// Check only .flac files
+		filename := entry.Name()
+		if len(filename) < 5 || filename[len(filename)-5:] != ".flac" {
+			continue
+		}
+
+		filepath := fmt.Sprintf("%s/%s", outputDir, filename)
+
+		// Read ISRC from file
+		isrc, err := ReadISRCFromFile(filepath)
+		if err != nil {
+			continue
+		}
+
+		// Compare ISRC (case-insensitive)
+		if isrc != "" && strings.EqualFold(isrc, targetISRC) {
+			return filepath, true
+		}
+	}
+
+	return "", false
 }

@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import type { TrackMetadata } from "@/types/api";
 
@@ -9,6 +9,7 @@ interface TrackInfoProps {
   isDownloading: boolean;
   downloadingTrack: string | null;
   isDownloaded: boolean;
+  isFailed: boolean;
   onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string) => void;
   onOpenFolder: () => void;
 }
@@ -18,6 +19,7 @@ export function TrackInfo({
   isDownloading,
   downloadingTrack,
   isDownloaded,
+  isFailed,
   onDownload,
   onOpenFolder,
 }: TrackInfoProps) {
@@ -34,7 +36,15 @@ export function TrackInfo({
           )}
           <div className="flex-1 space-y-4 min-w-0">
             <div className="space-y-1">
-              <h1 className="text-3xl font-bold wrap-break-word">{track.name}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-bold wrap-break-word">{track.name}</h1>
+                {isDownloaded && (
+                  <CheckCircle className="h-6 w-6 text-green-500 shrink-0" />
+                )}
+                {isFailed && (
+                  <XCircle className="h-6 w-6 text-red-500 shrink-0" />
+                )}
+              </div>
               <p className="text-lg text-muted-foreground">{track.artists}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">

@@ -50,7 +50,8 @@ type DownloadRequest struct {
 	TrackNumber         bool   `json:"track_number,omitempty"`
 	Position            int    `json:"position,omitempty"`               // Position in playlist/album (1-based)
 	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
-	SpotifyID           string `json:"spotify_id,omitempty"`             // Spotify track ID for Amazon Music
+	SpotifyID           string `json:"spotify_id,omitempty"`             // Spotify track ID
+	ServiceURL          string `json:"service_url,omitempty"`            // Direct service URL (Tidal/Deezer/Amazon) to skip song.link API call
 }
 
 // DownloadResponse represents the response structure for download operations
@@ -60,6 +61,27 @@ type DownloadResponse struct {
 	File          string `json:"file,omitempty"`
 	Error         string `json:"error,omitempty"`
 	AlreadyExists bool   `json:"already_exists,omitempty"`
+}
+
+// GetStreamingURLs fetches all streaming URLs from song.link API
+func (a *App) GetStreamingURLs(spotifyTrackID string) (string, error) {
+	if spotifyTrackID == "" {
+		return "", fmt.Errorf("spotify track ID is required")
+	}
+
+	fmt.Printf("[GetStreamingURLs] Called for track ID: %s\n", spotifyTrackID)
+	client := backend.NewSongLinkClient()
+	urls, err := client.GetAllURLsFromSpotify(spotifyTrackID)
+	if err != nil {
+		return "", err
+	}
+
+	jsonData, err := json.Marshal(urls)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode response: %v", err)
+	}
+
+	return string(jsonData), nil
 }
 
 // GetSpotifyMetadata fetches metadata from Spotify
@@ -120,7 +142,18 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		req.FilenameFormat = "title-artist"
 	}
 
-	// Early check: if we have track metadata, check if file already exists
+	// Early check: Check if file with same ISRC already exists
+	if existingFile, exists := backend.CheckISRCExists(req.OutputDir, req.ISRC); exists {
+		fmt.Printf("File with ISRC %s already exists: %s\n", req.ISRC, existingFile)
+		return DownloadResponse{
+			Success:       true,
+			Message:       "File with same ISRC already exists",
+			File:          existingFile,
+			AlreadyExists: true,
+		}, nil
+	}
+
+	// Fallback: if we have track metadata, check if file already exists by filename
 	if req.TrackName != "" && req.ArtistName != "" {
 		expectedFilename := backend.BuildExpectedFilename(req.TrackName, req.ArtistName, req.FilenameFormat, req.TrackNumber, req.Position, req.UseAlbumTrackNumber)
 		expectedPath := filepath.Join(req.OutputDir, expectedFilename)
@@ -139,34 +172,71 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	backend.SetDownloading(true)
 	defer backend.SetDownloading(false)
 
-	if req.Service == "amazon" {
-		if req.SpotifyID == "" {
-			return DownloadResponse{
-				Success: false,
-				Error:   "Spotify ID is required for Amazon Music",
-			}, fmt.Errorf("Spotify ID is required for Amazon Music")
-		}
+	switch req.Service {
+	case "amazon":
 		downloader := backend.NewAmazonDownloader()
-		filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
-	} else if req.Service == "tidal" {
-		searchQuery := req.Query
-		if searchQuery == "" {
-			searchQuery = req.ISRC
+		if req.ServiceURL != "" {
+			// Use provided URL directly
+			filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+		} else {
+			if req.SpotifyID == "" {
+				return DownloadResponse{
+					Success: false,
+					Error:   "Spotify ID is required for Amazon Music",
+				}, fmt.Errorf("spotify ID is required for Amazon Music")
+			}
+			filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
 		}
 
+	case "tidal":
 		if req.ApiURL == "" || req.ApiURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
-			filename, err = downloader.DownloadWithFallback(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+			if req.ServiceURL != "" {
+				// Use provided URL directly with fallback to multiple APIs
+				filename, err = downloader.DownloadByURLWithFallback(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+			} else {
+				if req.SpotifyID == "" {
+					return DownloadResponse{
+						Success: false,
+						Error:   "Spotify ID is required for Tidal",
+					}, fmt.Errorf("spotify ID is required for Tidal")
+				}
+				filename, err = downloader.DownloadWithFallback(req.SpotifyID, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+			}
 		} else {
 			downloader := backend.NewTidalDownloader(req.ApiURL)
-			filename, err = downloader.Download(searchQuery, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+			if req.ServiceURL != "" {
+				// Use provided URL directly with specific API
+				filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+			} else {
+				if req.SpotifyID == "" {
+					return DownloadResponse{
+						Success: false,
+						Error:   "Spotify ID is required for Tidal",
+					}, fmt.Errorf("spotify ID is required for Tidal")
+				}
+				filename, err = downloader.Download(req.SpotifyID, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+			}
 		}
-	} else if req.Service == "qobuz" {
+
+	case "qobuz":
 		downloader := backend.NewQobuzDownloader()
 		filename, err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
-	} else {
+
+	default: // deezer
 		downloader := backend.NewDeezerDownloader()
-		filename, err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+		if req.ServiceURL != "" {
+			// Use provided URL directly
+			filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+		} else {
+			if req.SpotifyID == "" {
+				return DownloadResponse{
+					Success: false,
+					Error:   "Spotify ID is required for Deezer",
+				}, fmt.Errorf("spotify ID is required for Deezer")
+			}
+			filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+		}
 	}
 
 	if err != nil {

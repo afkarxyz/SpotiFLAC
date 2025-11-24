@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle } from "lucide-react";
+import { Download, CheckCircle, XCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Pagination,
@@ -18,6 +18,7 @@ interface TrackListProps {
   sortBy: string;
   selectedTracks: string[];
   downloadedTracks: Set<string>;
+  failedTracks: Set<string>;
   downloadingTrack: string | null;
   isDownloading: boolean;
   currentPage: number;
@@ -36,6 +37,7 @@ export function TrackList({
   sortBy,
   selectedTracks,
   downloadedTracks,
+  failedTracks,
   downloadingTrack,
   isDownloading,
   currentPage,
@@ -164,6 +166,9 @@ export function TrackList({
                           <span className="font-medium">{track.name}</span>
                           {downloadedTracks.has(track.isrc) && (
                             <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
+                          )}
+                          {failedTracks.has(track.isrc) && (
+                            <XCircle className="h-4 w-4 text-red-500 shrink-0" />
                           )}
                         </div>
                         <span className="text-sm text-muted-foreground">

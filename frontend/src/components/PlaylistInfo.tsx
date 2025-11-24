@@ -26,6 +26,7 @@ interface PlaylistInfoProps {
   sortBy: string;
   selectedTracks: string[];
   downloadedTracks: Set<string>;
+  failedTracks: Set<string>;
   downloadingTrack: string | null;
   isDownloading: boolean;
   bulkDownloadType: "all" | "selected" | null;
@@ -52,6 +53,7 @@ export function PlaylistInfo({
   sortBy,
   selectedTracks,
   downloadedTracks,
+  failedTracks,
   downloadingTrack,
   isDownloading,
   bulkDownloadType,
@@ -151,6 +153,7 @@ export function PlaylistInfo({
           sortBy={sortBy}
           selectedTracks={selectedTracks}
           downloadedTracks={downloadedTracks}
+          failedTracks={failedTracks}
           downloadingTrack={downloadingTrack}
           isDownloading={isDownloading}
           currentPage={currentPage}

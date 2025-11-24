@@ -315,6 +315,12 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	safeArtist := sanitizeFilename(artists)
 	safeTitle := sanitizeFilename(trackTitle)
 
+	// Check if file with same ISRC already exists
+	if existingFile, exists := CheckISRCExists(outputDir, track.ISRC); exists {
+		fmt.Printf("File with ISRC %s already exists: %s\n", track.ISRC, existingFile)
+		return "EXISTS:" + existingFile, nil
+	}
+
 	// Build filename based on format settings
 	filename := buildQobuzFilename(safeTitle, safeArtist, track.TrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filepath := filepath.Join(outputDir, filename)

@@ -271,11 +271,6 @@ type artistResponse struct {
 	Popularity  int         `json:"popularity"`
 }
 
-type artistAlbumsResponse struct {
-	Items []albumSimplified `json:"items"`
-	Next  string            `json:"next"`
-}
-
 type playlistRaw struct {
 	Data         playlistResponse
 	BatchEnabled bool
@@ -321,7 +316,7 @@ func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL 
 		return nil, err
 	}
 
-	return c.processSpotifyData(ctx, raw, parsed.Type)
+	return c.processSpotifyData(ctx, raw)
 }
 
 func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed spotifyURI, token string, batch bool, delay time.Duration) (interface{}, error) {
@@ -341,7 +336,7 @@ func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed sp
 	}
 }
 
-func (c *SpotifyMetadataClient) processSpotifyData(ctx context.Context, raw interface{}, dataType string) (interface{}, error) {
+func (c *SpotifyMetadataClient) processSpotifyData(ctx context.Context, raw interface{}) (interface{}, error) {
 	switch payload := raw.(type) {
 	case *playlistRaw:
 		return c.formatPlaylistData(payload), nil

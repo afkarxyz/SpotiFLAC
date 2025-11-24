@@ -56,10 +56,75 @@ func NewDeezerDownloader() *DeezerDownloader {
 	}
 }
 
-func (d *DeezerDownloader) GetTrackByISRC(isrc string) (*DeezerTrack, error) {
+func (d *DeezerDownloader) GetDeezerURLFromSpotify(spotifyTrackID string) (string, error) {
 	// Decode base64 API URL
-	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkuZGVlemVyLmNvbS8yLjAvdHJhY2svaXNyYzo=")
-	url := fmt.Sprintf("%s%s", string(apiBase), isrc)
+	spotifyBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9vcGVuLnNwb3RpZnkuY29tL3RyYWNrLw==")
+	spotifyURL := fmt.Sprintf("%s%s", string(spotifyBase), spotifyTrackID)
+
+	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkuc29uZy5saW5rL3YxLWFscGhhLjEvbGlua3M/dXJsPQ==")
+	apiURL := fmt.Sprintf("%s%s", string(apiBase), spotifyURL)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	fmt.Println("Getting Deezer URL...")
+
+	resp, err := d.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to get Deezer URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	var songLinkResp struct {
+		LinksByPlatform map[string]struct {
+			URL string `json:"url"`
+		} `json:"linksByPlatform"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]
+	if !ok || deezerLink.URL == "" {
+		return "", fmt.Errorf("deezer link not found")
+	}
+
+	deezerURL := deezerLink.URL
+	fmt.Printf("Found Deezer URL: %s\n", deezerURL)
+	return deezerURL, nil
+}
+
+func (d *DeezerDownloader) GetTrackIDFromURL(deezerURL string) (int64, error) {
+	// Extract track ID from Deezer URL
+	// Format: https://www.deezer.com/track/3412534581
+	parts := strings.Split(deezerURL, "/track/")
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("invalid Deezer URL format")
+	}
+
+	// Get the track ID part and remove any query parameters
+	trackIDStr := strings.Split(parts[1], "?")[0]
+	trackIDStr = strings.TrimSpace(trackIDStr)
+
+	var trackID int64
+	_, err := fmt.Sscanf(trackIDStr, "%d", &trackID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse track ID: %w", err)
+	}
+
+	return trackID, nil
+}
+
+func (d *DeezerDownloader) GetTrackByID(trackID int64) (*DeezerTrack, error) {
+	// Decode base64 API URL
+	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkuZGVlemVyLmNvbS8yLjAvdHJhY2sv")
+	url := fmt.Sprintf("%s%d", string(apiBase), trackID)
 
 	resp, err := d.client.Get(url)
 	if err != nil {
@@ -77,7 +142,7 @@ func (d *DeezerDownloader) GetTrackByISRC(isrc string) (*DeezerTrack, error) {
 	}
 
 	if track.ID == 0 {
-		return nil, fmt.Errorf("track not found for ISRC: %s", isrc)
+		return nil, fmt.Errorf("track not found")
 	}
 
 	return &track, nil
@@ -187,10 +252,17 @@ func buildFilename(title, artist string, trackNumber int, format string, include
 	return filename + ".flac"
 }
 
-func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
-	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
+func (d *DeezerDownloader) DownloadByURL(deezerURL, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+	fmt.Printf("Using Deezer URL: %s\n", deezerURL)
 
-	track, err := d.GetTrackByISRC(isrc)
+	// Extract track ID from URL
+	trackID, err := d.GetTrackIDFromURL(deezerURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Get track info by ID
+	track, err := d.GetTrackByID(trackID)
 	if err != nil {
 		return "", err
 	}
@@ -233,6 +305,12 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 
 	safeArtist := sanitizeFilename(artists)
 	safeTitle := sanitizeFilename(trackTitle)
+
+	// Check if file with same ISRC already exists
+	if existingFile, exists := CheckISRCExists(outputDir, track.ISRC); exists {
+		fmt.Printf("File with ISRC %s already exists: %s\n", track.ISRC, existingFile)
+		return "EXISTS:" + existingFile, nil
+	}
 
 	// Build filename based on format settings
 	filename := buildFilename(safeTitle, safeArtist, track.TrackPos, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
@@ -287,5 +365,16 @@ func (d *DeezerDownloader) DownloadByISRC(isrc, outputDir, filenameFormat string
 	}
 
 	fmt.Println("Metadata embedded successfully!")
+	fmt.Println("✓ Downloaded successfully from Deezer")
 	return filepath, nil
+}
+
+func (d *DeezerDownloader) DownloadBySpotifyID(spotifyTrackID, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+	// Get Deezer URL from Spotify track ID
+	deezerURL, err := d.GetDeezerURLFromSpotify(spotifyTrackID)
+	if err != nil {
+		return "", err
+	}
+
+	return d.DownloadByURL(deezerURL, outputDir, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useAlbumTrackNumber)
 }

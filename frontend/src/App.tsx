@@ -40,7 +40,7 @@ function App() {
   const [hasUpdate, setHasUpdate] = useState(false);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.0";
+  const CURRENT_VERSION = "6.1";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -144,6 +144,7 @@ function App() {
           isDownloading={download.isDownloading}
           downloadingTrack={download.downloadingTrack}
           isDownloaded={download.downloadedTracks.has(track.isrc)}
+          isFailed={download.failedTracks.has(track.isrc)}
           onDownload={download.handleDownloadTrack}
           onOpenFolder={handleOpenFolder}
         />
@@ -160,6 +161,7 @@ function App() {
           sortBy={sortBy}
           selectedTracks={selectedTracks}
           downloadedTracks={download.downloadedTracks}
+          failedTracks={download.failedTracks}
           downloadingTrack={download.downloadingTrack}
           isDownloading={download.isDownloading}
           bulkDownloadType={download.bulkDownloadType}
@@ -193,6 +195,7 @@ function App() {
           sortBy={sortBy}
           selectedTracks={selectedTracks}
           downloadedTracks={download.downloadedTracks}
+          failedTracks={download.failedTracks}
           downloadingTrack={download.downloadingTrack}
           isDownloading={download.isDownloading}
           bulkDownloadType={download.bulkDownloadType}
@@ -231,6 +234,7 @@ function App() {
           sortBy={sortBy}
           selectedTracks={selectedTracks}
           downloadedTracks={download.downloadedTracks}
+          failedTracks={download.failedTracks}
           downloadingTrack={download.downloadingTrack}
           isDownloading={download.isDownloading}
           bulkDownloadType={download.bulkDownloadType}
