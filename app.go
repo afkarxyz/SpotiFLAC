@@ -285,6 +285,11 @@ func (a *App) SelectFolder(defaultPath string) (string, error) {
 	return backend.SelectFolderDialog(a.ctx, defaultPath)
 }
 
+// SelectFile opens a file selection dialog and returns the selected file path
+func (a *App) SelectFile() (string, error) {
+	return backend.SelectFileDialog(a.ctx)
+}
+
 // GetDefaults returns the default configuration
 func (a *App) GetDefaults() map[string]string {
 	return map[string]string{
@@ -301,4 +306,48 @@ func (a *App) GetDownloadProgress() backend.ProgressInfo {
 func (a *App) Quit() {
 	// You can add cleanup logic here if needed
 	panic("quit") // This will trigger Wails to close the app
+}
+
+// AnalyzeTrack analyzes audio quality of a FLAC file
+func (a *App) AnalyzeTrack(filePath string) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("file path is required")
+	}
+
+	result, err := backend.AnalyzeTrack(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to analyze track: %v", err)
+	}
+
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode response: %v", err)
+	}
+
+	return string(jsonData), nil
+}
+
+// AnalyzeMultipleTracks analyzes multiple FLAC files
+func (a *App) AnalyzeMultipleTracks(filePaths []string) (string, error) {
+	if len(filePaths) == 0 {
+		return "", fmt.Errorf("at least one file path is required")
+	}
+
+	results := make([]*backend.AnalysisResult, 0, len(filePaths))
+
+	for _, filePath := range filePaths {
+		result, err := backend.AnalyzeTrack(filePath)
+		if err != nil {
+			// Skip failed analyses
+			continue
+		}
+		results = append(results, result)
+	}
+
+	jsonData, err := json.Marshal(results)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode response: %v", err)
+	}
+
+	return string(jsonData), nil
 }
