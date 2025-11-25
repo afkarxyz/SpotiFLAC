@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Settings } from "@/components/Settings";
+import { AudioAnalysisDialog } from "@/components/AudioAnalysisDialog";
 import {
   Tooltip,
   TooltipContent,
@@ -72,6 +73,7 @@ export function Header({ version, hasUpdate }: HeaderProps) {
             <p>Report bug or request feature</p>
           </TooltipContent>
         </Tooltip>
+        <AudioAnalysisDialog />
         <Settings />
       </div>
     </div>
