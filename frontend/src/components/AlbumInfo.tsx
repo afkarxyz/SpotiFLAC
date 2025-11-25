@@ -14,6 +14,8 @@ interface AlbumInfoProps {
     images: string;
     release_date: string;
     total_tracks: number;
+    artist_id?: string;
+    artist_url?: string;
   };
   trackList: TrackMetadata[];
   searchQuery: string;
@@ -21,6 +23,7 @@ interface AlbumInfoProps {
   selectedTracks: string[];
   downloadedTracks: Set<string>;
   failedTracks: Set<string>;
+  skippedTracks: Set<string>;
   downloadingTrack: string | null;
   isDownloading: boolean;
   bulkDownloadType: "all" | "selected" | null;
@@ -32,12 +35,14 @@ interface AlbumInfoProps {
   onSortChange: (value: string) => void;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string) => void;
+  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string) => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
   onOpenFolder: () => void;
   onPageChange: (page: number) => void;
+  onArtistClick?: (artist: { id: string; name: string; external_urls: string }) => void;
+  onTrackClick?: (track: TrackMetadata) => void;
 }
 
 export function AlbumInfo({
@@ -48,6 +53,7 @@ export function AlbumInfo({
   selectedTracks,
   downloadedTracks,
   failedTracks,
+  skippedTracks,
   downloadingTrack,
   isDownloading,
   bulkDownloadType,
@@ -65,6 +71,8 @@ export function AlbumInfo({
   onStopDownload,
   onOpenFolder,
   onPageChange,
+  onArtistClick,
+  onTrackClick,
 }: AlbumInfoProps) {
   return (
     <div className="space-y-6">
@@ -83,7 +91,22 @@ export function AlbumInfo({
                 <p className="text-sm font-medium">Album</p>
                 <h2 className="text-4xl font-bold">{albumInfo.name}</h2>
                 <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">{albumInfo.artists}</span>
+                  {onArtistClick && albumInfo.artist_id && albumInfo.artist_url ? (
+                    <span
+                      className="font-medium cursor-pointer hover:underline"
+                      onClick={() =>
+                        onArtistClick({
+                          id: albumInfo.artist_id!,
+                          name: albumInfo.artists,
+                          external_urls: albumInfo.artist_url!,
+                        })
+                      }
+                    >
+                      {albumInfo.artists}
+                    </span>
+                  ) : (
+                    <span className="font-medium">{albumInfo.artists}</span>
+                  )}
                   <span>•</span>
                   <span>{albumInfo.release_date}</span>
                   <span>•</span>
@@ -148,16 +171,19 @@ export function AlbumInfo({
           selectedTracks={selectedTracks}
           downloadedTracks={downloadedTracks}
           failedTracks={failedTracks}
+          skippedTracks={skippedTracks}
           downloadingTrack={downloadingTrack}
           isDownloading={isDownloading}
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}
           showCheckboxes={true}
           hideAlbumColumn={true}
+          folderName={albumInfo.name}
           onToggleTrack={onToggleTrack}
           onToggleSelectAll={onToggleSelectAll}
           onDownloadTrack={onDownloadTrack}
           onPageChange={onPageChange}
+          onTrackClick={onTrackClick}
         />
       </div>
     </div>

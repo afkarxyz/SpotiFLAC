@@ -28,6 +28,7 @@ interface ArtistInfoProps {
   selectedTracks: string[];
   downloadedTracks: Set<string>;
   failedTracks: Set<string>;
+  skippedTracks: Set<string>;
   downloadingTrack: string | null;
   isDownloading: boolean;
   bulkDownloadType: "all" | "selected" | null;
@@ -39,13 +40,15 @@ interface ArtistInfoProps {
   onSortChange: (value: string) => void;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string) => void;
+  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string) => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
   onOpenFolder: () => void;
   onAlbumClick: (album: { id: string; name: string; external_urls: string }) => void;
+  onArtistClick: (artist: { id: string; name: string; external_urls: string }) => void;
   onPageChange: (page: number) => void;
+  onTrackClick?: (track: TrackMetadata) => void;
 }
 
 export function ArtistInfo({
@@ -57,6 +60,7 @@ export function ArtistInfo({
   selectedTracks,
   downloadedTracks,
   failedTracks,
+  skippedTracks,
   downloadingTrack,
   isDownloading,
   bulkDownloadType,
@@ -74,7 +78,9 @@ export function ArtistInfo({
   onStopDownload,
   onOpenFolder,
   onAlbumClick,
+  onArtistClick,
   onPageChange,
+  onTrackClick,
 }: ArtistInfoProps) {
   return (
     <div className="space-y-6">
@@ -91,8 +97,12 @@ export function ArtistInfo({
             <div className="flex-1 space-y-2">
               <p className="text-sm font-medium">Artist</p>
               <h2 className="text-4xl font-bold">{artistInfo.name}</h2>
-              <div className="flex items-center gap-2 text-sm">
+              <div className="flex items-center gap-2 text-sm flex-wrap">
                 <span>{artistInfo.followers.toLocaleString()} followers</span>
+                <span>•</span>
+                <span>{albumList.length} albums</span>
+                <span>•</span>
+                <span>{trackList.length} tracks</span>
                 {artistInfo.genres.length > 0 && (
                   <>
                     <span>•</span>
@@ -200,16 +210,22 @@ export function ArtistInfo({
             selectedTracks={selectedTracks}
             downloadedTracks={downloadedTracks}
             failedTracks={failedTracks}
+            skippedTracks={skippedTracks}
             downloadingTrack={downloadingTrack}
             isDownloading={isDownloading}
             currentPage={currentPage}
             itemsPerPage={itemsPerPage}
             showCheckboxes={true}
             hideAlbumColumn={false}
+            folderName={artistInfo.name}
+            isArtistDiscography={true}
             onToggleTrack={onToggleTrack}
             onToggleSelectAll={onToggleSelectAll}
             onDownloadTrack={onDownloadTrack}
             onPageChange={onPageChange}
+            onAlbumClick={onAlbumClick}
+            onArtistClick={onArtistClick}
+            onTrackClick={onTrackClick}
           />
         </div>
       )}

@@ -119,8 +119,12 @@
     font-family: "Google Sans Flex", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
   code, pre, .font-mono {
-    font-family: "Google Sans Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-family: "Google Sans Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
   }
+}
+
+@theme inline {
+  --font-mono: "Google Sans Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 /* Sonner Toast Styling */

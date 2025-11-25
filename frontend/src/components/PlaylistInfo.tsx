@@ -27,6 +27,7 @@ interface PlaylistInfoProps {
   selectedTracks: string[];
   downloadedTracks: Set<string>;
   failedTracks: Set<string>;
+  skippedTracks: Set<string>;
   downloadingTrack: string | null;
   isDownloading: boolean;
   bulkDownloadType: "all" | "selected" | null;
@@ -38,12 +39,15 @@ interface PlaylistInfoProps {
   onSortChange: (value: string) => void;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string) => void;
+  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string) => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
   onOpenFolder: () => void;
   onPageChange: (page: number) => void;
+  onAlbumClick: (album: { id: string; name: string; external_urls: string }) => void;
+  onArtistClick: (artist: { id: string; name: string; external_urls: string }) => void;
+  onTrackClick: (track: TrackMetadata) => void;
 }
 
 export function PlaylistInfo({
@@ -54,6 +58,7 @@ export function PlaylistInfo({
   selectedTracks,
   downloadedTracks,
   failedTracks,
+  skippedTracks,
   downloadingTrack,
   isDownloading,
   bulkDownloadType,
@@ -71,6 +76,9 @@ export function PlaylistInfo({
   onStopDownload,
   onOpenFolder,
   onPageChange,
+  onAlbumClick,
+  onArtistClick,
+  onTrackClick,
 }: PlaylistInfoProps) {
   return (
     <div className="space-y-6">
@@ -154,16 +162,21 @@ export function PlaylistInfo({
           selectedTracks={selectedTracks}
           downloadedTracks={downloadedTracks}
           failedTracks={failedTracks}
+          skippedTracks={skippedTracks}
           downloadingTrack={downloadingTrack}
           isDownloading={isDownloading}
           currentPage={currentPage}
           itemsPerPage={itemsPerPage}
           showCheckboxes={true}
           hideAlbumColumn={false}
+          folderName={playlistInfo.owner.name}
           onToggleTrack={onToggleTrack}
           onToggleSelectAll={onToggleSelectAll}
           onDownloadTrack={onDownloadTrack}
           onPageChange={onPageChange}
+          onAlbumClick={onAlbumClick}
+          onArtistClick={onArtistClick}
+          onTrackClick={onTrackClick}
         />
       </div>
     </div>

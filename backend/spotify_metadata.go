@@ -69,19 +69,31 @@ type TrackMetadata struct {
 	SpotifyID   string `json:"spotify_id,omitempty"`
 }
 
+// ArtistSimple holds basic artist info for clickable artists
+type ArtistSimple struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	ExternalURL string `json:"external_urls"`
+}
+
 // AlbumTrackMetadata holds per-track info for album / playlist formatting.
 type AlbumTrackMetadata struct {
-	Artists     string `json:"artists"`
-	Name        string `json:"name"`
-	AlbumName   string `json:"album_name"`
-	DurationMS  int    `json:"duration_ms"`
-	Images      string `json:"images"`
-	ReleaseDate string `json:"release_date"`
-	TrackNumber int    `json:"track_number"`
-	ExternalURL string `json:"external_urls"`
-	ISRC        string `json:"isrc"`
-	AlbumType   string `json:"album_type,omitempty"`
-	SpotifyID   string `json:"spotify_id,omitempty"`
+	Artists     string         `json:"artists"`
+	Name        string         `json:"name"`
+	AlbumName   string         `json:"album_name"`
+	DurationMS  int            `json:"duration_ms"`
+	Images      string         `json:"images"`
+	ReleaseDate string         `json:"release_date"`
+	TrackNumber int            `json:"track_number"`
+	ExternalURL string         `json:"external_urls"`
+	ISRC        string         `json:"isrc"`
+	AlbumType   string         `json:"album_type,omitempty"`
+	SpotifyID   string         `json:"spotify_id,omitempty"`
+	AlbumID     string         `json:"album_id,omitempty"`
+	AlbumURL    string         `json:"album_url,omitempty"`
+	ArtistID    string         `json:"artist_id,omitempty"`
+	ArtistURL   string         `json:"artist_url,omitempty"`
+	ArtistsData []ArtistSimple `json:"artists_data,omitempty"`
 }
 
 type TrackResponse struct {
@@ -95,6 +107,8 @@ type AlbumInfoMetadata struct {
 	Artists     string `json:"artists"`
 	Images      string `json:"images"`
 	Batch       string `json:"batch,omitempty"`
+	ArtistID    string `json:"artist_id,omitempty"`
+	ArtistURL   string `json:"artist_url,omitempty"`
 }
 
 type AlbumResponsePayload struct {
@@ -474,6 +488,19 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 		if item.Track == nil {
 			continue
 		}
+		var artistID, artistURL string
+		if len(item.Track.Artists) > 0 {
+			artistID = item.Track.Artists[0].ID
+			artistURL = fmt.Sprintf("https://open.spotify.com/artist/%s", item.Track.Artists[0].ID)
+		}
+		artistsData := make([]ArtistSimple, 0, len(item.Track.Artists))
+		for _, a := range item.Track.Artists {
+			artistsData = append(artistsData, ArtistSimple{
+				ID:          a.ID,
+				Name:        a.Name,
+				ExternalURL: fmt.Sprintf("https://open.spotify.com/artist/%s", a.ID),
+			})
+		}
 		tracks = append(tracks, AlbumTrackMetadata{
 			Artists:     joinArtists(item.Track.Artists),
 			Name:        item.Track.Name,
@@ -485,6 +512,11 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 			ExternalURL: item.Track.ExternalURL.Spotify,
 			ISRC:        item.Track.ExternalID.ISRC,
 			SpotifyID:   item.Track.ID,
+			AlbumID:     item.Track.Album.ID,
+			AlbumURL:    item.Track.Album.ExternalURL.Spotify,
+			ArtistID:    artistID,
+			ArtistURL:   artistURL,
+			ArtistsData: artistsData,
 		})
 	}
 
@@ -496,12 +528,19 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 
 func (c *SpotifyMetadataClient) formatAlbumData(ctx context.Context, raw *albumRaw) (*AlbumResponsePayload, error) {
 	albumImage := firstImageURL(raw.Data.Images)
+	var artistID, artistURL string
+	if len(raw.Data.Artists) > 0 {
+		artistID = raw.Data.Artists[0].ID
+		artistURL = fmt.Sprintf("https://open.spotify.com/artist/%s", raw.Data.Artists[0].ID)
+	}
 	info := AlbumInfoMetadata{
 		TotalTracks: raw.Data.TotalTracks,
 		Name:        raw.Data.Name,
 		ReleaseDate: raw.Data.ReleaseDate,
 		Artists:     joinArtists(raw.Data.Artists),
 		Images:      albumImage,
+		ArtistID:    artistID,
+		ArtistURL:   artistURL,
 	}
 	if raw.BatchEnabled {
 		info.Batch = strconv.Itoa(maxInt(1, raw.BatchCount))
@@ -576,6 +615,19 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 
 		for _, tr := range tracks {
 			isrc := c.fetchTrackISRC(ctx, tr.ID, raw.Token, isrcCache)
+			var artistID, artistURL string
+			if len(tr.Artists) > 0 {
+				artistID = tr.Artists[0].ID
+				artistURL = fmt.Sprintf("https://open.spotify.com/artist/%s", tr.Artists[0].ID)
+			}
+			artistsData := make([]ArtistSimple, 0, len(tr.Artists))
+			for _, a := range tr.Artists {
+				artistsData = append(artistsData, ArtistSimple{
+					ID:          a.ID,
+					Name:        a.Name,
+					ExternalURL: fmt.Sprintf("https://open.spotify.com/artist/%s", a.ID),
+				})
+			}
 			allTracks = append(allTracks, AlbumTrackMetadata{
 				Artists:     joinArtists(tr.Artists),
 				Name:        tr.Name,
@@ -588,6 +640,11 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 				ExternalURL: tr.ExternalURL.Spotify,
 				ISRC:        isrc,
 				SpotifyID:   tr.ID,
+				AlbumID:     alb.ID,
+				AlbumURL:    alb.ExternalURL.Spotify,
+				ArtistID:    artistID,
+				ArtistURL:   artistURL,
+				ArtistsData: artistsData,
 			})
 		}
 	}

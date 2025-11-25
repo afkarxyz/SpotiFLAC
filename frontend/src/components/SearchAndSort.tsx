@@ -6,7 +6,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, ArrowUpDown } from "lucide-react";
+import { Search, ArrowUpDown, XCircle } from "lucide-react";
 
 interface SearchAndSortProps {
   searchQuery: string;
@@ -29,8 +29,17 @@ export function SearchAndSort({
           placeholder="Search tracks..."
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10"
+          className="pl-10 pr-8"
         />
+        {searchQuery && (
+          <button
+            type="button"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            onClick={() => onSearchChange("")}
+          >
+            <XCircle className="h-4 w-4" />
+          </button>
+        )}
       </div>
       <Select value={sortBy} onValueChange={onSortChange}>
         <SelectTrigger className="w-[200px] gap-1.5">

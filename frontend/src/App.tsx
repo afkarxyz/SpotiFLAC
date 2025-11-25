@@ -5,12 +5,11 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getSettings, applyThemeMode } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
@@ -26,10 +25,14 @@ import { AlbumInfo } from "@/components/AlbumInfo";
 import { PlaylistInfo } from "@/components/PlaylistInfo";
 import { ArtistInfo } from "@/components/ArtistInfo";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
+import type { HistoryItem } from "@/components/FetchHistory";
 
 // Hooks
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
+
+const HISTORY_KEY = "spotiflac_fetch_history";
+const MAX_HISTORY = 5;
 
 function App() {
   const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -38,9 +41,10 @@ function App() {
   const [sortBy, setSortBy] = useState<string>("default");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasUpdate, setHasUpdate] = useState(false);
+  const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.1";
+  const CURRENT_VERSION = "6.2";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -61,6 +65,7 @@ function App() {
 
     mediaQuery.addEventListener("change", handleChange);
     checkForUpdates();
+    loadHistory();
 
     return () => {
       mediaQuery.removeEventListener("change", handleChange);
@@ -78,16 +83,66 @@ function App() {
   const checkForUpdates = async () => {
     try {
       const response = await fetch(
-        "https://cdn.jsdelivr.net/gh/afkarxyz/SpotiFLAC@refs/heads/main/version.json"
+        "https://api.github.com/repos/afkarxyz/SpotiFLAC/releases/latest"
       );
       const data = await response.json();
-      const latestVersion = data.version;
+      // tag_name format: "v6.1" -> extract "6.1"
+      const latestVersion = data.tag_name?.replace(/^v/, "") || "";
 
-      if (latestVersion > CURRENT_VERSION) {
+      if (latestVersion && latestVersion > CURRENT_VERSION) {
         setHasUpdate(true);
       }
     } catch (err) {
       console.error("Failed to check for updates:", err);
+    }
+  };
+
+  const loadHistory = () => {
+    try {
+      const saved = localStorage.getItem(HISTORY_KEY);
+      if (saved) {
+        setFetchHistory(JSON.parse(saved));
+      }
+    } catch (err) {
+      console.error("Failed to load history:", err);
+    }
+  };
+
+  const saveHistory = (history: HistoryItem[]) => {
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (err) {
+      console.error("Failed to save history:", err);
+    }
+  };
+
+  const addToHistory = (item: Omit<HistoryItem, "id" | "timestamp">) => {
+    setFetchHistory((prev) => {
+      const filtered = prev.filter((h) => h.url !== item.url);
+      const newItem: HistoryItem = {
+        ...item,
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+      };
+      const updated = [newItem, ...filtered].slice(0, MAX_HISTORY);
+      saveHistory(updated);
+      return updated;
+    });
+  };
+
+  const removeFromHistory = (id: string) => {
+    setFetchHistory((prev) => {
+      const updated = prev.filter((h) => h.id !== id);
+      saveHistory(updated);
+      return updated;
+    });
+  };
+
+  const handleHistorySelect = async (item: HistoryItem) => {
+    setSpotifyUrl(item.url);
+    const updatedUrl = await metadata.handleFetchMetadata(item.url);
+    if (updatedUrl) {
+      setSpotifyUrl(updatedUrl);
     }
   };
 
@@ -97,6 +152,55 @@ function App() {
       setSpotifyUrl(updatedUrl);
     }
   };
+
+  // Add to history when metadata is successfully fetched
+  useEffect(() => {
+    if (!metadata.metadata || !spotifyUrl) return;
+
+    let historyItem: Omit<HistoryItem, "id" | "timestamp"> | null = null;
+
+    if ("track" in metadata.metadata) {
+      const { track } = metadata.metadata;
+      historyItem = {
+        url: spotifyUrl,
+        type: "track",
+        name: track.name,
+        artist: track.artists,
+        image: track.images,
+      };
+    } else if ("album_info" in metadata.metadata) {
+      const { album_info } = metadata.metadata;
+      historyItem = {
+        url: spotifyUrl,
+        type: "album",
+        name: album_info.name,
+        artist: album_info.artists,
+        image: album_info.images,
+      };
+    } else if ("playlist_info" in metadata.metadata) {
+      const { playlist_info } = metadata.metadata;
+      historyItem = {
+        url: spotifyUrl,
+        type: "playlist",
+        name: playlist_info.owner.name,
+        artist: `${playlist_info.tracks.total} tracks • ${playlist_info.owner.display_name}`,
+        image: playlist_info.owner.images || "",
+      };
+    } else if ("artist_info" in metadata.metadata) {
+      const { artist_info } = metadata.metadata;
+      historyItem = {
+        url: spotifyUrl,
+        type: "artist",
+        name: artist_info.name,
+        artist: `${artist_info.total_albums} albums`,
+        image: artist_info.images,
+      };
+    }
+
+    if (historyItem) {
+      addToHistory(historyItem);
+    }
+  }, [metadata.metadata]);
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -162,6 +266,7 @@ function App() {
           selectedTracks={selectedTracks}
           downloadedTracks={download.downloadedTracks}
           failedTracks={download.failedTracks}
+          skippedTracks={download.skippedTracks}
           downloadingTrack={download.downloadingTrack}
           isDownloading={download.isDownloading}
           bulkDownloadType={download.bulkDownloadType}
@@ -181,6 +286,18 @@ function App() {
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}
           onPageChange={setCurrentPage}
+          onArtistClick={async (artist) => {
+            const artistUrl = await metadata.handleArtistClick(artist);
+            if (artistUrl) {
+              setSpotifyUrl(artistUrl);
+            }
+          }}
+          onTrackClick={async (track) => {
+            if (track.external_urls) {
+              setSpotifyUrl(track.external_urls);
+              await metadata.handleFetchMetadata(track.external_urls);
+            }
+          }}
         />
       );
     }
@@ -196,6 +313,7 @@ function App() {
           selectedTracks={selectedTracks}
           downloadedTracks={download.downloadedTracks}
           failedTracks={download.failedTracks}
+          skippedTracks={download.skippedTracks}
           downloadingTrack={download.downloadingTrack}
           isDownloading={download.isDownloading}
           bulkDownloadType={download.bulkDownloadType}
@@ -219,6 +337,19 @@ function App() {
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}
           onPageChange={setCurrentPage}
+          onAlbumClick={metadata.handleAlbumClick}
+          onArtistClick={async (artist) => {
+            const artistUrl = await metadata.handleArtistClick(artist);
+            if (artistUrl) {
+              setSpotifyUrl(artistUrl);
+            }
+          }}
+          onTrackClick={async (track) => {
+            if (track.external_urls) {
+              setSpotifyUrl(track.external_urls);
+              await metadata.handleFetchMetadata(track.external_urls);
+            }
+          }}
         />
       );
     }
@@ -235,6 +366,7 @@ function App() {
           selectedTracks={selectedTracks}
           downloadedTracks={download.downloadedTracks}
           failedTracks={download.failedTracks}
+          skippedTracks={download.skippedTracks}
           downloadingTrack={download.downloadingTrack}
           isDownloading={download.isDownloading}
           bulkDownloadType={download.bulkDownloadType}
@@ -254,7 +386,19 @@ function App() {
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}
           onAlbumClick={metadata.handleAlbumClick}
+          onArtistClick={async (artist) => {
+            const artistUrl = await metadata.handleArtistClick(artist);
+            if (artistUrl) {
+              setSpotifyUrl(artistUrl);
+            }
+          }}
           onPageChange={setCurrentPage}
+          onTrackClick={async (track) => {
+            if (track.external_urls) {
+              setSpotifyUrl(track.external_urls);
+              await metadata.handleFetchMetadata(track.external_urls);
+            }
+          }}
         />
       );
     }
@@ -278,14 +422,27 @@ function App() {
             open={metadata.showTimeoutDialog}
             onOpenChange={metadata.setShowTimeoutDialog}
           >
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Fetch Settings</DialogTitle>
-                <DialogDescription>
-                  Set timeout for fetching metadata. Longer timeout is recommended for artists
-                  with large discography.
-                </DialogDescription>
-              </DialogHeader>
+            <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
+              <div className="absolute right-4 top-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 opacity-70 hover:opacity-100"
+                  onClick={() => metadata.setShowTimeoutDialog(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <DialogTitle className="text-sm font-medium">Fetch Artist</DialogTitle>
+              <DialogDescription>
+                Set timeout for fetching metadata. Longer timeout is recommended for artists
+                with large discography.
+              </DialogDescription>
+              {metadata.pendingArtistName && (
+                <div className="py-2">
+                  <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.pendingArtistName}</p>
+                </div>
+              )}
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="timeout">Timeout (seconds)</Label>
@@ -320,23 +477,36 @@ function App() {
 
           {/* Album Fetch Dialog */}
           <Dialog open={metadata.showAlbumDialog} onOpenChange={metadata.setShowAlbumDialog}>
-            <DialogContent className="sm:max-w-[425px]">
-              <DialogHeader>
-                <DialogTitle>Fetch Album</DialogTitle>
-                <DialogDescription>
-                  Do you want to fetch metadata for this album?
-                </DialogDescription>
-              </DialogHeader>
+            <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
+              <div className="absolute right-4 top-4">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 opacity-70 hover:opacity-100"
+                  onClick={() => metadata.setShowAlbumDialog(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <DialogTitle className="text-sm font-medium">Fetch Album</DialogTitle>
+              <DialogDescription>
+                Do you want to fetch metadata for this album?
+              </DialogDescription>
               {metadata.selectedAlbum && (
-                <div className="py-4">
-                  <p className="font-medium">{metadata.selectedAlbum.name}</p>
+                <div className="py-2">
+                  <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.selectedAlbum.name}</p>
                 </div>
               )}
               <DialogFooter>
                 <Button variant="outline" onClick={() => metadata.setShowAlbumDialog(false)}>
                   Cancel
                 </Button>
-                <Button onClick={metadata.handleConfirmAlbumFetch}>
+                <Button onClick={async () => {
+                  const albumUrl = await metadata.handleConfirmAlbumFetch();
+                  if (albumUrl) {
+                    setSpotifyUrl(albumUrl);
+                  }
+                }}>
                   <Search className="h-4 w-4" />
                   Fetch Album
                 </Button>
@@ -349,6 +519,10 @@ function App() {
             loading={metadata.loading}
             onUrlChange={setSpotifyUrl}
             onFetch={handleFetchMetadata}
+            history={fetchHistory}
+            onHistorySelect={handleHistorySelect}
+            onHistoryRemove={removeFromHistory}
+            hasResult={!!metadata.metadata}
           />
 
             {metadata.metadata && renderMetadata()}

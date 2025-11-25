@@ -3,6 +3,7 @@ import { downloadTrack } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
 
 export function useDownload() {
@@ -12,6 +13,7 @@ export function useDownload() {
   const [bulkDownloadType, setBulkDownloadType] = useState<"all" | "selected" | null>(null);
   const [downloadedTracks, setDownloadedTracks] = useState<Set<string>>(new Set());
   const [failedTracks, setFailedTracks] = useState<Set<string>>(new Set());
+  const [skippedTracks, setSkippedTracks] = useState<Set<string>>(new Set());
   const [currentDownloadInfo, setCurrentDownloadInfo] = useState<{
     name: string;
     artists: string;
@@ -73,6 +75,7 @@ export function useDownload() {
       // Try Tidal first
       if (streamingURLs?.tidal_url) {
         try {
+          logger.debug(`trying tidal for: ${trackName} - ${artistName}`);
           const tidalResponse = await downloadTrack({
             isrc,
             service: "tidal",
@@ -90,17 +93,19 @@ export function useDownload() {
           });
 
           if (tidalResponse.success) {
+            logger.success(`tidal: ${trackName} - ${artistName}`);
             return tidalResponse;
           }
-          console.log("Tidal failed, trying Deezer...");
+          logger.warning(`tidal failed, trying deezer...`);
         } catch (tidalErr) {
-          console.log("Tidal error:", tidalErr);
+          logger.error(`tidal error: ${tidalErr}`);
         }
       }
 
       // Try Deezer second
       if (streamingURLs?.deezer_url) {
         try {
+          logger.debug(`trying deezer for: ${trackName} - ${artistName}`);
           const deezerResponse = await downloadTrack({
             isrc,
             service: "deezer",
@@ -118,17 +123,19 @@ export function useDownload() {
           });
 
           if (deezerResponse.success) {
+            logger.success(`deezer: ${trackName} - ${artistName}`);
             return deezerResponse;
           }
-          console.log("Deezer failed, trying Amazon...");
+          logger.warning(`deezer failed, trying amazon...`);
         } catch (deezerErr) {
-          console.log("Deezer error:", deezerErr);
+          logger.error(`deezer error: ${deezerErr}`);
         }
       }
 
       // Try Amazon third
       if (streamingURLs?.amazon_url) {
         try {
+          logger.debug(`trying amazon for: ${trackName} - ${artistName}`);
           const amazonResponse = await downloadTrack({
             isrc,
             service: "amazon",
@@ -146,15 +153,17 @@ export function useDownload() {
           });
 
           if (amazonResponse.success) {
+            logger.success(`amazon: ${trackName} - ${artistName}`);
             return amazonResponse;
           }
-          console.log("Amazon failed, trying Qobuz...");
+          logger.warning(`amazon failed, trying qobuz...`);
         } catch (amazonErr) {
-          console.log("Amazon error:", amazonErr);
+          logger.error(`amazon error: ${amazonErr}`);
         }
       }
 
       // Try Qobuz as last fallback
+      logger.debug(`trying qobuz (fallback) for: ${trackName} - ${artistName}`);
       service = "qobuz";
     }
 
@@ -179,26 +188,29 @@ export function useDownload() {
     trackName?: string,
     artistName?: string,
     albumName?: string,
-    spotifyId?: string
+    spotifyId?: string,
+    playlistName?: string,
+    isArtistDiscography?: boolean
   ) => {
     if (!isrc) {
       toast.error("No ISRC found for this track");
       return;
     }
 
+    logger.info(`starting download: ${trackName} - ${artistName}`);
     const settings = getSettings();
     setDownloadingTrack(isrc);
 
     try {
-      // Single track download - no position parameter
+      // Single track download - use playlistName if provided for folder structure
       const response = await downloadWithAutoFallback(
         isrc,
         settings,
         trackName,
         artistName,
         albumName,
-        undefined,
-        false,
+        playlistName,
+        isArtistDiscography,
         undefined, // Don't pass position for single track
         spotifyId
       );
@@ -206,15 +218,23 @@ export function useDownload() {
       if (response.success) {
         if (response.already_exists) {
           toast.info(response.message);
+          setSkippedTracks((prev) => new Set(prev).add(isrc));
         } else {
           toast.success(response.message);
         }
         setDownloadedTracks((prev) => new Set(prev).add(isrc));
+        setFailedTracks((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(isrc);
+          return newSet;
+        });
       } else {
         toast.error(response.error || "Download failed");
+        setFailedTracks((prev) => new Set(prev).add(isrc));
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Download failed");
+      setFailedTracks((prev) => new Set(prev).add(isrc));
     } finally {
       setDownloadingTrack(null);
     }
@@ -231,6 +251,7 @@ export function useDownload() {
       return;
     }
 
+    logger.info(`starting batch download: ${selectedTracks.length} selected tracks`);
     const settings = getSettings();
     setIsDownloading(true);
     setBulkDownloadType("selected");
@@ -275,9 +296,11 @@ export function useDownload() {
         if (response.success) {
           if (response.already_exists) {
             skippedCount++;
-            console.log(`Skipped: ${track?.name} - ${track?.artists} (already exists)`);
+            logger.info(`skipped: ${track?.name} - ${track?.artists} (already exists)`);
+            setSkippedTracks((prev) => new Set(prev).add(isrc));
           } else {
             successCount++;
+            logger.success(`downloaded: ${track?.name} - ${track?.artists}`);
           }
           setDownloadedTracks((prev) => new Set(prev).add(isrc));
           setFailedTracks((prev) => {
@@ -287,10 +310,12 @@ export function useDownload() {
           });
         } else {
           errorCount++;
+          logger.error(`failed: ${track?.name} - ${track?.artists}`);
           setFailedTracks((prev) => new Set(prev).add(isrc));
         }
       } catch (err) {
         errorCount++;
+        logger.error(`error: ${track?.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(isrc));
       }
 
@@ -304,6 +329,7 @@ export function useDownload() {
     shouldStopDownloadRef.current = false;
 
     // Build summary message
+    logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
     if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
     } else if (errorCount === 0 && successCount === 0) {
@@ -334,6 +360,7 @@ export function useDownload() {
       return;
     }
 
+    logger.info(`starting batch download: ${tracksWithIsrc.length} tracks`);
     const settings = getSettings();
     setIsDownloading(true);
     setBulkDownloadType("all");
@@ -373,9 +400,11 @@ export function useDownload() {
         if (response.success) {
           if (response.already_exists) {
             skippedCount++;
-            console.log(`Skipped: ${track.name} - ${track.artists} (already exists)`);
+            logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
+            setSkippedTracks((prev) => new Set(prev).add(track.isrc));
           } else {
             successCount++;
+            logger.success(`downloaded: ${track.name} - ${track.artists}`);
           }
           setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
           setFailedTracks((prev) => {
@@ -385,10 +414,12 @@ export function useDownload() {
           });
         } else {
           errorCount++;
+          logger.error(`failed: ${track.name} - ${track.artists}`);
           setFailedTracks((prev) => new Set(prev).add(track.isrc));
         }
       } catch (err) {
         errorCount++;
+        logger.error(`error: ${track.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(track.isrc));
       }
 
@@ -402,6 +433,7 @@ export function useDownload() {
     shouldStopDownloadRef.current = false;
 
     // Build summary message
+    logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
     if (errorCount === 0 && skippedCount === 0) {
       toast.success(`Downloaded ${successCount} tracks successfully`);
     } else if (errorCount === 0 && successCount === 0) {
@@ -421,6 +453,7 @@ export function useDownload() {
   };
 
   const handleStopDownload = () => {
+    logger.info("download stopped by user");
     shouldStopDownloadRef.current = true;
     toast.info("Stopping download...");
   };
@@ -428,6 +461,7 @@ export function useDownload() {
   const resetDownloadedTracks = () => {
     setDownloadedTracks(new Set());
     setFailedTracks(new Set());
+    setSkippedTracks(new Set());
   };
 
   return {
@@ -437,6 +471,7 @@ export function useDownload() {
     bulkDownloadType,
     downloadedTracks,
     failedTracks,
+    skippedTracks,
     currentDownloadInfo,
     handleDownloadTrack,
     handleDownloadSelected,

@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogContent,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
@@ -20,34 +19,34 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw, Info } from "lucide-react";
+import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw, Info, X } from "lucide-react";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, type Settings as SettingsType } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder } from "../../wailsjs/go/main/App";
 
 // Service Icons
 const TidalIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="inline-block w-[1.1em] h-[1.1em] mr-2">
+  <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
     <path d="M4.022 4.5 0 8.516l3.997 3.99 3.997-3.984L4.022 4.5Zm7.956 0L7.994 8.522l4.003 3.984L16 8.484 11.978 4.5Zm8.007 0L24 8.528l-4.003 3.978L16 8.484 19.985 4.5Z"></path>
     <path d="m8.012 16.534 3.991 3.966L16 16.49l-4.003-3.984-3.985 4.028Z"></path>
   </svg>
 );
 
 const DeezerIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="inline-block w-[1.1em] h-[1.1em] mr-2">
+  <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
     <path d="M18.77 5.55c.19-1.07.46-1.75.76-1.75.56 0 1.02 2.34 1.02 5.23 0 2.89-.46 5.23-1.02 5.23-.23 0-.44-.4-.61-1.06-.27 2.43-.83 4.11-1.48 4.11-.5 0-.96-1-1.26-2.6-.2 3.03-.73 5.17-1.33 5.17-.39 0-.73-.85-.99-2.23-.31 2.85-1.03 4.85-1.86 4.85-.83 0-1.55-2-1.86-4.85-.25 1.38-.6 2.23-.99 2.23-.6 0-1.12-2.14-1.33-5.16-.3 1.58-.75 2.6-1.26 2.6-.65 0-1.2-1.68-1.48-4.12-.17.66-.38 1.06-.61 1.06-.56 0-1.02-2.34-1.02-5.23 0-2.89.46-5.23 1.02-5.23.3 0 .57.68.76 1.75C5.53 3.7 6 2.5 6.56 2.5c.66 0 1.22 1.7 1.49 4.17.26-1.8.66-2.94 1.1-2.94.63 0 1.16 2.25 1.36 5.4.36-1.62.9-2.63 1.5-2.63.58 0 1.12 1.01 1.49 2.62.2-3.14.72-5.4 1.35-5.4.44 0 .84 1.15 1.1 2.95.27-2.47.84-4.17 1.49-4.17.55 0 1.03 1.2 1.33 3.05ZM2 8.52c0-1.3.26-2.34.58-2.34.32 0 .57 1.05.57 2.34 0 1.29-.25 2.34-.57 2.34-.32 0-.58-1.05-.58-2.34Zm18.85 0c0-1.3.25-2.34.57-2.34.32 0 .58 1.05.58 2.34 0 1.29-.26 2.34-.58 2.34-.32 0-.57-1.05-.57-2.34Z"></path>
   </svg>
 );
 
 const QobuzIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="inline-block w-[1.1em] h-[1.1em] mr-2">
+  <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
     <path d="M21.744 9.815C19.836 1.261 8.393-1 3.55 6.64-.618 13.214 4 22 11.988 22c2.387 0 4.63-.83 6.394-2.304l2.252 2.252 1.224-1.224-2.252-2.253c1.983-2.407 2.823-5.586 2.138-8.656Zm-3.508 7.297L16.4 15.275c-.786-.787-2.017.432-1.224 1.225L17 18.326C10.29 23.656.5 16 5.16 7.667c3.502-6.264 13.172-4.348 14.707 2.574.529 2.385-.06 4.987-1.63 6.87Z"></path>
     <path d="M13.4 8.684a3.59 3.59 0 0 0-4.712 1.9 3.59 3.59 0 0 0 1.9 4.712 3.594 3.594 0 0 0 4.711-1.89 3.598 3.598 0 0 0-1.9-4.722Zm-.737 3.591a.727.727 0 0 1-.965.384.727.727 0 0 1-.384-.965.727.727 0 0 1 .965-.384.73.73 0 0 1 .384.965Z"></path>
   </svg>
 );
 
 const AmazonIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" style={{ display: "block", width: "1.1em", height: "1.1em" }} className="inline-block mr-2">
+  <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
     <path fillRule="evenodd" d="M15.62 11.13c-.15.1-.37.18-.64.18-.42 0-.82-.05-1.21-.18l-.22-.04c-.08 0-.1.04-.1.14v.25c0 .08.02.12.05.17.02.03.07.08.15.1.4.18.84.25 1.33.25.52 0 .91-.12 1.24-.37.32-.25.47-.57.47-.99 0-.3-.08-.52-.23-.72-.15-.17-.4-.34-.74-.47l-.7-.27c-.26-.1-.46-.2-.53-.3a.47.47 0 0 1-.15-.36c0-.38.27-.57.84-.57.32 0 .64.05.94.15l.2.04c.07 0 .12-.04.12-.14v-.25c0-.08-.03-.12-.05-.17-.03-.05-.08-.08-.15-.1-.37-.13-.74-.2-1.11-.2-.47 0-.87.12-1.16.35-.3.22-.45.54-.45.91 0 .57.32.99.97 1.24l.74.27c.24.1.4.17.5.27.09.1.12.2.12.35 0 .2-.08.37-.23.46Zm-3.88-3.55v3.28c-.42.28-.84.42-1.26.42-.27 0-.47-.07-.6-.22-.11-.15-.16-.37-.16-.7V7.59c0-.13-.05-.18-.18-.18h-.52c-.12 0-.17.05-.17.18v3.06c0 .42.1.77.32.99.22.22.55.35.97.35.56 0 1.13-.2 1.68-.6l.05.3c0 .07.02.1.07.12.02.03.07.03.15.03h.37c.12 0 .17-.05.17-.18V7.58c0-.13-.05-.18-.17-.18h-.52c-.15 0-.2.08-.2.18Zm-4.69 4.27h.52c.12 0 .17-.05.17-.17v-3.1c0-.41-.1-.73-.32-.95a1.25 1.25 0 0 0-.94-.35c-.57 0-1.16.2-1.73.62-.2-.42-.57-.62-1.11-.62-.55 0-1.1.2-1.64.57l-.04-.27c0-.08-.03-.1-.08-.13-.02-.02-.07-.02-.12-.02h-.4c-.12 0-.17.05-.17.17v4.1c0 .13.05.18.17.18h.52c.12 0 .17-.05.17-.18V8.37c.42-.25.84-.4 1.29-.4.25 0 .42.08.52.22.1.15.17.35.17.65v2.84c0 .12.05.17.17.17h.52c.13 0 .18-.05.18-.17V8.37c.44-.27.86-.4 1.28-.4.25 0 .42.08.52.22.1.15.17.35.17.65v2.84c0 .12.05.17.18.17Zm13.47 3.29a21.8 21.8 0 0 1-8.3 1.7c-3.96 0-7.8-1.08-10.88-2.89a.35.35 0 0 0-.15-.05c-.17 0-.27.2-.1.37a16.11 16.11 0 0 0 10.87 4.16c3.02 0 6.5-.94 8.9-2.72.42-.3.08-.74-.34-.57Zm-.08-6.74c.22-.26.57-.38 1.06-.38.25 0 .5.03.72.1l.15.02c.07 0 .12-.04.12-.17v-.25c0-.07-.02-.14-.05-.17a.54.54 0 0 0-.12-.1c-.32-.07-.64-.15-.94-.15-.7 0-1.21.2-1.6.62-.38.4-.57 1-.57 1.73 0 .74.17 1.31.54 1.7.37.4.89.6 1.58.6.37 0 .72-.05.99-.17.07-.03.12-.05.15-.1.02-.03.02-.1.02-.17v-.25c0-.13-.05-.17-.12-.17-.03 0-.07 0-.12.02-.28.07-.55.12-.8.12-.46 0-.81-.12-1.03-.37-.23-.24-.32-.64-.32-1.16v-.12c.02-.55.12-.94.34-1.19Z" clipRule="evenodd"></path>
     <path fillRule="evenodd" d="M21.55 17.46c1.29-1.09 1.64-3.33 1.36-3.68-.12-.15-.71-.3-1.45-.3-.8 0-1.73.18-2.45.67-.22.15-.17.35.05.32.76-.1 2.5-.3 2.82.1.3.4-.35 2.03-.65 2.74-.07.23.1.3.32.15ZM18.12 7.4h-.52c-.12 0-.17.05-.17.18v4.1c0 .12.05.17.17.17h.52c.12 0 .17-.05.17-.17v-4.1c0-.1-.05-.18-.17-.18Zm.15-1.68a.58.58 0 0 0-.42-.15c-.18 0-.3.05-.4.15a.5.5 0 0 0-.15.37c0 .15.05.3.15.37.1.1.22.15.4.15.17 0 .3-.05.4-.15a.5.5 0 0 0 .14-.37c0-.15-.02-.3-.12-.37Z" clipRule="evenodd"></path>
   </svg>
@@ -58,6 +57,7 @@ export function Settings() {
   const [savedSettings, setSavedSettings] = useState<SettingsType>(getSettings());
   const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
   const [, setIsLoadingDefaults] = useState(false);
+  const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
 
   // Apply saved settings
   useEffect(() => {
@@ -85,6 +85,11 @@ export function Settings() {
     if (open) {
       applyThemeMode(tempSettings.themeMode);
       applyTheme(tempSettings.theme);
+      
+      // Update isDark state after theme is applied
+      setTimeout(() => {
+        setIsDark(document.documentElement.classList.contains('dark'));
+      }, 0);
 
       // Setup listener for system theme changes during preview
       const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -92,6 +97,9 @@ export function Settings() {
         if (tempSettings.themeMode === "auto") {
           applyThemeMode("auto");
           applyTheme(tempSettings.theme);
+          setTimeout(() => {
+            setIsDark(document.documentElement.classList.contains('dark'));
+          }, 0);
         }
       };
 
@@ -199,11 +207,19 @@ export function Settings() {
           <SettingsIcon className="h-5 w-5" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[700px] flex flex-col" aria-describedby={undefined}>
-        <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-6 py-2">
+      <DialogContent className="sm:max-w-[600px] flex flex-col p-6 [&>button]:hidden" aria-describedby={undefined}>
+        <div className="absolute right-4 top-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 opacity-70 hover:opacity-100"
+            onClick={handleCancel}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+        <DialogTitle className="text-sm font-medium">Settings</DialogTitle>
+        <div className="grid grid-cols-[1.2fr_0.8fr] gap-6 py-2">
           {/* Left Column */}
           <div className="space-y-4">
             {/* Download Path */}
@@ -290,8 +306,12 @@ export function Settings() {
                     <SelectItem key={theme.name} value={theme.name}>
                       <span className="flex items-center gap-2">
                         <span 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: theme.cssVars.light.primary }}
+                          className="w-3 h-3 rounded-full border border-border" 
+                          style={{ 
+                            backgroundColor: isDark
+                              ? theme.cssVars.dark.primary 
+                              : theme.cssVars.light.primary 
+                          }}
                         />
                         {theme.label}
                       </span>
@@ -353,7 +373,15 @@ export function Settings() {
                   checked={tempSettings.artistSubfolder}
                   onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, artistSubfolder: checked as boolean }))}
                 />
-                <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder <span className="font-normal">(Playlist only)</span></Label>
+                <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    <p className="text-xs text-center">Playlist only</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -361,22 +389,30 @@ export function Settings() {
                   checked={tempSettings.albumSubfolder}
                   onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, albumSubfolder: checked as boolean }))}
                 />
-                <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder <span className="font-normal">(Playlist & Discography)</span></Label>
+                <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    <p className="text-xs text-center">Playlist & Discography</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </div>
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="outline" onClick={handleReset} size="sm" className="gap-1.5">
-            <RotateCcw className="h-3.5 w-3.5" />
+          <Button variant="outline" onClick={handleReset} className="gap-1.5">
+            <RotateCcw className="h-4 w-4" />
             Reset to Default
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={handleCancel} size="sm">
+            <Button variant="outline" onClick={handleCancel}>
               Cancel
             </Button>
-            <Button onClick={handleSave} size="sm" className="gap-1.5">
-              <Save className="h-3.5 w-3.5" />
+            <Button onClick={handleSave} className="gap-1.5">
+              <Save className="h-4 w-4" />
               Save Changes
             </Button>
           </div>

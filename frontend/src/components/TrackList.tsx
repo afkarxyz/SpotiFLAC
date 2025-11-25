@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle, XCircle } from "lucide-react";
+import { Download, CheckCircle, XCircle, SkipForward } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Pagination,
@@ -19,16 +19,22 @@ interface TrackListProps {
   selectedTracks: string[];
   downloadedTracks: Set<string>;
   failedTracks: Set<string>;
+  skippedTracks: Set<string>;
   downloadingTrack: string | null;
   isDownloading: boolean;
   currentPage: number;
   itemsPerPage: number;
   showCheckboxes?: boolean;
   hideAlbumColumn?: boolean;
+  folderName?: string;
+  isArtistDiscography?: boolean;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string) => void;
+  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, isArtistDiscography?: boolean) => void;
   onPageChange: (page: number) => void;
+  onAlbumClick?: (album: { id: string; name: string; external_urls: string }) => void;
+  onArtistClick?: (artist: { id: string; name: string; external_urls: string }) => void;
+  onTrackClick?: (track: TrackMetadata) => void;
 }
 
 export function TrackList({
@@ -38,16 +44,22 @@ export function TrackList({
   selectedTracks,
   downloadedTracks,
   failedTracks,
+  skippedTracks,
   downloadingTrack,
   isDownloading,
   currentPage,
   itemsPerPage,
   showCheckboxes = false,
   hideAlbumColumn = false,
+  folderName,
+  isArtistDiscography = false,
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
   onPageChange,
+  onAlbumClick,
+  onArtistClick,
+  onTrackClick,
 }: TrackListProps) {
   let filteredTracks = tracks.filter((track) => {
     if (!searchQuery) return true;
@@ -163,23 +175,85 @@ export function TrackList({
                       )}
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{track.name}</span>
-                          {downloadedTracks.has(track.isrc) && (
+                          {onTrackClick ? (
+                            <span
+                              className="font-medium cursor-pointer hover:underline"
+                              onClick={() => onTrackClick(track)}
+                            >
+                              {track.name}
+                            </span>
+                          ) : (
+                            <span className="font-medium">{track.name}</span>
+                          )}
+                          {skippedTracks.has(track.isrc) ? (
+                            <SkipForward className="h-4 w-4 text-yellow-500 shrink-0" />
+                          ) : downloadedTracks.has(track.isrc) ? (
                             <CheckCircle className="h-4 w-4 text-green-500 shrink-0" />
-                          )}
-                          {failedTracks.has(track.isrc) && (
+                          ) : failedTracks.has(track.isrc) ? (
                             <XCircle className="h-4 w-4 text-red-500 shrink-0" />
-                          )}
+                          ) : null}
                         </div>
                         <span className="text-sm text-muted-foreground">
-                          {track.artists}
+                          {track.artists_data && track.artists_data.length > 0 ? (
+                            track.artists_data.map((artist, i, arr) => (
+                              <span key={artist.id}>
+                                {onArtistClick ? (
+                                  <span
+                                    className="cursor-pointer hover:underline"
+                                    onClick={() =>
+                                      onArtistClick({
+                                        id: artist.id,
+                                        name: artist.name,
+                                        external_urls: artist.external_urls,
+                                      })
+                                    }
+                                  >
+                                    {artist.name}
+                                  </span>
+                                ) : (
+                                  artist.name
+                                )}
+                                {i < arr.length - 1 && ", "}
+                              </span>
+                            ))
+                          ) : onArtistClick && track.artist_id && track.artist_url ? (
+                            <span
+                              className="cursor-pointer hover:underline"
+                              onClick={() =>
+                                onArtistClick({
+                                  id: track.artist_id!,
+                                  name: track.artists,
+                                  external_urls: track.artist_url!,
+                                })
+                              }
+                            >
+                              {track.artists}
+                            </span>
+                          ) : (
+                            track.artists
+                          )}
                         </span>
                       </div>
                     </div>
                   </td>
                   {!hideAlbumColumn && (
                     <td className="p-4 align-middle text-sm text-muted-foreground hidden md:table-cell">
-                      {track.album_name}
+                      {onAlbumClick && track.album_id && track.album_url ? (
+                        <span
+                          className="cursor-pointer hover:underline"
+                          onClick={() =>
+                            onAlbumClick({
+                              id: track.album_id!,
+                              name: track.album_name,
+                              external_urls: track.album_url!,
+                            })
+                          }
+                        >
+                          {track.album_name}
+                        </span>
+                      ) : (
+                        track.album_name
+                      )}
                     </td>
                   )}
                   <td className="p-4 align-middle text-sm text-muted-foreground hidden lg:table-cell">
@@ -189,7 +263,7 @@ export function TrackList({
                     {track.isrc && (
                       <Button
                         onClick={() =>
-                          onDownloadTrack(track.isrc, track.name, track.artists, track.album_name)
+                          onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, isArtistDiscography)
                         }
                         size="sm"
                         className="gap-1.5"
