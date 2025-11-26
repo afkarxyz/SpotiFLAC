@@ -144,16 +144,8 @@ jobs:
           pnpm install
           pnpm run generate-icon
 
-      - name: Install UPX
-        run: |
-          brew install upx
-
       - name: Build application
         run: wails build -platform darwin/universal
-
-      - name: Compress with UPX
-        run: |
-          upx --best --lzma "build/bin/SpotiFLAC.app/Contents/MacOS/SpotiFLAC"
 
       - name: Create DMG
         run: |
