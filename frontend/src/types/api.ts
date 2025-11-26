@@ -124,6 +124,7 @@ export interface DownloadRequest {
   use_album_track_number?: boolean;
   spotify_id?: string;
   service_url?: string;
+  duration?: number; // Track duration in seconds for better matching
 }
 
 export interface DownloadResponse {

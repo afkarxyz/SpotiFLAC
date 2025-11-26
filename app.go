@@ -52,6 +52,7 @@ type DownloadRequest struct {
 	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
 	SpotifyID           string `json:"spotify_id,omitempty"`             // Spotify track ID
 	ServiceURL          string `json:"service_url,omitempty"`            // Direct service URL (Tidal/Deezer/Amazon) to skip song.link API call
+	Duration            int    `json:"duration,omitempty"`               // Track duration in seconds for better matching
 }
 
 // DownloadResponse represents the response structure for download operations
@@ -201,7 +202,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 						Error:   "Spotify ID is required for Tidal",
 					}, fmt.Errorf("spotify ID is required for Tidal")
 				}
-				filename, err = downloader.DownloadWithFallback(req.SpotifyID, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+				// Use ISRC matching for search fallback
+				filename, err = downloader.DownloadWithFallbackAndISRC(req.SpotifyID, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber, req.Duration)
 			}
 		} else {
 			downloader := backend.NewTidalDownloader(req.ApiURL)
@@ -215,7 +217,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 						Error:   "Spotify ID is required for Tidal",
 					}, fmt.Errorf("spotify ID is required for Tidal")
 				}
-				filename, err = downloader.Download(req.SpotifyID, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+				// Use ISRC matching for search fallback
+				filename, err = downloader.DownloadWithISRC(req.SpotifyID, req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber, req.Duration)
 			}
 		}
 

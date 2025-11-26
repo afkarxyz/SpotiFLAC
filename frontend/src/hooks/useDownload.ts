@@ -29,7 +29,8 @@ export function useDownload() {
     playlistName?: string,
     isArtistDiscography?: boolean,
     position?: number,
-    spotifyId?: string
+    spotifyId?: string,
+    durationMs?: number
   ) => {
     let service = settings.downloader;
 
@@ -72,6 +73,9 @@ export function useDownload() {
         }
       }
 
+      // Convert duration from ms to seconds for backend
+      const durationSeconds = durationMs ? Math.round(durationMs / 1000) : undefined;
+
       // Try Tidal first
       if (streamingURLs?.tidal_url) {
         try {
@@ -90,6 +94,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             service_url: streamingURLs.tidal_url,
+            duration: durationSeconds,
           });
 
           if (tidalResponse.success) {
@@ -167,6 +172,9 @@ export function useDownload() {
       service = "qobuz";
     }
 
+    // Convert duration from ms to seconds for backend (if not already done above)
+    const durationSecondsForFallback = durationMs ? Math.round(durationMs / 1000) : undefined;
+
     return await downloadTrack({
       isrc,
       service: service as "deezer" | "tidal" | "qobuz" | "amazon",
@@ -180,6 +188,7 @@ export function useDownload() {
       position,
       use_album_track_number: useAlbumTrackNumber,
       spotify_id: spotifyId,
+      duration: durationSecondsForFallback,
     });
   };
 
@@ -190,7 +199,8 @@ export function useDownload() {
     albumName?: string,
     spotifyId?: string,
     playlistName?: string,
-    isArtistDiscography?: boolean
+    isArtistDiscography?: boolean,
+    durationMs?: number
   ) => {
     if (!isrc) {
       toast.error("No ISRC found for this track");
@@ -212,7 +222,8 @@ export function useDownload() {
         playlistName,
         isArtistDiscography,
         undefined, // Don't pass position for single track
-        spotifyId
+        spotifyId,
+        durationMs
       );
 
       if (response.success) {
@@ -290,7 +301,8 @@ export function useDownload() {
           playlistName,
           isArtistDiscography,
           i + 1, // Sequential position based on selection order
-          track?.spotify_id
+          track?.spotify_id,
+          track?.duration_ms
         );
 
         if (response.success) {
@@ -394,7 +406,8 @@ export function useDownload() {
           playlistName,
           isArtistDiscography,
           i + 1,
-          track.spotify_id
+          track.spotify_id,
+          track.duration_ms
         );
 
         if (response.success) {
