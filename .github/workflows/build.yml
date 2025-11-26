@@ -2,18 +2,13 @@ name: Build Multi-Platform
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 env:
   GO_VERSION: '1.25.4'
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
 
 jobs:
   build-windows:
@@ -72,8 +67,16 @@ jobs:
           pnpm install
           pnpm run generate-icon
 
+      - name: Install UPX
+        run: |
+          choco install upx -y
+
       - name: Build application
         run: wails build -platform windows/amd64
+
+      - name: Compress with UPX
+        run: |
+          upx --best --lzma "build\bin\SpotiFLAC.exe"
 
       - name: Prepare artifacts
         run: |
@@ -141,8 +144,16 @@ jobs:
           pnpm install
           pnpm run generate-icon
 
+      - name: Install UPX
+        run: |
+          brew install upx
+
       - name: Build application
         run: wails build -platform darwin/universal
+
+      - name: Compress with UPX
+        run: |
+          upx --best --lzma "build/bin/SpotiFLAC.app/Contents/MacOS/SpotiFLAC"
 
       - name: Create DMG
         run: |
@@ -219,7 +230,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick upx-ucl
 
           # Create symlink for webkit2gtk-4.0 -> webkit2gtk-4.1 (Ubuntu 24.04 compatibility)
           sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
@@ -235,6 +246,10 @@ jobs:
 
       - name: Build application
         run: wails build -platform linux/amd64
+
+      - name: Compress with UPX
+        run: |
+          upx --best --lzma build/bin/SpotiFLAC
 
       - name: Download appimagetool
         run: |
