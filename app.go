@@ -357,10 +357,14 @@ func (a *App) AnalyzeMultipleTracks(filePaths []string) (string, error) {
 
 // LyricsDownloadRequest represents the request structure for downloading lyrics
 type LyricsDownloadRequest struct {
-	SpotifyID  string `json:"spotify_id"`
-	TrackName  string `json:"track_name"`
-	ArtistName string `json:"artist_name"`
-	OutputDir  string `json:"output_dir"`
+	SpotifyID           string `json:"spotify_id"`
+	TrackName           string `json:"track_name"`
+	ArtistName          string `json:"artist_name"`
+	OutputDir           string `json:"output_dir"`
+	FilenameFormat      string `json:"filename_format"`
+	TrackNumber         bool   `json:"track_number"`
+	Position            int    `json:"position"`
+	UseAlbumTrackNumber bool   `json:"use_album_track_number"`
 }
 
 // DownloadLyrics downloads lyrics for a single track
@@ -374,10 +378,14 @@ func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadR
 
 	client := backend.NewLyricsClient()
 	backendReq := backend.LyricsDownloadRequest{
-		SpotifyID:  req.SpotifyID,
-		TrackName:  req.TrackName,
-		ArtistName: req.ArtistName,
-		OutputDir:  req.OutputDir,
+		SpotifyID:           req.SpotifyID,
+		TrackName:           req.TrackName,
+		ArtistName:          req.ArtistName,
+		OutputDir:           req.OutputDir,
+		FilenameFormat:      req.FilenameFormat,
+		TrackNumber:         req.TrackNumber,
+		Position:            req.Position,
+		UseAlbumTrackNumber: req.UseAlbumTrackNumber,
 	}
 
 	resp, err := client.DownloadLyrics(backendReq)
@@ -389,4 +397,24 @@ func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadR
 	}
 
 	return *resp, nil
+}
+
+// CheckTrackAvailability checks the availability of a track on different streaming platforms
+func (a *App) CheckTrackAvailability(spotifyTrackID string, isrc string) (string, error) {
+	if spotifyTrackID == "" {
+		return "", fmt.Errorf("spotify track ID is required")
+	}
+
+	client := backend.NewSongLinkClient()
+	availability, err := client.CheckTrackAvailability(spotifyTrackID, isrc)
+	if err != nil {
+		return "", err
+	}
+
+	jsonData, err := json.Marshal(availability)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode response: %v", err)
+	}
+
+	return string(jsonData), nil
 }

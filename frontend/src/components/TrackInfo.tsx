@@ -1,8 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, CheckCircle, XCircle, FileText, SkipForward } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle, FileText, SkipForward, Globe } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import type { TrackMetadata } from "@/types/api";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import type { TrackMetadata, TrackAvailability } from "@/types/api";
+import { TidalIcon, DeezerIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 
 interface TrackInfoProps {
   track: TrackMetadata & { album_name: string; release_date: string };
@@ -14,8 +20,11 @@ interface TrackInfoProps {
   downloadedLyrics?: boolean;
   failedLyrics?: boolean;
   skippedLyrics?: boolean;
+  checkingAvailability?: boolean;
+  availability?: TrackAvailability;
   onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string) => void;
+  onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
   onOpenFolder: () => void;
 }
 
@@ -29,21 +38,71 @@ export function TrackInfo({
   downloadedLyrics,
   failedLyrics,
   skippedLyrics,
+  checkingAvailability,
+  availability,
   onDownload,
   onDownloadLyrics,
+  onCheckAvailability,
   onOpenFolder,
 }: TrackInfoProps) {
   return (
     <Card>
       <CardContent className="px-6">
         <div className="flex gap-6 items-start">
-          {track.images && (
-            <img
-              src={track.images}
-              alt={track.name}
-              className="w-48 h-48 rounded-md shadow-lg object-cover shrink-0"
-            />
-          )}
+          <div className="shrink-0">
+            {track.images && (
+              <img
+                src={track.images}
+                alt={track.name}
+                className="w-48 h-48 rounded-md shadow-lg object-cover"
+              />
+            )}
+            {/* Availability Icons - below cover art */}
+            {availability && (
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <Tooltip>
+                  <TooltipTrigger>
+                    <div className={`${availability.tidal ? "text-green-500" : "text-red-500"}`}>
+                      <TidalIcon className="w-5 h-5" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Tidal</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <div className={`${availability.deezer ? "text-green-500" : "text-red-500"}`}>
+                      <DeezerIcon className="w-5 h-5" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Deezer</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <div className={`${availability.amazon ? "text-green-500" : "text-red-500"}`}>
+                      <AmazonIcon className="w-5 h-5" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Amazon Music</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <div className={`${availability.qobuz ? "text-green-500" : "text-red-500"}`}>
+                      <QobuzIcon className="w-5 h-5" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Qobuz</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            )}
+          </div>
           <div className="flex-1 space-y-4 min-w-0">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
@@ -68,7 +127,7 @@ export function TrackInfo({
               </div>
             </div>
             {track.isrc && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button
                   onClick={() => onDownload(track.isrc, track.name, track.artists, track.album_name, track.spotify_id)}
                   disabled={isDownloading || downloadingTrack === track.isrc}
@@ -82,30 +141,51 @@ export function TrackInfo({
                     </>
                   )}
                 </Button>
+                {track.spotify_id && onCheckAvailability && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => onCheckAvailability(track.spotify_id!, track.isrc)}
+                        variant="outline"
+                        disabled={checkingAvailability}
+                      >
+                        {checkingAvailability ? (
+                          <Spinner />
+                        ) : (
+                          <Globe className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Check Availability</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {track.spotify_id && onDownloadLyrics && (
-                  <Button
-                    onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
-                    variant="secondary"
-                    disabled={downloadingLyricsTrack === track.spotify_id}
-                  >
-                    {downloadingLyricsTrack === track.spotify_id ? (
-                      <Spinner />
-                    ) : (
-                      <>
-                        <FileText className="h-4 w-4" />
-                        Download Lyric
-                        {skippedLyrics && (
-                          <SkipForward className="h-4 w-4 text-yellow-500 ml-1" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
+                        variant="outline"
+                        disabled={downloadingLyricsTrack === track.spotify_id}
+                      >
+                        {downloadingLyricsTrack === track.spotify_id ? (
+                          <Spinner />
+                        ) : skippedLyrics ? (
+                          <SkipForward className="h-4 w-4 text-yellow-500" />
+                        ) : downloadedLyrics ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : failedLyrics ? (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        ) : (
+                          <FileText className="h-4 w-4" />
                         )}
-                        {downloadedLyrics && !skippedLyrics && (
-                          <CheckCircle className="h-4 w-4 text-green-500 ml-1" />
-                        )}
-                        {failedLyrics && (
-                          <XCircle className="h-4 w-4 text-red-500 ml-1" />
-                        )}
-                      </>
-                    )}
-                  </Button>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download Lyric</p>
+                    </TooltipContent>
+                  </Tooltip>
                 )}
                 {isDownloaded && (
                   <Button onClick={onOpenFolder} variant="outline">

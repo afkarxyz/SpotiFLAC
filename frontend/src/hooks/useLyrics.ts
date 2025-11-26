@@ -17,7 +17,8 @@ export function useLyrics() {
     artistName: string,
     albumName?: string,
     playlistName?: string,
-    isArtistDiscography?: boolean
+    isArtistDiscography?: boolean,
+    position?: number
   ) => {
     if (!spotifyId) {
       toast.error("No Spotify ID found for this track");
@@ -55,6 +56,10 @@ export function useLyrics() {
         track_name: trackName,
         artist_name: artistName,
         output_dir: outputDir,
+        filename_format: settings.filenameFormat,
+        track_number: settings.trackNumber,
+        position: position || 0,
+        use_album_track_number: settings.albumSubfolder,
       });
 
       if (response.success) {

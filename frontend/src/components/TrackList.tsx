@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle, XCircle, SkipForward, FileText } from "lucide-react";
+import { Download, CheckCircle, XCircle, SkipForward, FileText, Globe } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Tooltip,
@@ -15,7 +15,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import type { TrackMetadata } from "@/types/api";
+import type { TrackMetadata, TrackAvailability } from "@/types/api";
+import { TidalIcon, DeezerIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 
 interface TrackListProps {
   tracks: TrackMetadata[];
@@ -38,10 +39,14 @@ interface TrackListProps {
   failedLyrics?: Set<string>;
   skippedLyrics?: Set<string>;
   downloadingLyricsTrack?: string | null;
+  // Availability props
+  checkingAvailabilityTrack?: string | null;
+  availabilityMap?: Map<string, TrackAvailability>;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, isArtistDiscography?: boolean) => void;
-  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
+  onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
   onPageChange: (page: number) => void;
   onAlbumClick?: (album: { id: string; name: string; external_urls: string }) => void;
   onArtistClick?: (artist: { id: string; name: string; external_urls: string }) => void;
@@ -68,10 +73,13 @@ export function TrackList({
   failedLyrics,
   skippedLyrics,
   downloadingLyricsTrack,
+  checkingAvailabilityTrack,
+  availabilityMap,
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
   onDownloadLyrics,
+  onCheckAvailability,
   onPageChange,
   onAlbumClick,
   onArtistClick,
@@ -296,12 +304,44 @@ export function TrackList({
                           )}
                         </Button>
                       )}
+                      {track.spotify_id && onCheckAvailability && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => onCheckAvailability(track.spotify_id!, track.isrc)}
+                              size="sm"
+                              variant="outline"
+                              disabled={checkingAvailabilityTrack === track.spotify_id}
+                            >
+                              {checkingAvailabilityTrack === track.spotify_id ? (
+                                <Spinner />
+                              ) : availabilityMap?.has(track.spotify_id) ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <Globe className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {availabilityMap?.has(track.spotify_id) ? (
+                              <div className="flex items-center gap-2">
+                                <TidalIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`} />
+                                <DeezerIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.deezer ? "text-green-500" : "text-red-500"}`} />
+                                <AmazonIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`} />
+                                <QobuzIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`} />
+                              </div>
+                            ) : (
+                              <p>Check Availability</p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                       {track.spotify_id && onDownloadLyrics && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               onClick={() =>
-                                onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, folderName, isArtistDiscography)
+                                onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1)
                               }
                               size="sm"
                               variant="outline"

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,11 +17,14 @@ import { SpectrumVisualization } from "@/components/SpectrumVisualization";
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis";
 import { SelectFile } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
+import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
+import { useEffect } from "react";
 
 export function AudioAnalysisDialog() {
   const [open, setOpen] = useState(false);
   const { analyzing, result, analyzeFile, clearResult } = useAudioAnalysis();
   const [selectedFilePath, setSelectedFilePath] = useState<string>("");
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleSelectFile = async () => {
     try {
@@ -36,6 +39,38 @@ export function AudioAnalysisDialog() {
       });
     }
   };
+
+  const handleFileDrop = useCallback(async (_x: number, _y: number, paths: string[]) => {
+    setIsDragging(false);
+    
+    if (paths.length === 0) return;
+    
+    const filePath = paths[0];
+    
+    // Check if it's a FLAC file
+    if (!filePath.toLowerCase().endsWith('.flac')) {
+      toast.error("Invalid File Type", {
+        description: "Please drop a FLAC file for analysis",
+      });
+      return;
+    }
+    
+    setSelectedFilePath(filePath);
+    await analyzeFile(filePath);
+  }, [analyzeFile]);
+
+  // Register drag and drop handlers when dialog is open
+  useEffect(() => {
+    if (open) {
+      OnFileDrop((x, y, paths) => {
+        handleFileDrop(x, y, paths);
+      }, true);
+      
+      return () => {
+        OnFileDropOff();
+      };
+    }
+  }, [open, handleFileDrop]);
 
   const handleClose = () => {
     setOpen(false);
@@ -82,11 +117,32 @@ export function AudioAnalysisDialog() {
         <div className="space-y-4">
           {/* File Selection */}
           {!result && !analyzing && (
-            <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg">
-              <Activity className="h-16 w-16 text-muted-foreground/50 mb-4" />
+            <div 
+              className={`flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-lg transition-colors ${
+                isDragging 
+                  ? "border-primary bg-primary/10" 
+                  : "border-muted-foreground/30 hover:border-muted-foreground/50"
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragging(false);
+              }}
+              style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
+            >
+              <Activity className={`h-16 w-16 mb-4 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground/50"}`} />
               <h3 className="text-lg font-medium mb-2">Analyze FLAC Audio Quality</h3>
               <p className="text-sm text-muted-foreground mb-6 text-center max-w-md">
-                Upload a FLAC file to verify true lossless quality, view detailed technical specifications, and see the frequency spectrum
+                {isDragging 
+                  ? "Drop your FLAC file here" 
+                  : "Drag and drop a FLAC file here, or click the button below to select"}
               </p>
               <Button onClick={handleSelectFile} size="lg">
                 <Upload className="h-5 w-5" />

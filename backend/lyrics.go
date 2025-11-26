@@ -28,10 +28,14 @@ type LyricsResponse struct {
 
 // LyricsDownloadRequest represents a request to download lyrics
 type LyricsDownloadRequest struct {
-	SpotifyID  string `json:"spotify_id"`
-	TrackName  string `json:"track_name"`
-	ArtistName string `json:"artist_name"`
-	OutputDir  string `json:"output_dir"`
+	SpotifyID           string `json:"spotify_id"`
+	TrackName           string `json:"track_name"`
+	ArtistName          string `json:"artist_name"`
+	OutputDir           string `json:"output_dir"`
+	FilenameFormat      string `json:"filename_format"`
+	TrackNumber         bool   `json:"track_number"`
+	Position            int    `json:"position"`
+	UseAlbumTrackNumber bool   `json:"use_album_track_number"`
 }
 
 // LyricsDownloadResponse represents the response from lyrics download
@@ -121,6 +125,31 @@ func msToLRCTimestamp(msStr string) string {
 	return fmt.Sprintf("[%02d:%02d.%02d]", minutes, seconds, centiseconds)
 }
 
+// buildLyricsFilename builds the lyrics filename based on settings (same as track filename)
+func buildLyricsFilename(trackName, artistName, filenameFormat string, includeTrackNumber bool, position int) string {
+	safeTitle := sanitizeFilename(trackName)
+	safeArtist := sanitizeFilename(artistName)
+
+	var filename string
+
+	// Build base filename based on format
+	switch filenameFormat {
+	case "artist-title":
+		filename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
+	case "title":
+		filename = safeTitle
+	default: // "title-artist"
+		filename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
+	}
+
+	// Add track number prefix if enabled
+	if includeTrackNumber && position > 0 {
+		filename = fmt.Sprintf("%02d. %s", position, filename)
+	}
+
+	return filename + ".lrc"
+}
+
 // DownloadLyrics downloads lyrics for a single track
 func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloadResponse, error) {
 	if req.SpotifyID == "" {
@@ -143,8 +172,12 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		}, err
 	}
 
-	// Generate filename
-	filename := sanitizeFilename(fmt.Sprintf("%s - %s.lrc", req.TrackName, req.ArtistName))
+	// Generate filename using same format as track
+	filenameFormat := req.FilenameFormat
+	if filenameFormat == "" {
+		filenameFormat = "title-artist" // default
+	}
+	filename := buildLyricsFilename(req.TrackName, req.ArtistName, filenameFormat, req.TrackNumber, req.Position)
 	filePath := filepath.Join(outputDir, filename)
 
 	// Check if file already exists

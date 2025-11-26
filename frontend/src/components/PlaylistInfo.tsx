@@ -5,7 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SearchAndSort } from "./SearchAndSort";
 import { TrackList } from "./TrackList";
 import { DownloadProgress } from "./DownloadProgress";
-import type { TrackMetadata } from "@/types/api";
+import type { TrackMetadata, TrackAvailability } from "@/types/api";
 
 interface PlaylistInfoProps {
   playlistInfo: {
@@ -40,12 +40,16 @@ interface PlaylistInfoProps {
   failedLyrics?: Set<string>;
   skippedLyrics?: Set<string>;
   downloadingLyricsTrack?: string | null;
+  // Availability props
+  checkingAvailabilityTrack?: string | null;
+  availabilityMap?: Map<string, TrackAvailability>;
   onSearchChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string) => void;
-  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
+  onCheckAvailability?: (spotifyId: string) => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
@@ -76,12 +80,15 @@ export function PlaylistInfo({
   failedLyrics,
   skippedLyrics,
   downloadingLyricsTrack,
+  checkingAvailabilityTrack,
+  availabilityMap,
   onSearchChange,
   onSortChange,
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
   onDownloadLyrics,
+  onCheckAvailability,
   onDownloadAll,
   onDownloadSelected,
   onStopDownload,
@@ -182,10 +189,13 @@ export function PlaylistInfo({
           failedLyrics={failedLyrics}
           skippedLyrics={skippedLyrics}
           downloadingLyricsTrack={downloadingLyricsTrack}
+          checkingAvailabilityTrack={checkingAvailabilityTrack}
+          availabilityMap={availabilityMap}
           onToggleTrack={onToggleTrack}
           onToggleSelectAll={onToggleSelectAll}
           onDownloadTrack={onDownloadTrack}
           onDownloadLyrics={onDownloadLyrics}
+          onCheckAvailability={onCheckAvailability}
           onPageChange={onPageChange}
           onAlbumClick={onAlbumClick}
           onArtistClick={onArtistClick}

@@ -31,6 +31,7 @@ import type { HistoryItem } from "@/components/FetchHistory";
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
+import { useAvailability } from "@/hooks/useAvailability";
 
 const HISTORY_KEY = "spotiflac_fetch_history";
 const MAX_HISTORY = 5;
@@ -45,11 +46,12 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.3";
+  const CURRENT_VERSION = "6.4";
 
   const download = useDownload();
   const metadata = useMetadata();
   const lyrics = useLyrics();
+  const availability = useAvailability();
 
   useEffect(() => {
     const settings = getSettings();
@@ -79,6 +81,7 @@ function App() {
     setSearchQuery("");
     download.resetDownloadedTracks();
     lyrics.resetLyricsState();
+    availability.clearAvailability();
     setSortBy("default");
     setCurrentPage(1);
   }, [metadata.metadata]);
@@ -256,8 +259,11 @@ function App() {
           downloadedLyrics={lyrics.downloadedLyrics.has(track.spotify_id || "")}
           failedLyrics={lyrics.failedLyrics.has(track.spotify_id || "")}
           skippedLyrics={lyrics.skippedLyrics.has(track.spotify_id || "")}
+          checkingAvailability={availability.checkingTrackId === track.spotify_id}
+          availability={availability.getAvailability(track.spotify_id || "")}
           onDownload={download.handleDownloadTrack}
           onDownloadLyrics={lyrics.handleDownloadLyrics}
+          onCheckAvailability={availability.checkAvailability}
           onOpenFolder={handleOpenFolder}
         />
       );
@@ -286,14 +292,17 @@ function App() {
           failedLyrics={lyrics.failedLyrics}
           skippedLyrics={lyrics.skippedLyrics}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
+          checkingAvailabilityTrack={availability.checkingTrackId}
+          availabilityMap={availability.availabilityMap}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
-          onDownloadLyrics={(spotifyId, name, artists, albumName) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name)
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position)
           }
+          onCheckAvailability={availability.checkAvailability}
           onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(selectedTracks, track_list, album_info.name)
@@ -340,14 +349,17 @@ function App() {
           failedLyrics={lyrics.failedLyrics}
           skippedLyrics={lyrics.skippedLyrics}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
+          checkingAvailabilityTrack={availability.checkingTrackId}
+          availabilityMap={availability.availabilityMap}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
-          onDownloadLyrics={(spotifyId, name, artists, albumName) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name)
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, false, position)
           }
+          onCheckAvailability={availability.checkAvailability}
           onDownloadAll={() => download.handleDownloadAll(track_list, playlist_info.owner.name)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(
@@ -400,14 +412,17 @@ function App() {
           failedLyrics={lyrics.failedLyrics}
           skippedLyrics={lyrics.skippedLyrics}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
+          checkingAvailabilityTrack={availability.checkingTrackId}
+          availabilityMap={availability.availabilityMap}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
-          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography)
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position)
           }
+          onCheckAvailability={availability.checkAvailability}
           onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name, true)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(selectedTracks, track_list, artist_info.name, true)
