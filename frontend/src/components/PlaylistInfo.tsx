@@ -35,11 +35,17 @@ interface PlaylistInfoProps {
   currentDownloadInfo: { name: string; artists: string } | null;
   currentPage: number;
   itemsPerPage: number;
+  // Lyrics props
+  downloadedLyrics?: Set<string>;
+  failedLyrics?: Set<string>;
+  skippedLyrics?: Set<string>;
+  downloadingLyricsTrack?: string | null;
   onSearchChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean) => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
@@ -66,11 +72,16 @@ export function PlaylistInfo({
   currentDownloadInfo,
   currentPage,
   itemsPerPage,
+  downloadedLyrics,
+  failedLyrics,
+  skippedLyrics,
+  downloadingLyricsTrack,
   onSearchChange,
   onSortChange,
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
+  onDownloadLyrics,
   onDownloadAll,
   onDownloadSelected,
   onStopDownload,
@@ -104,11 +115,8 @@ export function PlaylistInfo({
                   <span>{playlistInfo.followers.total.toLocaleString()} followers</span>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={onDownloadAll}
-                  disabled={isDownloading}
-                >
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={onDownloadAll} disabled={isDownloading}>
                   {isDownloading && bulkDownloadType === "all" ? (
                     <Spinner />
                   ) : (
@@ -170,9 +178,14 @@ export function PlaylistInfo({
           showCheckboxes={true}
           hideAlbumColumn={false}
           folderName={playlistInfo.owner.name}
+          downloadedLyrics={downloadedLyrics}
+          failedLyrics={failedLyrics}
+          skippedLyrics={skippedLyrics}
+          downloadingLyricsTrack={downloadingLyricsTrack}
           onToggleTrack={onToggleTrack}
           onToggleSelectAll={onToggleSelectAll}
           onDownloadTrack={onDownloadTrack}
+          onDownloadLyrics={onDownloadLyrics}
           onPageChange={onPageChange}
           onAlbumClick={onAlbumClick}
           onArtistClick={onArtistClick}

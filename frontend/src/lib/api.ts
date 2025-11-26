@@ -3,8 +3,10 @@ import type {
   DownloadRequest,
   DownloadResponse,
   HealthResponse,
+  LyricsDownloadRequest,
+  LyricsDownloadResponse,
 } from "@/types/api";
-import { GetSpotifyMetadata, DownloadTrack } from "../../wailsjs/go/main/App";
+import { GetSpotifyMetadata, DownloadTrack, DownloadLyrics } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
 
 export async function fetchSpotifyMetadata(
@@ -38,4 +40,11 @@ export async function checkHealth(): Promise<HealthResponse> {
     status: "ok",
     time: new Date().toISOString(),
   };
+}
+
+export async function downloadLyrics(
+  request: LyricsDownloadRequest
+): Promise<LyricsDownloadResponse> {
+  const req = new main.LyricsDownloadRequest(request);
+  return await DownloadLyrics(req);
 }

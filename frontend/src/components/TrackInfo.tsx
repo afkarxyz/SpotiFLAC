@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, CheckCircle, XCircle } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle, FileText, SkipForward } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import type { TrackMetadata } from "@/types/api";
 
@@ -10,7 +10,12 @@ interface TrackInfoProps {
   downloadingTrack: string | null;
   isDownloaded: boolean;
   isFailed: boolean;
+  downloadingLyricsTrack?: string | null;
+  downloadedLyrics?: boolean;
+  failedLyrics?: boolean;
+  skippedLyrics?: boolean;
   onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string) => void;
   onOpenFolder: () => void;
 }
 
@@ -20,7 +25,12 @@ export function TrackInfo({
   downloadingTrack,
   isDownloaded,
   isFailed,
+  downloadingLyricsTrack,
+  downloadedLyrics,
+  failedLyrics,
+  skippedLyrics,
   onDownload,
+  onDownloadLyrics,
   onOpenFolder,
 }: TrackInfoProps) {
   return (
@@ -72,6 +82,31 @@ export function TrackInfo({
                     </>
                   )}
                 </Button>
+                {track.spotify_id && onDownloadLyrics && (
+                  <Button
+                    onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
+                    variant="secondary"
+                    disabled={downloadingLyricsTrack === track.spotify_id}
+                  >
+                    {downloadingLyricsTrack === track.spotify_id ? (
+                      <Spinner />
+                    ) : (
+                      <>
+                        <FileText className="h-4 w-4" />
+                        Download Lyric
+                        {skippedLyrics && (
+                          <SkipForward className="h-4 w-4 text-yellow-500 ml-1" />
+                        )}
+                        {downloadedLyrics && !skippedLyrics && (
+                          <CheckCircle className="h-4 w-4 text-green-500 ml-1" />
+                        )}
+                        {failedLyrics && (
+                          <XCircle className="h-4 w-4 text-red-500 ml-1" />
+                        )}
+                      </>
+                    )}
+                  </Button>
+                )}
                 {isDownloaded && (
                   <Button onClick={onOpenFolder} variant="outline">
                     <FolderOpen className="h-4 w-4" />

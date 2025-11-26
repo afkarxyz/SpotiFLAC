@@ -354,3 +354,39 @@ func (a *App) AnalyzeMultipleTracks(filePaths []string) (string, error) {
 
 	return string(jsonData), nil
 }
+
+// LyricsDownloadRequest represents the request structure for downloading lyrics
+type LyricsDownloadRequest struct {
+	SpotifyID  string `json:"spotify_id"`
+	TrackName  string `json:"track_name"`
+	ArtistName string `json:"artist_name"`
+	OutputDir  string `json:"output_dir"`
+}
+
+// DownloadLyrics downloads lyrics for a single track
+func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadResponse, error) {
+	if req.SpotifyID == "" {
+		return backend.LyricsDownloadResponse{
+			Success: false,
+			Error:   "Spotify ID is required",
+		}, fmt.Errorf("spotify ID is required")
+	}
+
+	client := backend.NewLyricsClient()
+	backendReq := backend.LyricsDownloadRequest{
+		SpotifyID:  req.SpotifyID,
+		TrackName:  req.TrackName,
+		ArtistName: req.ArtistName,
+		OutputDir:  req.OutputDir,
+	}
+
+	resp, err := client.DownloadLyrics(backendReq)
+	if err != nil {
+		return backend.LyricsDownloadResponse{
+			Success: false,
+			Error:   err.Error(),
+		}, err
+	}
+
+	return *resp, nil
+}

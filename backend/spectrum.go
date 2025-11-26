@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 	"math/cmplx"
-	"os"
 
 	"github.com/mewkiz/flac"
 )
@@ -193,13 +192,4 @@ func fftRecursive(x []complex128) []complex128 {
 	}
 
 	return result
-}
-
-// GetFileSize helper
-func getSpectrumFileSize(filepath string) (int64, error) {
-	info, err := os.Stat(filepath)
-	if err != nil {
-		return 0, err
-	}
-	return info.Size(), nil
 }

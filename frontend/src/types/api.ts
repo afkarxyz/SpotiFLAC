@@ -166,3 +166,20 @@ export interface AnalysisResult {
   rms_level: number;
   spectrum?: SpectrumData;
 }
+
+export interface LyricsDownloadRequest {
+  spotify_id: string;
+  track_name: string;
+  artist_name: string;
+  output_dir?: string;
+}
+
+export interface LyricsDownloadResponse {
+  success: boolean;
+  message: string;
+  file?: string;
+  error?: string;
+  already_exists?: boolean;
+}
+
+

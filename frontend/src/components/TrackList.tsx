@@ -1,7 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle, XCircle, SkipForward } from "lucide-react";
+import { Download, CheckCircle, XCircle, SkipForward, FileText } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Pagination,
   PaginationContent,
@@ -28,9 +33,15 @@ interface TrackListProps {
   hideAlbumColumn?: boolean;
   folderName?: string;
   isArtistDiscography?: boolean;
+  // Lyrics props
+  downloadedLyrics?: Set<string>;
+  failedLyrics?: Set<string>;
+  skippedLyrics?: Set<string>;
+  downloadingLyricsTrack?: string | null;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, isArtistDiscography?: boolean) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean) => void;
   onPageChange: (page: number) => void;
   onAlbumClick?: (album: { id: string; name: string; external_urls: string }) => void;
   onArtistClick?: (artist: { id: string; name: string; external_urls: string }) => void;
@@ -53,9 +64,14 @@ export function TrackList({
   hideAlbumColumn = false,
   folderName,
   isArtistDiscography = false,
+  downloadedLyrics,
+  failedLyrics,
+  skippedLyrics,
+  downloadingLyricsTrack,
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
+  onDownloadLyrics,
   onPageChange,
   onAlbumClick,
   onArtistClick,
@@ -260,25 +276,56 @@ export function TrackList({
                     {formatDuration(track.duration_ms)}
                   </td>
                   <td className="p-4 align-middle text-center">
-                    {track.isrc && (
-                      <Button
-                        onClick={() =>
-                          onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, isArtistDiscography)
-                        }
-                        size="sm"
-                        className="gap-1.5"
-                        disabled={isDownloading || downloadingTrack === track.isrc}
-                      >
-                        {downloadingTrack === track.isrc ? (
-                          <Spinner />
-                        ) : (
-                          <>
-                            <Download className="h-4 w-4" />
-                            Download
-                          </>
-                        )}
-                      </Button>
-                    )}
+                    <div className="flex items-center justify-center gap-1">
+                      {track.isrc && (
+                        <Button
+                          onClick={() =>
+                            onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, isArtistDiscography)
+                          }
+                          size="sm"
+                          className="gap-1.5"
+                          disabled={isDownloading || downloadingTrack === track.isrc}
+                        >
+                          {downloadingTrack === track.isrc ? (
+                            <Spinner />
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4" />
+                              Download
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {track.spotify_id && onDownloadLyrics && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() =>
+                                onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, folderName, isArtistDiscography)
+                              }
+                              size="sm"
+                              variant="outline"
+                              disabled={downloadingLyricsTrack === track.spotify_id}
+                            >
+                              {downloadingLyricsTrack === track.spotify_id ? (
+                                <Spinner />
+                              ) : skippedLyrics?.has(track.spotify_id) ? (
+                                <SkipForward className="h-4 w-4 text-yellow-500" />
+                              ) : downloadedLyrics?.has(track.spotify_id) ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : failedLyrics?.has(track.spotify_id) ? (
+                                <XCircle className="h-4 w-4 text-red-500" />
+                              ) : (
+                                <FileText className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Download Lyric</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
