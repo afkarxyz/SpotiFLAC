@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Download, CheckCircle2, XCircle, Clock, FileCheck, Trash2 } from "lucide-react";
+import { X, Download, CheckCircle2, XCircle, Clock, FileCheck, Trash2, HardDrive, Zap, Timer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -97,9 +97,28 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
     );
   };
 
+  // Format session duration
+  const formatDuration = (startTimestamp: number) => {
+    if (startTimestamp === 0) return "—";
+    const now = Math.floor(Date.now() / 1000);
+    const durationSeconds = now - startTimestamp;
+    
+    const hours = Math.floor(durationSeconds / 3600);
+    const minutes = Math.floor((durationSeconds % 3600) / 60);
+    const seconds = durationSeconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
+      <DialogContent className="max-w-[1200px] w-[95vw] max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b space-y-0">
           <div className="flex items-center justify-between mb-4 pr-8">
             <DialogTitle className="text-lg font-semibold">Download Queue</DialogTitle>
@@ -147,6 +166,33 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
               <XCircle className="h-3.5 w-3.5 text-red-500" />
               <span className="text-muted-foreground">Failed:</span>
               <span className="font-semibold">{queueInfo.failed_count}</span>
+            </div>
+          </div>
+
+          {/* Session Stats */}
+          <div className="flex items-center gap-4 text-sm pt-3 mt-3 border-t">
+            <div className="flex items-center gap-1.5">
+              <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Downloaded:</span>
+              <span className="font-semibold font-mono">
+                {queueInfo.total_downloaded > 0 ? `${queueInfo.total_downloaded.toFixed(2)} MB` : "0.00 MB"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Speed:</span>
+              <span className="font-semibold font-mono">
+                {queueInfo.current_speed > 0 && queueInfo.is_downloading 
+                  ? `${queueInfo.current_speed.toFixed(2)} MB/s` 
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Timer className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Duration:</span>
+              <span className="font-semibold font-mono">
+                {queueInfo.session_start_time > 0 ? formatDuration(queueInfo.session_start_time) : "—"}
+              </span>
             </div>
           </div>
 
