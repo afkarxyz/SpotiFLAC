@@ -327,8 +327,8 @@ export function TrackList({
                               <div className="flex items-center gap-2">
                                 <TidalIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`} />
                                 <DeezerIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.deezer ? "text-green-500" : "text-red-500"}`} />
-                                <AmazonIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`} />
                                 <QobuzIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`} />
+                                <AmazonIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`} />
                               </div>
                             ) : (
                               <p>Check Availability</p>
