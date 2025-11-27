@@ -168,9 +168,14 @@ func CheckISRCExists(outputDir string, targetISRC string) (string, bool) {
 
 		filepath := fmt.Sprintf("%s/%s", outputDir, filename)
 
-		// Read ISRC from file
+		// Read ISRC from file (this will fail for corrupted files)
 		isrc, err := ReadISRCFromFile(filepath)
 		if err != nil {
+			// File is corrupted or unreadable, delete it
+			fmt.Printf("Removing corrupted/unreadable file: %s (error: %v)\n", filepath, err)
+			if removeErr := os.Remove(filepath); removeErr != nil {
+				fmt.Printf("Warning: Failed to remove corrupted file %s: %v\n", filepath, removeErr)
+			}
 			continue
 		}
 

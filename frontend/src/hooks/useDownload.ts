@@ -60,6 +60,10 @@ export function useDownload() {
       }
     }
 
+    // Always add item to queue before downloading
+    const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
+    const itemID = await AddToDownloadQueue(isrc, trackName || "", artistName || "", albumName || "");
+
     if (service === "auto") {
       // Get all streaming URLs once from song.link API
       let streamingURLs: any = null;
@@ -95,6 +99,7 @@ export function useDownload() {
             spotify_id: spotifyId,
             service_url: streamingURLs.tidal_url,
             duration: durationSeconds,
+            item_id: itemID, // Pass the same itemID through all attempts
           });
 
           if (tidalResponse.success) {
@@ -125,6 +130,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             service_url: streamingURLs.deezer_url,
+            item_id: itemID,
           });
 
           if (deezerResponse.success) {
@@ -155,6 +161,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             service_url: streamingURLs.amazon_url,
+            item_id: itemID,
           });
 
           if (amazonResponse.success) {
@@ -169,13 +176,37 @@ export function useDownload() {
 
       // Try Qobuz as last fallback
       logger.debug(`trying qobuz (fallback) for: ${trackName} - ${artistName}`);
-      service = "qobuz";
+      const qobuzResponse = await downloadTrack({
+        isrc,
+        service: "qobuz",
+        query,
+        track_name: trackName,
+        artist_name: artistName,
+        album_name: albumName,
+        output_dir: outputDir,
+        filename_format: settings.filenameFormat,
+        track_number: settings.trackNumber,
+        position,
+        use_album_track_number: useAlbumTrackNumber,
+        spotify_id: spotifyId,
+        duration: durationMs ? Math.round(durationMs / 1000) : undefined,
+        item_id: itemID,
+      });
+
+      // If Qobuz also failed, mark the item as failed
+      if (!qobuzResponse.success) {
+        const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+        await MarkDownloadItemFailed(itemID, qobuzResponse.error || "All services failed");
+      }
+
+      return qobuzResponse;
     }
 
-    // Convert duration from ms to seconds for backend (if not already done above)
+    // Single service download (not auto-fallback)
+    // Convert duration from ms to seconds for backend
     const durationSecondsForFallback = durationMs ? Math.round(durationMs / 1000) : undefined;
 
-    return await downloadTrack({
+    const singleServiceResponse = await downloadTrack({
       isrc,
       service: service as "deezer" | "tidal" | "qobuz" | "amazon",
       query,
@@ -189,7 +220,213 @@ export function useDownload() {
       use_album_track_number: useAlbumTrackNumber,
       spotify_id: spotifyId,
       duration: durationSecondsForFallback,
+      item_id: itemID, // Pass itemID for tracking
     });
+
+    // Mark as failed if download failed for single-service attempt
+    if (!singleServiceResponse.success) {
+      const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+      await MarkDownloadItemFailed(itemID, singleServiceResponse.error || "Download failed");
+    }
+
+    return singleServiceResponse;
+  };
+
+  const downloadWithItemID = async (
+    isrc: string,
+    settings: any,
+    itemID: string,
+    trackName?: string,
+    artistName?: string,
+    albumName?: string,
+    playlistName?: string,
+    isArtistDiscography?: boolean,
+    position?: number,
+    spotifyId?: string,
+    durationMs?: number
+  ) => {
+    let service = settings.downloader;
+
+    const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
+    const os = settings.operatingSystem;
+
+    let outputDir = settings.downloadPath;
+    let useAlbumTrackNumber = false;
+
+    if (playlistName) {
+      outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+
+      if (isArtistDiscography) {
+        if (settings.albumSubfolder && albumName) {
+          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
+          useAlbumTrackNumber = true;
+        }
+      } else {
+        if (settings.artistSubfolder && artistName) {
+          outputDir = joinPath(os, outputDir, sanitizePath(artistName, os));
+        }
+
+        if (settings.albumSubfolder && albumName) {
+          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
+          useAlbumTrackNumber = true;
+        }
+      }
+    }
+
+    if (service === "auto") {
+      // Get all streaming URLs once from song.link API
+      let streamingURLs: any = null;
+      if (spotifyId) {
+        try {
+          const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
+          const urlsJson = await GetStreamingURLs(spotifyId);
+          streamingURLs = JSON.parse(urlsJson);
+        } catch (err) {
+          console.error("Failed to get streaming URLs:", err);
+        }
+      }
+
+      const durationSeconds = durationMs ? Math.round(durationMs / 1000) : undefined;
+
+      // Try Tidal first
+      if (streamingURLs?.tidal_url) {
+        try {
+          const tidalResponse = await downloadTrack({
+            isrc,
+            service: "tidal",
+            query,
+            track_name: trackName,
+            artist_name: artistName,
+            album_name: albumName,
+            output_dir: outputDir,
+            filename_format: settings.filenameFormat,
+            track_number: settings.trackNumber,
+            position,
+            use_album_track_number: useAlbumTrackNumber,
+            spotify_id: spotifyId,
+            service_url: streamingURLs.tidal_url,
+            duration: durationSeconds,
+            item_id: itemID,
+          });
+
+          if (tidalResponse.success) {
+            return tidalResponse;
+          }
+        } catch (tidalErr) {
+          console.error("Tidal error:", tidalErr);
+        }
+      }
+
+      // Try Deezer second
+      if (streamingURLs?.deezer_url) {
+        try {
+          const deezerResponse = await downloadTrack({
+            isrc,
+            service: "deezer",
+            query,
+            track_name: trackName,
+            artist_name: artistName,
+            album_name: albumName,
+            output_dir: outputDir,
+            filename_format: settings.filenameFormat,
+            track_number: settings.trackNumber,
+            position,
+            use_album_track_number: useAlbumTrackNumber,
+            spotify_id: spotifyId,
+            service_url: streamingURLs.deezer_url,
+            item_id: itemID,
+          });
+
+          if (deezerResponse.success) {
+            return deezerResponse;
+          }
+        } catch (deezerErr) {
+          console.error("Deezer error:", deezerErr);
+        }
+      }
+
+      // Try Amazon third
+      if (streamingURLs?.amazon_url) {
+        try {
+          const amazonResponse = await downloadTrack({
+            isrc,
+            service: "amazon",
+            query,
+            track_name: trackName,
+            artist_name: artistName,
+            album_name: albumName,
+            output_dir: outputDir,
+            filename_format: settings.filenameFormat,
+            track_number: settings.trackNumber,
+            position,
+            use_album_track_number: useAlbumTrackNumber,
+            spotify_id: spotifyId,
+            service_url: streamingURLs.amazon_url,
+            item_id: itemID,
+          });
+
+          if (amazonResponse.success) {
+            return amazonResponse;
+          }
+        } catch (amazonErr) {
+          console.error("Amazon error:", amazonErr);
+        }
+      }
+
+      // Try Qobuz as last fallback
+      const qobuzResponse = await downloadTrack({
+        isrc,
+        service: "qobuz",
+        query,
+        track_name: trackName,
+        artist_name: artistName,
+        album_name: albumName,
+        output_dir: outputDir,
+        filename_format: settings.filenameFormat,
+        track_number: settings.trackNumber,
+        position,
+        use_album_track_number: useAlbumTrackNumber,
+        spotify_id: spotifyId,
+        duration: durationMs ? Math.round(durationMs / 1000) : undefined,
+        item_id: itemID,
+      });
+
+      // If Qobuz also failed, mark the item as failed
+      if (!qobuzResponse.success) {
+        const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+        await MarkDownloadItemFailed(itemID, qobuzResponse.error || "All services failed");
+      }
+
+      return qobuzResponse;
+    }
+
+    // Single service download
+    const durationSecondsForFallback = durationMs ? Math.round(durationMs / 1000) : undefined;
+
+    const singleServiceResponse = await downloadTrack({
+      isrc,
+      service: service as "deezer" | "tidal" | "qobuz" | "amazon",
+      query,
+      track_name: trackName,
+      artist_name: artistName,
+      album_name: albumName,
+      output_dir: outputDir,
+      filename_format: settings.filenameFormat,
+      track_number: settings.trackNumber,
+      position,
+      use_album_track_number: useAlbumTrackNumber,
+      spotify_id: spotifyId,
+      duration: durationSecondsForFallback,
+      item_id: itemID,
+    });
+
+    // Mark as failed if download failed for single-service attempt
+    if (!singleServiceResponse.success) {
+      const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+      await MarkDownloadItemFailed(itemID, singleServiceResponse.error || "Download failed");
+    }
+
+    return singleServiceResponse;
   };
 
   const handleDownloadTrack = async (
@@ -268,6 +505,20 @@ export function useDownload() {
     setBulkDownloadType("selected");
     setDownloadProgress(0);
 
+    // Pre-add ALL tracks to the queue before starting downloads
+    const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
+    const itemIDs: string[] = [];
+    for (const isrc of selectedTracks) {
+      const track = allTracks.find((t) => t.isrc === isrc);
+      const itemID = await AddToDownloadQueue(
+        isrc,
+        track?.name || "",
+        track?.artists || "",
+        track?.album_name || ""
+      );
+      itemIDs.push(itemID);
+    }
+
     let successCount = 0;
     let errorCount = 0;
     let skippedCount = 0;
@@ -283,6 +534,7 @@ export function useDownload() {
 
       const isrc = selectedTracks[i];
       const track = allTracks.find((t) => t.isrc === isrc);
+      const itemID = itemIDs[i];
 
       setDownloadingTrack(isrc);
 
@@ -291,10 +543,11 @@ export function useDownload() {
       }
 
       try {
-        // Use sequential numbering (1, 2, 3...) for selected tracks
-        const response = await downloadWithAutoFallback(
+        // Download with pre-created itemID
+        const response = await downloadWithItemID(
           isrc,
           settings,
+          itemID,
           track?.name,
           track?.artists,
           track?.album_name,
@@ -329,6 +582,9 @@ export function useDownload() {
         errorCount++;
         logger.error(`error: ${track?.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(isrc));
+        // Mark item as failed in queue
+        const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+        await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
       }
 
       setDownloadProgress(Math.round(((i + 1) / total) * 100));
@@ -339,6 +595,10 @@ export function useDownload() {
     setIsDownloading(false);
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
+
+    // Cancel any remaining queued items
+    const { CancelAllQueuedItems } = await import("../../wailsjs/go/main/App");
+    await CancelAllQueuedItems();
 
     // Build summary message
     logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
@@ -378,6 +638,19 @@ export function useDownload() {
     setBulkDownloadType("all");
     setDownloadProgress(0);
 
+    // Pre-add ALL tracks to the queue before starting downloads
+    const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
+    const itemIDs: string[] = [];
+    for (const track of tracksWithIsrc) {
+      const itemID = await AddToDownloadQueue(
+        track.isrc,
+        track.name,
+        track.artists,
+        track.album_name || ""
+      );
+      itemIDs.push(itemID);
+    }
+
     let successCount = 0;
     let errorCount = 0;
     let skippedCount = 0;
@@ -392,14 +665,16 @@ export function useDownload() {
       }
 
       const track = tracksWithIsrc[i];
+      const itemID = itemIDs[i];
 
       setDownloadingTrack(track.isrc);
       setCurrentDownloadInfo({ name: track.name, artists: track.artists });
 
       try {
-        const response = await downloadWithAutoFallback(
+        const response = await downloadWithItemID(
           track.isrc,
           settings,
+          itemID,
           track.name,
           track.artists,
           track.album_name,
@@ -434,6 +709,9 @@ export function useDownload() {
         errorCount++;
         logger.error(`error: ${track.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(track.isrc));
+        // Mark item as failed in queue
+        const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+        await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
       }
 
       setDownloadProgress(Math.round(((i + 1) / total) * 100));
@@ -444,6 +722,10 @@ export function useDownload() {
     setIsDownloading(false);
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
+
+    // Cancel any remaining queued items
+    const { CancelAllQueuedItems: CancelQueued } = await import("../../wailsjs/go/main/App");
+    await CancelQueued();
 
     // Build summary message
     logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
