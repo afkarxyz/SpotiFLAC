@@ -26,6 +26,7 @@ import { PlaylistInfo } from "@/components/PlaylistInfo";
 import { ArtistInfo } from "@/components/ArtistInfo";
 import { DownloadQueue } from "@/components/DownloadQueue";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
+import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
 import type { HistoryItem } from "@/components/FetchHistory";
 
 // Hooks
@@ -38,7 +39,10 @@ import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 const HISTORY_KEY = "spotiflac_fetch_history";
 const MAX_HISTORY = 5;
 
+type PageType = "main" | "audio-analysis";
+
 function App() {
+  const [currentPageView, setCurrentPageView] = useState<PageType>("main");
   const [spotifyUrl, setSpotifyUrl] = useState("");
   const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -48,7 +52,7 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.4";
+  const CURRENT_VERSION = "6.5";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -258,6 +262,7 @@ function App() {
           downloadingTrack={download.downloadingTrack}
           isDownloaded={download.downloadedTracks.has(track.isrc)}
           isFailed={download.failedTracks.has(track.isrc)}
+          isSkipped={download.skippedTracks.has(track.isrc)}
           downloadingLyricsTrack={lyrics.downloadingLyricsTrack}
           downloadedLyrics={lyrics.downloadedLyrics.has(track.spotify_id || "")}
           failedLyrics={lyrics.failedLyrics.has(track.spotify_id || "")}
@@ -459,10 +464,15 @@ function App() {
         <TitleBar />
         <div className="flex-1 p-4 md:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            <Header
-              version={CURRENT_VERSION}
-              hasUpdate={hasUpdate}
-            />
+            {currentPageView === "audio-analysis" ? (
+              <AudioAnalysisPage onBack={() => setCurrentPageView("main")} />
+            ) : (
+              <>
+                <Header
+                  version={CURRENT_VERSION}
+                  hasUpdate={hasUpdate}
+                  onOpenAudioAnalysis={() => setCurrentPageView("audio-analysis")}
+                />
 
           {/* Download Progress Toast - Bottom Left */}
           <DownloadProgressToast onClick={downloadQueue.openQueue} />
@@ -581,7 +591,9 @@ function App() {
             hasResult={!!metadata.metadata}
           />
 
-            {metadata.metadata && renderMetadata()}
+                {metadata.metadata && renderMetadata()}
+              </>
+            )}
           </div>
         </div>
       </div>

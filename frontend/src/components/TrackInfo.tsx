@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, CheckCircle, XCircle, FileText, SkipForward, Globe } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck, Globe } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Tooltip,
@@ -16,6 +16,7 @@ interface TrackInfoProps {
   downloadingTrack: string | null;
   isDownloaded: boolean;
   isFailed: boolean;
+  isSkipped: boolean;
   downloadingLyricsTrack?: string | null;
   downloadedLyrics?: boolean;
   failedLyrics?: boolean;
@@ -34,6 +35,7 @@ export function TrackInfo({
   downloadingTrack,
   isDownloaded,
   isFailed,
+  isSkipped,
   downloadingLyricsTrack,
   downloadedLyrics,
   failedLyrics,
@@ -57,62 +59,18 @@ export function TrackInfo({
                 className="w-48 h-48 rounded-md shadow-lg object-cover"
               />
             )}
-            {/* Availability Icons - below cover art */}
-            {availability && (
-              <div className="flex items-center justify-center gap-2 mt-3">
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className={`${availability.tidal ? "text-green-500" : "text-red-500"}`}>
-                      <TidalIcon className="w-5 h-5" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Tidal</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className={`${availability.deezer ? "text-green-500" : "text-red-500"}`}>
-                      <DeezerIcon className="w-5 h-5" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Deezer</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className={`${availability.amazon ? "text-green-500" : "text-red-500"}`}>
-                      <AmazonIcon className="w-5 h-5" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Amazon Music</p>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className={`${availability.qobuz ? "text-green-500" : "text-red-500"}`}>
-                      <QobuzIcon className="w-5 h-5" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Qobuz</p>
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            )}
           </div>
           <div className="flex-1 space-y-4 min-w-0">
             <div className="space-y-1">
               <div className="flex items-center gap-3">
                 <h1 className="text-3xl font-bold wrap-break-word">{track.name}</h1>
-                {isDownloaded && (
+                {isSkipped ? (
+                  <FileCheck className="h-6 w-6 text-yellow-500 shrink-0" />
+                ) : isDownloaded ? (
                   <CheckCircle className="h-6 w-6 text-green-500 shrink-0" />
-                )}
-                {isFailed && (
+                ) : isFailed ? (
                   <XCircle className="h-6 w-6 text-red-500 shrink-0" />
-                )}
+                ) : null}
               </div>
               <p className="text-lg text-muted-foreground">{track.artists}</p>
             </div>
@@ -151,13 +109,24 @@ export function TrackInfo({
                       >
                         {checkingAvailability ? (
                           <Spinner />
+                        ) : availability ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : (
                           <Globe className="h-4 w-4" />
                         )}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Check Availability</p>
+                      {availability ? (
+                        <div className="flex items-center gap-2">
+                          <TidalIcon className={`w-4 h-4 ${availability.tidal ? "text-green-500" : "text-red-500"}`} />
+                          <DeezerIcon className={`w-4 h-4 ${availability.deezer ? "text-green-500" : "text-red-500"}`} />
+                          <QobuzIcon className={`w-4 h-4 ${availability.qobuz ? "text-green-500" : "text-red-500"}`} />
+                          <AmazonIcon className={`w-4 h-4 ${availability.amazon ? "text-green-500" : "text-red-500"}`} />
+                        </div>
+                      ) : (
+                        <p>Check Availability</p>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -172,7 +141,7 @@ export function TrackInfo({
                         {downloadingLyricsTrack === track.spotify_id ? (
                           <Spinner />
                         ) : skippedLyrics ? (
-                          <SkipForward className="h-4 w-4 text-yellow-500" />
+                          <FileCheck className="h-4 w-4 text-yellow-500" />
                         ) : downloadedLyrics ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : failedLyrics ? (

@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
+
 import { Badge } from "@/components/ui/badge";
 import { GetDownloadQueue, ClearCompletedDownloads } from "../../wailsjs/go/main/App";
 import { backend } from "../../wailsjs/go/models";
@@ -227,26 +227,23 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
                         {getStatusBadge(item.status)}
                       </div>
 
-                      {/* Progress bar for downloading items */}
+                      {/* Info for downloading items */}
                       {item.status === "downloading" && (
-                        <div className="space-y-1.5 mt-2">
-                          <div className="flex items-center justify-between text-xs font-mono">
-                            <span>
-                              {item.progress > 0
-                                ? `${item.progress.toFixed(2)} MB`
-                                : queueInfo.is_downloading && queueInfo.current_speed > 0
-                                ? "Downloading..."
-                                : "Starting..."}
-                            </span>
-                            <span>
-                              {item.speed > 0
-                                ? `${item.speed.toFixed(2)} MB/s`
-                                : queueInfo.current_speed > 0
-                                ? `${queueInfo.current_speed.toFixed(2)} MB/s`
-                                : "—"}
-                            </span>
-                          </div>
-                          <Progress value={100} className="h-1.5" />
+                        <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground font-mono">
+                          <span>
+                            {item.progress > 0
+                              ? `${item.progress.toFixed(2)} MB`
+                              : queueInfo.is_downloading && queueInfo.current_speed > 0
+                              ? "Downloading..."
+                              : "Starting..."}
+                          </span>
+                          <span>
+                            {item.speed > 0
+                              ? `${item.speed.toFixed(2)} MB/s`
+                              : queueInfo.current_speed > 0
+                              ? `${queueInfo.current_speed.toFixed(2)} MB/s`
+                              : "—"}
+                          </span>
                         </div>
                       )}
 

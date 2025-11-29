@@ -32,7 +32,7 @@ const InputWithContext = React.forwardRef<HTMLInputElement, InputWithContextProp
       setHasSelection(start !== end);
     };
 
-    // Check clipboard permission
+    // Check clipboard permission when user explicitly opens the context menu.
     const checkClipboard = async () => {
       try {
         const text = await navigator.clipboard.readText();
@@ -41,10 +41,6 @@ const InputWithContext = React.forwardRef<HTMLInputElement, InputWithContextProp
         setCanPaste(false);
       }
     };
-
-    React.useEffect(() => {
-      checkClipboard();
-    }, []);
 
     const handleCut = async () => {
       const input = inputRef.current;
@@ -156,7 +152,13 @@ const InputWithContext = React.forwardRef<HTMLInputElement, InputWithContextProp
     };
 
     return (
-      <ContextMenu onOpenChange={checkClipboard}>
+      <ContextMenu
+        onOpenChange={(open) => {
+          if (open) {
+            checkClipboard();
+          }
+        }}
+      >
         <ContextMenuTrigger asChild>
           <Input 
             ref={inputRef} 

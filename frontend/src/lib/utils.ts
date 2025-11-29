@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { BrowserOpenURL } from "../../wailsjs/runtime/runtime"
 import type { Settings } from "./settings";
 
 export function cn(...inputs: ClassValue[]) {
@@ -44,4 +45,15 @@ export function buildOutputPath(settings: Settings, folder?: string) {
   const sanitized = folder ? sanitizePath(folder, os) : undefined;
 
   return sanitized ? joinPath(os, base, sanitized) : base;
+}
+
+export function openExternal(url: string) {
+  if (!url) return;
+  try {
+    BrowserOpenURL(url);
+  } catch (error) {
+    if (typeof window !== "undefined") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
 }
