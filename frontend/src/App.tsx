@@ -24,6 +24,7 @@ import { TrackInfo } from "@/components/TrackInfo";
 import { AlbumInfo } from "@/components/AlbumInfo";
 import { PlaylistInfo } from "@/components/PlaylistInfo";
 import { ArtistInfo } from "@/components/ArtistInfo";
+import { DownloadQueue } from "@/components/DownloadQueue";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 import type { HistoryItem } from "@/components/FetchHistory";
 
@@ -32,6 +33,7 @@ import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
 import { useAvailability } from "@/hooks/useAvailability";
+import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 
 const HISTORY_KEY = "spotiflac_fetch_history";
 const MAX_HISTORY = 5;
@@ -52,6 +54,7 @@ function App() {
   const metadata = useMetadata();
   const lyrics = useLyrics();
   const availability = useAvailability();
+  const downloadQueue = useDownloadQueueDialog();
 
   useEffect(() => {
     const settings = getSettings();
@@ -456,10 +459,19 @@ function App() {
         <TitleBar />
         <div className="flex-1 p-4 md:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} />
-          
-          {/* Download Progress Toast */}
-          <DownloadProgressToast />
+            <Header
+              version={CURRENT_VERSION}
+              hasUpdate={hasUpdate}
+            />
+
+          {/* Download Progress Toast - Bottom Left */}
+          <DownloadProgressToast onClick={downloadQueue.openQueue} />
+
+          {/* Download Queue Dialog */}
+          <DownloadQueue
+            isOpen={downloadQueue.isOpen}
+            onClose={downloadQueue.closeQueue}
+          />
 
           {/* Timeout Dialog */}
           <Dialog

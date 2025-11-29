@@ -125,6 +125,7 @@ export interface DownloadRequest {
   spotify_id?: string;
   service_url?: string;
   duration?: number; // Track duration in seconds for better matching
+  item_id?: string; // Optional queue item ID for multi-service fallback tracking
 }
 
 export interface DownloadResponse {
@@ -133,6 +134,7 @@ export interface DownloadResponse {
   file?: string;
   error?: string;
   already_exists?: boolean;
+  item_id?: string; // Queue item ID for tracking
 }
 
 export interface HealthResponse {
