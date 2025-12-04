@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, CheckCircle, XCircle, FileCheck, FileText, Globe } from "lucide-react";
+import { Download, CheckCircle, XCircle, FileCheck, FileText, Globe, ImageDown } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Tooltip,
@@ -42,11 +42,17 @@ interface TrackListProps {
   // Availability props
   checkingAvailabilityTrack?: string | null;
   availabilityMap?: Map<string, TrackAvailability>;
+  // Cover props
+  downloadedCovers?: Set<string>;
+  failedCovers?: Set<string>;
+  skippedCovers?: Set<string>;
+  downloadingCoverTrack?: string | null;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, isArtistDiscography?: boolean) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
   onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
   onPageChange: (page: number) => void;
   onAlbumClick?: (album: { id: string; name: string; external_urls: string }) => void;
   onArtistClick?: (artist: { id: string; name: string; external_urls: string }) => void;
@@ -75,11 +81,16 @@ export function TrackList({
   downloadingLyricsTrack,
   checkingAvailabilityTrack,
   availabilityMap,
+  downloadedCovers,
+  failedCovers,
+  skippedCovers,
+  downloadingCoverTrack,
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
   onDownloadLyrics,
   onCheckAvailability,
+  onDownloadCover,
   onPageChange,
   onAlbumClick,
   onArtistClick,
@@ -286,52 +297,39 @@ export function TrackList({
                   <td className="p-4 align-middle text-center">
                     <div className="flex items-center justify-center gap-1">
                       {track.isrc && (
-                        <Button
-                          onClick={() =>
-                            onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, isArtistDiscography)
-                          }
-                          size="sm"
-                          className="gap-1.5"
-                          disabled={isDownloading || downloadingTrack === track.isrc}
-                        >
-                          {downloadingTrack === track.isrc ? (
-                            <Spinner />
-                          ) : (
-                            <>
-                              <Download className="h-4 w-4" />
-                              Download
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      {track.spotify_id && onCheckAvailability && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
-                              onClick={() => onCheckAvailability(track.spotify_id!, track.isrc)}
+                              onClick={() =>
+                                onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, isArtistDiscography)
+                              }
                               size="sm"
-                              variant="outline"
-                              disabled={checkingAvailabilityTrack === track.spotify_id}
+                              disabled={isDownloading || downloadingTrack === track.isrc}
                             >
-                              {checkingAvailabilityTrack === track.spotify_id ? (
+                              {downloadingTrack === track.isrc ? (
                                 <Spinner />
-                              ) : availabilityMap?.has(track.spotify_id) ? (
-                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : skippedTracks.has(track.isrc) ? (
+                                <FileCheck className="h-4 w-4" />
+                              ) : downloadedTracks.has(track.isrc) ? (
+                                <CheckCircle className="h-4 w-4" />
+                              ) : failedTracks.has(track.isrc) ? (
+                                <XCircle className="h-4 w-4" />
                               ) : (
-                                <Globe className="h-4 w-4" />
+                                <Download className="h-4 w-4" />
                               )}
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {availabilityMap?.has(track.spotify_id) ? (
-                              <div className="flex items-center gap-2">
-                                <TidalIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`} />
-                                <DeezerIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.deezer ? "text-green-500" : "text-red-500"}`} />
-                                <QobuzIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`} />
-                                <AmazonIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`} />
-                              </div>
+                            {downloadingTrack === track.isrc ? (
+                              <p>Downloading...</p>
+                            ) : skippedTracks.has(track.isrc) ? (
+                              <p>Already exists</p>
+                            ) : downloadedTracks.has(track.isrc) ? (
+                              <p>Downloaded</p>
+                            ) : failedTracks.has(track.isrc) ? (
+                              <p>Failed</p>
                             ) : (
-                              <p>Check Availability</p>
+                              <p>Download Track</p>
                             )}
                           </TooltipContent>
                         </Tooltip>
@@ -362,6 +360,68 @@ export function TrackList({
                           </TooltipTrigger>
                           <TooltipContent>
                             <p>Download Lyric</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {track.images && onDownloadCover && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => {
+                                const trackId = track.spotify_id || `${track.name}-${track.artists}`;
+                                onDownloadCover(track.images, track.name, track.artists, track.album_name, folderName, isArtistDiscography, startIndex + index + 1, trackId);
+                              }}
+                              size="sm"
+                              variant="outline"
+                              disabled={downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)}
+                            >
+                              {downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`) ? (
+                                <Spinner />
+                              ) : skippedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
+                                <FileCheck className="h-4 w-4 text-yellow-500" />
+                              ) : downloadedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : failedCovers?.has(track.spotify_id || `${track.name}-${track.artists}`) ? (
+                                <XCircle className="h-4 w-4 text-red-500" />
+                              ) : (
+                                <ImageDown className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Download Cover</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {track.spotify_id && onCheckAvailability && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              onClick={() => onCheckAvailability(track.spotify_id!, track.isrc)}
+                              size="sm"
+                              variant="outline"
+                              disabled={checkingAvailabilityTrack === track.spotify_id}
+                            >
+                              {checkingAvailabilityTrack === track.spotify_id ? (
+                                <Spinner />
+                              ) : availabilityMap?.has(track.spotify_id) ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <Globe className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {availabilityMap?.has(track.spotify_id) ? (
+                              <div className="flex items-center gap-2">
+                                <TidalIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`} />
+                                <DeezerIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.deezer ? "text-green-500" : "text-red-500"}`} />
+                                <QobuzIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`} />
+                                <AmazonIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`} />
+                              </div>
+                            ) : (
+                              <p>Check Availability</p>
+                            )}
                           </TooltipContent>
                         </Tooltip>
                       )}

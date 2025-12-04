@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen } from "lucide-react";
+import { Download, FolderOpen, ImageDown } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchAndSort } from "./SearchAndSort";
 import { TrackList } from "./TrackList";
 import { DownloadProgress } from "./DownloadProgress";
@@ -43,13 +44,21 @@ interface PlaylistInfoProps {
   // Availability props
   checkingAvailabilityTrack?: string | null;
   availabilityMap?: Map<string, TrackAvailability>;
+  // Cover props
+  downloadedCovers?: Set<string>;
+  failedCovers?: Set<string>;
+  skippedCovers?: Set<string>;
+  downloadingCoverTrack?: string | null;
+  isBulkDownloadingCovers?: boolean;
   onSearchChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
   onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
   onCheckAvailability?: (spotifyId: string) => void;
+  onDownloadAllCovers?: () => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
   onStopDownload: () => void;
@@ -82,13 +91,20 @@ export function PlaylistInfo({
   downloadingLyricsTrack,
   checkingAvailabilityTrack,
   availabilityMap,
+  downloadedCovers,
+  failedCovers,
+  skippedCovers,
+  downloadingCoverTrack,
+  isBulkDownloadingCovers,
   onSearchChange,
   onSortChange,
   onToggleTrack,
   onToggleSelectAll,
   onDownloadTrack,
   onDownloadLyrics,
+  onDownloadCover,
   onCheckAvailability,
+  onDownloadAllCovers,
   onDownloadAll,
   onDownloadSelected,
   onStopDownload,
@@ -145,6 +161,22 @@ export function PlaylistInfo({
                     Download Selected ({selectedTracks.length})
                   </Button>
                 )}
+                {onDownloadAllCovers && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={onDownloadAllCovers}
+                        variant="outline"
+                        disabled={isBulkDownloadingCovers}
+                      >
+                        {isBulkDownloadingCovers ? <Spinner /> : <ImageDown className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download All Covers</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {downloadedTracks.size > 0 && (
                   <Button onClick={onOpenFolder} variant="outline">
                     <FolderOpen className="h-4 w-4" />
@@ -191,10 +223,15 @@ export function PlaylistInfo({
           downloadingLyricsTrack={downloadingLyricsTrack}
           checkingAvailabilityTrack={checkingAvailabilityTrack}
           availabilityMap={availabilityMap}
+          downloadedCovers={downloadedCovers}
+          failedCovers={failedCovers}
+          skippedCovers={skippedCovers}
+          downloadingCoverTrack={downloadingCoverTrack}
           onToggleTrack={onToggleTrack}
           onToggleSelectAll={onToggleSelectAll}
           onDownloadTrack={onDownloadTrack}
           onDownloadLyrics={onDownloadLyrics}
+          onDownloadCover={onDownloadCover}
           onCheckAvailability={onCheckAvailability}
           onPageChange={onPageChange}
           onAlbumClick={onAlbumClick}

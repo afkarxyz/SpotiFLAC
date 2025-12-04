@@ -482,6 +482,48 @@ func (a *App) DownloadLyrics(req LyricsDownloadRequest) (backend.LyricsDownloadR
 	return *resp, nil
 }
 
+// CoverDownloadRequest represents the request structure for downloading cover art
+type CoverDownloadRequest struct {
+	CoverURL       string `json:"cover_url"`
+	TrackName      string `json:"track_name"`
+	ArtistName     string `json:"artist_name"`
+	OutputDir      string `json:"output_dir"`
+	FilenameFormat string `json:"filename_format"`
+	TrackNumber    bool   `json:"track_number"`
+	Position       int    `json:"position"`
+}
+
+// DownloadCover downloads cover art for a single track
+func (a *App) DownloadCover(req CoverDownloadRequest) (backend.CoverDownloadResponse, error) {
+	if req.CoverURL == "" {
+		return backend.CoverDownloadResponse{
+			Success: false,
+			Error:   "Cover URL is required",
+		}, fmt.Errorf("cover URL is required")
+	}
+
+	client := backend.NewCoverClient()
+	backendReq := backend.CoverDownloadRequest{
+		CoverURL:       req.CoverURL,
+		TrackName:      req.TrackName,
+		ArtistName:     req.ArtistName,
+		OutputDir:      req.OutputDir,
+		FilenameFormat: req.FilenameFormat,
+		TrackNumber:    req.TrackNumber,
+		Position:       req.Position,
+	}
+
+	resp, err := client.DownloadCover(backendReq)
+	if err != nil {
+		return backend.CoverDownloadResponse{
+			Success: false,
+			Error:   err.Error(),
+		}, err
+	}
+
+	return *resp, nil
+}
+
 // CheckTrackAvailability checks the availability of a track on different streaming platforms
 func (a *App) CheckTrackAvailability(spotifyTrackID string, isrc string) (string, error) {
 	if spotifyTrackID == "" {

@@ -9,7 +9,7 @@ import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 
 interface AudioAnalysisPageProps {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
@@ -71,21 +71,18 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Audio Quality Analyzer</h1>
-          <p className="text-sm text-muted-foreground">
-            Analyze FLAC files to verify true lossless quality
-          </p>
-        </div>
+        {onBack && (
+          <Button variant="ghost" size="icon" onClick={onBack}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        )}
+        <h1 className="text-2xl font-bold">Audio Quality Analyzer</h1>
       </div>
 
       {/* File Selection */}
       {!result && !analyzing && (
         <div
-          className={`flex flex-col items-center justify-center py-16 border-2 border-dashed rounded-lg transition-colors ${
+          className={`flex flex-col items-center justify-center py-24 border-2 border-dashed rounded-lg transition-colors ${
             isDragging
               ? "border-primary bg-primary/10"
               : "border-muted-foreground/30 hover:border-muted-foreground/50"

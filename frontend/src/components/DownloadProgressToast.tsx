@@ -22,7 +22,7 @@ export function DownloadProgressToast({ onClick }: DownloadProgressToastProps) {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 animate-in slide-in-from-bottom-5 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-5">
+    <div className="fixed bottom-4 left-[calc(56px+1rem)] z-50 animate-in slide-in-from-bottom-5 data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom-5">
       <Button
         variant="outline"
         className="bg-background border rounded-lg shadow-lg p-3 h-auto hover:bg-muted/50 transition-colors cursor-pointer"

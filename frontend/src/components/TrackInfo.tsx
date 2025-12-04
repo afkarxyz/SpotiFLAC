@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck, Globe } from "lucide-react";
+import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck, Globe, ImageDown } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Tooltip,
@@ -23,9 +24,11 @@ interface TrackInfoProps {
   skippedLyrics?: boolean;
   checkingAvailability?: boolean;
   availability?: TrackAvailability;
+  downloadingCover?: boolean;
   onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string) => void;
   onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string) => void;
   onOpenFolder: () => void;
 }
 
@@ -42,22 +45,52 @@ export function TrackInfo({
   skippedLyrics,
   checkingAvailability,
   availability,
+  downloadingCover,
   onDownload,
   onDownloadLyrics,
   onCheckAvailability,
+  onDownloadCover,
   onOpenFolder,
 }: TrackInfoProps) {
+  const [isHoveringCover, setIsHoveringCover] = useState(false);
+
   return (
     <Card>
       <CardContent className="px-6">
         <div className="flex gap-6 items-start">
-          <div className="shrink-0">
+          <div 
+            className="shrink-0 relative"
+            onMouseEnter={() => setIsHoveringCover(true)}
+            onMouseLeave={() => setIsHoveringCover(false)}
+          >
             {track.images && (
-              <img
-                src={track.images}
-                alt={track.name}
-                className="w-48 h-48 rounded-md shadow-lg object-cover"
-              />
+              <>
+                <img
+                  src={track.images}
+                  alt={track.name}
+                  className="w-48 h-48 rounded-md shadow-lg object-cover"
+                />
+                {isHoveringCover && onDownloadCover && (
+                  <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="icon"
+                          variant="secondary"
+                          className="cursor-pointer"
+                          onClick={() => onDownloadCover(track.images, track.name, track.artists, track.album_name)}
+                          disabled={downloadingCover}
+                        >
+                          {downloadingCover ? <Spinner /> : <ImageDown className="h-5 w-5" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Download Cover</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                )}
+              </>
             )}
           </div>
           <div className="flex-1 space-y-4 min-w-0">
@@ -99,6 +132,32 @@ export function TrackInfo({
                     </>
                   )}
                 </Button>
+                {track.spotify_id && onDownloadLyrics && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
+                        variant="outline"
+                        disabled={downloadingLyricsTrack === track.spotify_id}
+                      >
+                        {downloadingLyricsTrack === track.spotify_id ? (
+                          <Spinner />
+                        ) : skippedLyrics ? (
+                          <FileCheck className="h-4 w-4 text-yellow-500" />
+                        ) : downloadedLyrics ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : failedLyrics ? (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        ) : (
+                          <FileText className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download Lyric</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {track.spotify_id && onCheckAvailability && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -127,32 +186,6 @@ export function TrackInfo({
                       ) : (
                         <p>Check Availability</p>
                       )}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {track.spotify_id && onDownloadLyrics && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
-                        variant="outline"
-                        disabled={downloadingLyricsTrack === track.spotify_id}
-                      >
-                        {downloadingLyricsTrack === track.spotify_id ? (
-                          <Spinner />
-                        ) : skippedLyrics ? (
-                          <FileCheck className="h-4 w-4 text-yellow-500" />
-                        ) : downloadedLyrics ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : failedLyrics ? (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        ) : (
-                          <FileText className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Download Lyric</p>
                     </TooltipContent>
                   </Tooltip>
                 )}

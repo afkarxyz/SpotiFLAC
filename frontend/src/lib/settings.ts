@@ -1,14 +1,18 @@
 import { GetDefaults } from "../../wailsjs/go/main/App";
 
+export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk";
+
 export interface Settings {
   downloadPath: string;
   downloader: "auto" | "deezer" | "tidal" | "qobuz" | "amazon";
   theme: string;
   themeMode: "auto" | "light" | "dark";
+  fontFamily: FontFamily;
   filenameFormat: "title-artist" | "artist-title" | "title";
   artistSubfolder: boolean;
   albumSubfolder: boolean;
   trackNumber: boolean;
+  sfxEnabled: boolean;
   operatingSystem: "Windows" | "linux/MacOS"
 }
 
@@ -26,12 +30,33 @@ export const DEFAULT_SETTINGS: Settings = {
   downloader: "auto",
   theme: "yellow",
   themeMode: "auto",
+  fontFamily: "google-sans",
   filenameFormat: "title-artist",
   artistSubfolder: false,
   albumSubfolder: false,
   trackNumber: false,
+  sfxEnabled: true,
   operatingSystem: detectOS()
 };
+
+export const FONT_OPTIONS: { value: FontFamily; label: string; fontFamily: string }[] = [
+  { value: "google-sans", label: "Google Sans Flex", fontFamily: '"Google Sans Flex", system-ui, sans-serif' },
+  { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
+  { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
+  { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
+  { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
+  { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+  { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
+  { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
+];
+
+export function applyFont(fontFamily: FontFamily): void {
+  const font = FONT_OPTIONS.find(f => f.value === fontFamily);
+  if (font) {
+    document.documentElement.style.setProperty('--font-sans', font.fontFamily);
+    document.body.style.fontFamily = font.fontFamily;
+  }
+}
 
 async function fetchDefaultPath(): Promise<string> {
   try {

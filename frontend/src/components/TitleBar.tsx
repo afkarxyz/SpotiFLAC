@@ -1,10 +1,7 @@
-import { useState } from "react";
-import { X, Minus, Square } from "lucide-react";
+import { X, Minus, Maximize } from "lucide-react";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
 
 export function TitleBar() {
-  const [hoveredButton, setHoveredButton] = useState<string | null>(null);
-
   const handleMinimize = () => {
     WindowMinimise();
   };
@@ -21,48 +18,36 @@ export function TitleBar() {
     <>
       {/* Draggable area */}
       <div 
-        className="fixed top-0 left-0 right-0 h-12 z-40"
+        className="fixed top-0 left-14 right-0 h-10 z-40 bg-background/80 backdrop-blur-sm"
         style={{ "--wails-draggable": "drag" } as React.CSSProperties}
         onDoubleClick={handleMaximize}
       />
       
-      {/* Window control buttons */}
-      <div className="fixed top-4 left-4 z-50 flex gap-2">
-        <button
-          onClick={handleClose}
-          onMouseEnter={() => setHoveredButton("close")}
-          onMouseLeave={() => setHoveredButton(null)}
-          className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center"
-          style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}
-          aria-label="Close"
-        >
-          {hoveredButton === "close" && (
-            <X className="w-2 h-2 text-red-900" strokeWidth={3} />
-          )}
-        </button>
+      {/* Window control buttons - Windows style, right side */}
+      <div className="fixed top-1.5 right-2 z-50 flex h-7 gap-0.5">
         <button
           onClick={handleMinimize}
-          onMouseEnter={() => setHoveredButton("minimize")}
-          onMouseLeave={() => setHoveredButton(null)}
-          className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors flex items-center justify-center"
+          className="w-8 h-7 flex items-center justify-center hover:bg-muted transition-colors rounded"
           style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}
           aria-label="Minimize"
         >
-          {hoveredButton === "minimize" && (
-            <Minus className="w-2 h-2 text-yellow-900" strokeWidth={3} />
-          )}
+          <Minus className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={handleMaximize}
-          onMouseEnter={() => setHoveredButton("maximize")}
-          onMouseLeave={() => setHoveredButton(null)}
-          className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors flex items-center justify-center"
+          className="w-8 h-7 flex items-center justify-center hover:bg-muted transition-colors rounded"
           style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}
           aria-label="Maximize"
         >
-          {hoveredButton === "maximize" && (
-            <Square className="w-1.5 h-1.5 text-green-900" strokeWidth={3} />
-          )}
+          <Maximize className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={handleClose}
+          className="w-8 h-7 flex items-center justify-center hover:bg-destructive hover:text-white transition-colors rounded"
+          style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}
+          aria-label="Close"
+        >
+          <X className="w-3.5 h-3.5" />
         </button>
       </div>
     </>

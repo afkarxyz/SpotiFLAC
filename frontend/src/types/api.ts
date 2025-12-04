@@ -200,4 +200,22 @@ export interface TrackAvailability {
   qobuz_url?: string;
 }
 
+export interface CoverDownloadRequest {
+  cover_url: string;
+  track_name: string;
+  artist_name: string;
+  output_dir?: string;
+  filename_format?: string;
+  track_number?: boolean;
+  position?: number;
+}
+
+export interface CoverDownloadResponse {
+  success: boolean;
+  message: string;
+  file?: string;
+  error?: string;
+  already_exists?: boolean;
+}
+
 

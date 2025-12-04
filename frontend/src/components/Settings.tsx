@@ -19,7 +19,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw, Info, X } from "lucide-react";
+import { Settings as SettingsIcon, FolderOpen, Save, RotateCcw, Info, X, Volume2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, type Settings as SettingsType } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder } from "../../wailsjs/go/main/App";
@@ -281,7 +282,7 @@ export function Settings() {
 
             {/* Theme Mode Selection */}
             <div className="space-y-2">
-              <Label htmlFor="theme-mode">Theme</Label>
+              <Label htmlFor="theme-mode">Mode</Label>
               <Select value={tempSettings.themeMode} onValueChange={handleThemeModeChange}>
                 <SelectTrigger id="theme-mode">
                   <SelectValue placeholder="Select theme mode" />
@@ -294,9 +295,9 @@ export function Settings() {
               </Select>
             </div>
 
-            {/* Theme Color Selection */}
+            {/* Accent Selection */}
             <div className="space-y-2">
-              <Label htmlFor="theme">Theme Color</Label>
+              <Label htmlFor="theme">Accent</Label>
               <Select value={tempSettings.theme} onValueChange={handleThemeChange}>
                 <SelectTrigger id="theme">
                   <SelectValue placeholder="Select a theme" />
@@ -399,6 +400,21 @@ export function Settings() {
                   </TooltipContent>
                 </Tooltip>
               </div>
+            </div>
+
+            <div className="border-t" />
+
+            {/* Sound Effects */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Volume2 className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="sfx-enabled" className="cursor-pointer text-sm">Sound Effects</Label>
+              </div>
+              <Switch
+                id="sfx-enabled"
+                checked={tempSettings.sfxEnabled}
+                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))}
+              />
             </div>
           </div>
         </div>
