@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { downloadTrack } from "@/lib/api";
-import { getSettings } from "@/lib/settings";
+import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -27,10 +27,10 @@ export function useDownload() {
     artistName?: string,
     albumName?: string,
     playlistName?: string,
-    isArtistDiscography?: boolean,
     position?: number,
     spotifyId?: string,
-    durationMs?: number
+    durationMs?: number,
+    releaseYear?: string
   ) => {
     let service = settings.downloader;
 
@@ -40,23 +40,35 @@ export function useDownload() {
     let outputDir = settings.downloadPath;
     let useAlbumTrackNumber = false;
 
+    // Build template data for folder path
+    const templateData: TemplateData = {
+      artist: artistName,
+      album: albumName,
+      title: trackName,
+      track: position,
+      year: releaseYear,
+      playlist: playlistName,
+      isrc: isrc,
+    };
+
+    // For playlist/discography downloads, always create a folder with the playlist/artist name
     if (playlistName) {
       outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+    }
 
-      if (isArtistDiscography) {
-        if (settings.albumSubfolder && albumName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
-          useAlbumTrackNumber = true; // Use album track number for discography with album subfolder
+    // Apply folder template if available
+    if (settings.folderTemplate) {
+      const folderPath = parseTemplate(settings.folderTemplate, templateData);
+      if (folderPath) {
+        const parts = folderPath.split("/").filter((p: string) => p.trim());
+        for (const part of parts) {
+          outputDir = joinPath(os, outputDir, sanitizePath(part, os));
         }
-      } else {
-        if (settings.artistSubfolder && artistName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(artistName, os));
-        }
-
-        if (settings.albumSubfolder && albumName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
-          useAlbumTrackNumber = true; // Use album track number when both artist and album subfolders are used
-        }
+      }
+      
+      // Use album track number if template contains {album}
+      if (settings.folderTemplate.includes("{album}")) {
+        useAlbumTrackNumber = true;
       }
     }
 
@@ -92,7 +104,7 @@ export function useDownload() {
             artist_name: artistName,
             album_name: albumName,
             output_dir: outputDir,
-            filename_format: settings.filenameFormat,
+            filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
             position,
             use_album_track_number: useAlbumTrackNumber,
@@ -124,7 +136,7 @@ export function useDownload() {
             artist_name: artistName,
             album_name: albumName,
             output_dir: outputDir,
-            filename_format: settings.filenameFormat,
+            filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
             position,
             use_album_track_number: useAlbumTrackNumber,
@@ -155,7 +167,7 @@ export function useDownload() {
             artist_name: artistName,
             album_name: albumName,
             output_dir: outputDir,
-            filename_format: settings.filenameFormat,
+            filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
             position,
             use_album_track_number: useAlbumTrackNumber,
@@ -184,7 +196,7 @@ export function useDownload() {
         artist_name: artistName,
         album_name: albumName,
         output_dir: outputDir,
-        filename_format: settings.filenameFormat,
+        filename_format: settings.filenameTemplate,
         track_number: settings.trackNumber,
         position,
         use_album_track_number: useAlbumTrackNumber,
@@ -214,7 +226,7 @@ export function useDownload() {
       artist_name: artistName,
       album_name: albumName,
       output_dir: outputDir,
-      filename_format: settings.filenameFormat,
+      filename_format: settings.filenameTemplate,
       track_number: settings.trackNumber,
       position,
       use_album_track_number: useAlbumTrackNumber,
@@ -239,11 +251,12 @@ export function useDownload() {
     trackName?: string,
     artistName?: string,
     albumName?: string,
-    playlistName?: string,
-    isArtistDiscography?: boolean,
+    folderName?: string,
     position?: number,
     spotifyId?: string,
-    durationMs?: number
+    durationMs?: number,
+    isAlbum?: boolean,
+    releaseYear?: string
   ) => {
     let service = settings.downloader;
 
@@ -253,23 +266,37 @@ export function useDownload() {
     let outputDir = settings.downloadPath;
     let useAlbumTrackNumber = false;
 
-    if (playlistName) {
-      outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+    // Build template data for folder path
+    const templateData: TemplateData = {
+      artist: artistName,
+      album: albumName,
+      title: trackName,
+      track: position,
+      year: releaseYear,
+      playlist: folderName,
+      isrc: isrc,
+    };
 
-      if (isArtistDiscography) {
-        if (settings.albumSubfolder && albumName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
-          useAlbumTrackNumber = true;
-        }
-      } else {
-        if (settings.artistSubfolder && artistName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(artistName, os));
-        }
+    // For playlist/discography downloads, always create a folder with the playlist/artist name
+    if (folderName && !isAlbum) {
+      outputDir = joinPath(os, outputDir, sanitizePath(folderName, os));
+    }
 
-        if (settings.albumSubfolder && albumName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
-          useAlbumTrackNumber = true;
+    // Apply folder template if available
+    if (settings.folderTemplate) {
+      // Parse and apply folder template
+      const folderPath = parseTemplate(settings.folderTemplate, templateData);
+      if (folderPath) {
+        // Split by / and sanitize each part
+        const parts = folderPath.split("/").filter(p => p.trim());
+        for (const part of parts) {
+          outputDir = joinPath(os, outputDir, sanitizePath(part, os));
         }
+      }
+      
+      // Use album track number if template contains {album}
+      if (settings.folderTemplate.includes("{album}")) {
+        useAlbumTrackNumber = true;
       }
     }
 
@@ -299,7 +326,7 @@ export function useDownload() {
             artist_name: artistName,
             album_name: albumName,
             output_dir: outputDir,
-            filename_format: settings.filenameFormat,
+            filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
             position,
             use_album_track_number: useAlbumTrackNumber,
@@ -328,7 +355,7 @@ export function useDownload() {
             artist_name: artistName,
             album_name: albumName,
             output_dir: outputDir,
-            filename_format: settings.filenameFormat,
+            filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
             position,
             use_album_track_number: useAlbumTrackNumber,
@@ -356,7 +383,7 @@ export function useDownload() {
             artist_name: artistName,
             album_name: albumName,
             output_dir: outputDir,
-            filename_format: settings.filenameFormat,
+            filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
             position,
             use_album_track_number: useAlbumTrackNumber,
@@ -382,7 +409,7 @@ export function useDownload() {
         artist_name: artistName,
         album_name: albumName,
         output_dir: outputDir,
-        filename_format: settings.filenameFormat,
+        filename_format: settings.filenameTemplate,
         track_number: settings.trackNumber,
         position,
         use_album_track_number: useAlbumTrackNumber,
@@ -411,7 +438,7 @@ export function useDownload() {
       artist_name: artistName,
       album_name: albumName,
       output_dir: outputDir,
-      filename_format: settings.filenameFormat,
+      filename_format: settings.filenameTemplate,
       track_number: settings.trackNumber,
       position,
       use_album_track_number: useAlbumTrackNumber,
@@ -436,8 +463,8 @@ export function useDownload() {
     albumName?: string,
     spotifyId?: string,
     playlistName?: string,
-    isArtistDiscography?: boolean,
-    durationMs?: number
+    durationMs?: number,
+    position?: number
   ) => {
     if (!isrc) {
       toast.error("No ISRC found for this track");
@@ -457,8 +484,7 @@ export function useDownload() {
         artistName,
         albumName,
         playlistName,
-        isArtistDiscography,
-        undefined, // Don't pass position for single track
+        position, // Pass position for track numbering
         spotifyId,
         durationMs
       );
@@ -491,8 +517,8 @@ export function useDownload() {
   const handleDownloadSelected = async (
     selectedTracks: string[],
     allTracks: TrackMetadata[],
-    playlistName?: string,
-    isArtistDiscography?: boolean
+    folderName?: string,
+    isAlbum?: boolean
   ) => {
     if (selectedTracks.length === 0) {
       toast.error("No tracks selected");
@@ -543,6 +569,9 @@ export function useDownload() {
       }
 
       try {
+        // Extract year from release_date (format: YYYY-MM-DD or YYYY)
+        const releaseYear = track?.release_date?.substring(0, 4);
+        
         // Download with pre-created itemID
         const response = await downloadWithItemID(
           isrc,
@@ -551,11 +580,12 @@ export function useDownload() {
           track?.name,
           track?.artists,
           track?.album_name,
-          playlistName,
-          isArtistDiscography,
+          folderName,
           i + 1, // Sequential position based on selection order
           track?.spotify_id,
-          track?.duration_ms
+          track?.duration_ms,
+          isAlbum,
+          releaseYear
         );
 
         if (response.success) {
@@ -622,8 +652,8 @@ export function useDownload() {
 
   const handleDownloadAll = async (
     tracks: TrackMetadata[],
-    playlistName?: string,
-    isArtistDiscography?: boolean
+    folderName?: string,
+    isAlbum?: boolean
   ) => {
     const tracksWithIsrc = tracks.filter((track) => track.isrc);
 
@@ -671,6 +701,9 @@ export function useDownload() {
       setCurrentDownloadInfo({ name: track.name, artists: track.artists });
 
       try {
+        // Extract year from release_date (format: YYYY-MM-DD or YYYY)
+        const releaseYear = track.release_date?.substring(0, 4);
+        
         const response = await downloadWithItemID(
           track.isrc,
           settings,
@@ -678,11 +711,12 @@ export function useDownload() {
           track.name,
           track.artists,
           track.album_name,
-          playlistName,
-          isArtistDiscography,
+          folderName,
           i + 1,
           track.spotify_id,
-          track.duration_ms
+          track.duration_ms,
+          isAlbum,
+          releaseYear
         );
 
         if (response.success) {

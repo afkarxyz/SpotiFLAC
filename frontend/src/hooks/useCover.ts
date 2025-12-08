@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { downloadCover } from "@/lib/api";
-import { getSettings } from "@/lib/settings";
+import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -22,7 +22,6 @@ export function useCover() {
     artistName: string,
     albumName?: string,
     playlistName?: string,
-    isArtistDiscography?: boolean,
     position?: number,
     trackId?: string
   ) => {
@@ -41,20 +40,27 @@ export function useCover() {
       const os = settings.operatingSystem;
       let outputDir = settings.downloadPath;
 
-      // Build output path similar to audio download
+      // Build output path using template system
+      const templateData: TemplateData = {
+        artist: artistName,
+        album: albumName,
+        title: trackName,
+        track: position,
+        playlist: playlistName,
+      };
+
+      // For playlist/discography, prepend the folder name
       if (playlistName) {
         outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+      }
 
-        if (isArtistDiscography) {
-          if (settings.albumSubfolder && albumName) {
-            outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
-          }
-        } else {
-          if (settings.artistSubfolder && artistName) {
-            outputDir = joinPath(os, outputDir, sanitizePath(artistName, os));
-          }
-          if (settings.albumSubfolder && albumName) {
-            outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
+      // Apply folder template
+      if (settings.folderTemplate) {
+        const folderPath = parseTemplate(settings.folderTemplate, templateData);
+        if (folderPath) {
+          const parts = folderPath.split("/").filter((p: string) => p.trim());
+          for (const part of parts) {
+            outputDir = joinPath(os, outputDir, sanitizePath(part, os));
           }
         }
       }
@@ -64,7 +70,7 @@ export function useCover() {
         track_name: trackName,
         artist_name: artistName,
         output_dir: outputDir,
-        filename_format: settings.filenameFormat,
+        filename_format: settings.filenameTemplate || "{title}",
         track_number: settings.trackNumber,
         position: position || 0,
       });
@@ -97,8 +103,7 @@ export function useCover() {
 
   const handleDownloadAllCovers = async (
     tracks: TrackMetadata[],
-    playlistName?: string,
-    isArtistDiscography?: boolean
+    playlistName?: string
   ) => {
     if (tracks.length === 0) {
       toast.error("No tracks to download covers");
@@ -135,19 +140,27 @@ export function useCover() {
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
 
+        // Build output path using template system
+        const templateData: TemplateData = {
+          artist: track.artists,
+          album: track.album_name,
+          title: track.name,
+          track: i + 1,
+          playlist: playlistName,
+        };
+
+        // For playlist/discography, prepend the folder name
         if (playlistName) {
           outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+        }
 
-          if (isArtistDiscography) {
-            if (settings.albumSubfolder && track.album_name) {
-              outputDir = joinPath(os, outputDir, sanitizePath(track.album_name, os));
-            }
-          } else {
-            if (settings.artistSubfolder && track.artists) {
-              outputDir = joinPath(os, outputDir, sanitizePath(track.artists, os));
-            }
-            if (settings.albumSubfolder && track.album_name) {
-              outputDir = joinPath(os, outputDir, sanitizePath(track.album_name, os));
+        // Apply folder template
+        if (settings.folderTemplate) {
+          const folderPath = parseTemplate(settings.folderTemplate, templateData);
+          if (folderPath) {
+            const parts = folderPath.split("/").filter((p: string) => p.trim());
+            for (const part of parts) {
+              outputDir = joinPath(os, outputDir, sanitizePath(part, os));
             }
           }
         }
@@ -157,7 +170,7 @@ export function useCover() {
           track_name: track.name,
           artist_name: track.artists,
           output_dir: outputDir,
-          filename_format: settings.filenameFormat,
+          filename_format: settings.filenameTemplate || "{title}",
           track_number: settings.trackNumber,
           position: i + 1,
         });

@@ -131,6 +131,9 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 	if req.OutputDir == "" {
 		req.OutputDir = "."
+	} else {
+		// Sanitize output directory path to remove invalid characters
+		req.OutputDir = backend.SanitizeFolderPath(req.OutputDir)
 	}
 
 	if req.AudioFormat == "" {

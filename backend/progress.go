@@ -264,6 +264,13 @@ func UpdateItemProgress(id string, progress, speed float64) {
 	}
 }
 
+// GetCurrentItemID returns the ID of the currently downloading item
+func GetCurrentItemID() string {
+	currentItemLock.RLock()
+	defer currentItemLock.RUnlock()
+	return currentItemID
+}
+
 // CompleteDownloadItem marks an item as completed
 func CompleteDownloadItem(id, filePath string, finalSize float64) {
 	downloadQueueLock.Lock()
