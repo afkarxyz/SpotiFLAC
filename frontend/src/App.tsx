@@ -332,7 +332,7 @@ function App() {
           }
           onCheckAvailability={availability.checkAvailability}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name)}
-          onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name)}
+          onDownloadAll={() => download.handleDownloadAll(track_list)}
           onDownloadSelected={() =>
             download.handleDownloadSelected(selectedTracks, track_list, album_info.name)
           }
