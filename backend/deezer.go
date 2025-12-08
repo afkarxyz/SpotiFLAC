@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -229,24 +230,42 @@ func (d *DeezerDownloader) DownloadCoverArt(coverURL, filepath string) error {
 func buildFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
 	var filename string
 
-	// Build base filename based on format
-	switch format {
-	case "artist-title":
-		filename = fmt.Sprintf("%s - %s", artist, title)
-	case "title":
-		filename = title
-	default: // "title-artist"
-		filename = fmt.Sprintf("%s - %s", title, artist)
+	// Determine track number to use
+	numberToUse := position
+	if useAlbumTrackNumber && trackNumber > 0 {
+		numberToUse = trackNumber
 	}
 
-	// Add track number prefix if enabled
-	if includeTrackNumber && position > 0 {
-		// Use album track number if in album folder structure, otherwise use playlist position
-		numberToUse := position
-		if useAlbumTrackNumber && trackNumber > 0 {
-			numberToUse = trackNumber
+	// Check if format is a template (contains {})
+	if strings.Contains(format, "{") {
+		filename = format
+		filename = strings.ReplaceAll(filename, "{title}", title)
+		filename = strings.ReplaceAll(filename, "{artist}", artist)
+
+		// Handle track number - if numberToUse is 0, remove {track} and surrounding separators
+		if numberToUse > 0 {
+			filename = strings.ReplaceAll(filename, "{track}", fmt.Sprintf("%02d", numberToUse))
+		} else {
+			// Remove {track} with common separators
+			filename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(filename, "")
+			filename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(filename, "")
+			filename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(filename, "")
 		}
-		filename = fmt.Sprintf("%02d. %s", numberToUse, filename)
+	} else {
+		// Legacy format support
+		switch format {
+		case "artist-title":
+			filename = fmt.Sprintf("%s - %s", artist, title)
+		case "title":
+			filename = title
+		default: // "title-artist"
+			filename = fmt.Sprintf("%s - %s", title, artist)
+		}
+
+		// Add track number prefix if enabled (legacy behavior)
+		if includeTrackNumber && position > 0 {
+			filename = fmt.Sprintf("%02d. %s", numberToUse, filename)
+		}
 	}
 
 	return filename + ".flac"

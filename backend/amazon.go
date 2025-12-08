@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -390,18 +391,37 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat st
 
 		// Build filename based on format settings
 		var newFilename string
-		switch filenameFormat {
-		case "artist-title":
-			newFilename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
-		case "title":
-			newFilename = safeTitle
-		default: // "title-artist"
-			newFilename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
-		}
 
-		// Add track number prefix if enabled
-		if includeTrackNumber && position > 0 {
-			newFilename = fmt.Sprintf("%02d. %s", position, newFilename)
+		// Check if format is a template (contains {})
+		if strings.Contains(filenameFormat, "{") {
+			newFilename = filenameFormat
+			newFilename = strings.ReplaceAll(newFilename, "{title}", safeTitle)
+			newFilename = strings.ReplaceAll(newFilename, "{artist}", safeArtist)
+
+			// Handle track number - if position is 0, remove {track} and surrounding separators
+			if position > 0 {
+				newFilename = strings.ReplaceAll(newFilename, "{track}", fmt.Sprintf("%02d", position))
+			} else {
+				// Remove {track} with common separators
+				newFilename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(newFilename, "")
+				newFilename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(newFilename, "")
+				newFilename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(newFilename, "")
+			}
+		} else {
+			// Legacy format support
+			switch filenameFormat {
+			case "artist-title":
+				newFilename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
+			case "title":
+				newFilename = safeTitle
+			default: // "title-artist"
+				newFilename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
+			}
+
+			// Add track number prefix if enabled (legacy behavior)
+			if includeTrackNumber && position > 0 {
+				newFilename = fmt.Sprintf("%02d. %s", position, newFilename)
+			}
 		}
 
 		newFilename = newFilename + ".flac"

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -55,19 +56,36 @@ func buildCoverFilename(trackName, artistName, filenameFormat string, includeTra
 
 	var filename string
 
-	// Build base filename based on format
-	switch filenameFormat {
-	case "artist-title":
-		filename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
-	case "title":
-		filename = safeTitle
-	default: // "title-artist"
-		filename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
-	}
+	// Check if format is a template (contains {})
+	if strings.Contains(filenameFormat, "{") {
+		filename = filenameFormat
+		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
+		filename = strings.ReplaceAll(filename, "{artist}", safeArtist)
 
-	// Add track number prefix if enabled
-	if includeTrackNumber && position > 0 {
-		filename = fmt.Sprintf("%02d. %s", position, filename)
+		// Handle track number - if position is 0, remove {track} and surrounding separators
+		if position > 0 {
+			filename = strings.ReplaceAll(filename, "{track}", fmt.Sprintf("%02d", position))
+		} else {
+			// Remove {track} with common separators
+			filename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(filename, "")
+			filename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(filename, "")
+			filename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(filename, "")
+		}
+	} else {
+		// Legacy format support
+		switch filenameFormat {
+		case "artist-title":
+			filename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
+		case "title":
+			filename = safeTitle
+		default: // "title-artist"
+			filename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
+		}
+
+		// Add track number prefix if enabled (legacy behavior)
+		if includeTrackNumber && position > 0 {
+			filename = fmt.Sprintf("%02d. %s", position, filename)
+		}
 	}
 
 	return filename + ".jpg"
@@ -102,6 +120,8 @@ func (c *CoverClient) DownloadCover(req CoverDownloadRequest) (*CoverDownloadRes
 	outputDir := req.OutputDir
 	if outputDir == "" {
 		outputDir = GetDefaultMusicPath()
+	} else {
+		outputDir = SanitizeFolderPath(outputDir)
 	}
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {

@@ -55,7 +55,7 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.6";
+  const CURRENT_VERSION = "6.7";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -325,16 +325,16 @@ function App() {
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
           onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, false, position)
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, position)
           }
           onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId) =>
-            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, false, position, trackId)
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, position, trackId)
           }
           onCheckAvailability={availability.checkAvailability}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name)}
-          onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name)}
+          onDownloadAll={() => download.handleDownloadAll(track_list, undefined, true)}
           onDownloadSelected={() =>
-            download.handleDownloadSelected(selectedTracks, track_list, album_info.name)
+            download.handleDownloadSelected(selectedTracks, track_list, undefined, true)
           }
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}
@@ -391,10 +391,10 @@ function App() {
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
           onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, false, position)
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.owner.name, position)
           }
           onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId) =>
-            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.owner.name, false, position, trackId)
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.owner.name, position, trackId)
           }
           onCheckAvailability={availability.checkAvailability}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlist_info.owner.name)}
@@ -462,17 +462,17 @@ function App() {
           onToggleTrack={toggleTrackSelection}
           onToggleSelectAll={toggleSelectAll}
           onDownloadTrack={download.handleDownloadTrack}
-          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, isArtistDiscography, position) =>
-            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, isArtistDiscography, position)
+          onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position) =>
+            lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, position)
           }
-          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, isArtistDiscography, position, trackId) =>
-            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, isArtistDiscography, position, trackId)
+          onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId) =>
+            cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, position, trackId)
           }
           onCheckAvailability={availability.checkAvailability}
-          onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name, true)}
-          onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name, true)}
+          onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name)}
+          onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name)}
           onDownloadSelected={() =>
-            download.handleDownloadSelected(selectedTracks, track_list, artist_info.name, true)
+            download.handleDownloadSelected(selectedTracks, track_list, artist_info.name)
           }
           onStopDownload={download.handleStopDownload}
           onOpenFolder={handleOpenFolder}
