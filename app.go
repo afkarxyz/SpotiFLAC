@@ -296,6 +296,58 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		filename = strings.TrimPrefix(filename, "EXISTS:")
 	}
 
+	// Embed lyrics after successful download (only for new downloads with Spotify ID)
+	if !alreadyExists && req.SpotifyID != "" && strings.HasSuffix(filename, ".flac") {
+		go func(filePath, spotifyID, trackName, artistName string) {
+			fmt.Printf("\n========== LYRICS FETCH START ==========\n")
+			fmt.Printf("Spotify ID: %s\n", spotifyID)
+			fmt.Printf("Track: %s\n", trackName)
+			fmt.Printf("Artist: %s\n", artistName)
+			fmt.Println("Searching all sources...")
+			
+			lyricsClient := backend.NewLyricsClient()
+			
+			// Try all sources with fallbacks
+			lyricsResp, source, err := lyricsClient.FetchLyricsAllSources(spotifyID, trackName, artistName)
+			if err != nil {
+				fmt.Printf("❌ All sources failed: %v\n", err)
+				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
+				return
+			}
+			
+			if lyricsResp == nil || len(lyricsResp.Lines) == 0 {
+				fmt.Println("❌ No lyrics content found")
+				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
+				return
+			}
+			
+			fmt.Printf("✓ Lyrics found from: %s\n", source)
+			fmt.Printf("✓ Sync type: %s\n", lyricsResp.SyncType)
+			fmt.Printf("✓ Total lines: %d\n", len(lyricsResp.Lines))
+			
+			lyrics := lyricsClient.ConvertToLRC(lyricsResp, trackName, artistName)
+			if lyrics == "" {
+				fmt.Println("❌ No lyrics content to embed")
+				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
+				return
+			}
+			
+			// Show full lyrics in console for debugging
+			fmt.Printf("\n--- Full LRC Content ---\n")
+			fmt.Println(lyrics)
+			fmt.Printf("--- End LRC Content ---\n\n")
+			
+			fmt.Printf("Embedding into: %s\n", filePath)
+			if err := backend.EmbedLyricsOnly(filePath, lyrics); err != nil {
+				fmt.Printf("❌ Failed to embed lyrics: %v\n", err)
+				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
+			} else {
+				fmt.Printf("✓ Lyrics embedded successfully!\n")
+				fmt.Printf("========== LYRICS FETCH END (SUCCESS) ==========\n\n")
+			}
+		}(filename, req.SpotifyID, req.TrackName, req.ArtistName)
+	}
+
 	message := "Download completed successfully"
 	if alreadyExists {
 		message = "File already exists"

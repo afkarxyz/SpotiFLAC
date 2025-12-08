@@ -19,6 +19,7 @@ type Metadata struct {
 	TrackNumber int
 	DiscNumber  int
 	ISRC        string
+	Lyrics      string
 }
 
 func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
@@ -57,6 +58,9 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	}
 	if metadata.ISRC != "" {
 		_ = cmt.Add(flacvorbis.FIELD_ISRC, metadata.ISRC)
+	}
+	if metadata.Lyrics != "" {
+		_ = cmt.Add("LYRICS", metadata.Lyrics) // Or "UNSYNCEDLYRICS" for unsynced
 	}
 
 	cmtBlock := cmt.Marshal()
@@ -111,6 +115,62 @@ func embedCoverArt(f *flac.File, coverPath string) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// EmbedLyricsOnly adds lyrics to a FLAC file while preserving existing metadata
+func EmbedLyricsOnly(filepath string, lyrics string) error {
+	if lyrics == "" {
+		return nil
+	}
+	f, err := flac.ParseFile(filepath)
+	if err != nil {
+		return fmt.Errorf("failed to parse FLAC file: %w", err)
+	}
+
+	var cmtIdx = -1
+	var existingCmt *flacvorbis.MetaDataBlockVorbisComment
+	for idx, block := range f.Meta {
+		if block.Type == flac.VorbisComment {
+			cmtIdx = idx
+			existingCmt, err = flacvorbis.ParseFromMetaDataBlock(*block)
+			if err != nil {
+				existingCmt = nil
+			}
+			break
+		}
+	}
+
+	// Create new comment block, preserving existing comments
+	cmt := flacvorbis.New()
+
+	// Copy existing comments except LYRICS
+	if existingCmt != nil {
+		for _, comment := range existingCmt.Comments {
+			parts := strings.SplitN(comment, "=", 2)
+			if len(parts) == 2 {
+				fieldName := strings.ToUpper(parts[0])
+				if fieldName != "LYRICS" && fieldName != "UNSYNCEDLYRICS" && fieldName != "SYNCEDLYRICS" {
+					_ = cmt.Add(parts[0], parts[1])
+				}
+			}
+		}
+	}
+
+	// Add lyrics
+	_ = cmt.Add("LYRICS", lyrics)
+
+	cmtBlock := cmt.Marshal()
+	if cmtIdx < 0 {
+		f.Meta = append(f.Meta, &cmtBlock)
+	} else {
+		f.Meta[cmtIdx] = &cmtBlock
+	}
+
+	if err := f.Save(filepath); err != nil {
+		return fmt.Errorf("failed to save FLAC file: %w", err)
+	}
+
+	return nil
 }
 
 // ReadISRCFromFile reads ISRC metadata from a FLAC file

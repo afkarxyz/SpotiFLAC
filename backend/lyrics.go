@@ -6,11 +6,25 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+// LRCLibResponse represents the LRCLIB API response
+type LRCLibResponse struct {
+	ID            int     `json:"id"`
+	Name          string  `json:"name"`
+	TrackName     string  `json:"trackName"`
+	ArtistName    string  `json:"artistName"`
+	AlbumName     string  `json:"albumName"`
+	Duration      float64 `json:"duration"`
+	Instrumental  bool    `json:"instrumental"`
+	PlainLyrics   string  `json:"plainLyrics"`
+	SyncedLyrics  string  `json:"syncedLyrics"`
+}
 
 // LyricsLine represents a single line of lyrics
 type LyricsLine struct {
@@ -59,13 +73,215 @@ func NewLyricsClient() *LyricsClient {
 	}
 }
 
-// FetchLyrics fetches lyrics from the Spotify Lyrics API
+// FetchLyricsWithMetadata fetches lyrics using track name and artist (for LRCLIB fallback)
+func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName string) (*LyricsResponse, error) {
+	// Try LRCLIB API
+	apiURL := fmt.Sprintf("https://lrclib.net/api/get?artist_name=%s&track_name=%s",
+		url.QueryEscape(artistName),
+		url.QueryEscape(trackName))
+
+	resp, err := c.httpClient.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch from LRCLIB: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("LRCLIB returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read LRCLIB response: %v", err)
+	}
+
+	var lrcLibResp LRCLibResponse
+	if err := json.Unmarshal(body, &lrcLibResp); err != nil {
+		return nil, fmt.Errorf("failed to parse LRCLIB response: %v", err)
+	}
+
+	// Convert LRCLIB response to our LyricsResponse format
+	return c.convertLRCLibToLyricsResponse(&lrcLibResp), nil
+}
+
+// convertLRCLibToLyricsResponse converts LRCLIB response to our standard format
+func (c *LyricsClient) convertLRCLibToLyricsResponse(lrcLib *LRCLibResponse) *LyricsResponse {
+	resp := &LyricsResponse{
+		Error:    false,
+		SyncType: "LINE_SYNCED",
+		Lines:    []LyricsLine{},
+	}
+
+	// Prefer synced lyrics, fall back to plain
+	lyricsText := lrcLib.SyncedLyrics
+	if lyricsText == "" {
+		lyricsText = lrcLib.PlainLyrics
+		resp.SyncType = "UNSYNCED"
+	}
+
+	if lyricsText == "" {
+		resp.Error = true
+		return resp
+	}
+
+	// Parse synced lyrics format [mm:ss.xx] text
+	lines := strings.Split(lyricsText, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		// Check if line has timestamp [mm:ss.xx]
+		if strings.HasPrefix(line, "[") && len(line) > 10 {
+			closeBracket := strings.Index(line, "]")
+			if closeBracket > 0 {
+				timestamp := line[1:closeBracket]
+				words := strings.TrimSpace(line[closeBracket+1:])
+
+				// Convert [mm:ss.xx] to milliseconds
+				ms := lrcTimestampToMs(timestamp)
+				resp.Lines = append(resp.Lines, LyricsLine{
+					StartTimeMs: fmt.Sprintf("%d", ms),
+					Words:       words,
+				})
+				continue
+			}
+		}
+
+		// Plain lyrics line (no timestamp)
+		resp.Lines = append(resp.Lines, LyricsLine{
+			StartTimeMs: "0",
+			Words:       line,
+		})
+	}
+
+	return resp
+}
+
+// lrcTimestampToMs converts LRC timestamp [mm:ss.xx] to milliseconds
+func lrcTimestampToMs(timestamp string) int64 {
+	var minutes, seconds, centiseconds int64
+	// Try parsing mm:ss.xx format
+	n, _ := fmt.Sscanf(timestamp, "%d:%d.%d", &minutes, &seconds, &centiseconds)
+	if n >= 2 {
+		return minutes*60*1000 + seconds*1000 + centiseconds*10
+	}
+	return 0
+}
+
+// FetchLyricsFromLRCLibSearch fetches lyrics using LRCLIB search API
+func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string) (*LyricsResponse, error) {
+	query := fmt.Sprintf("%s %s", artistName, trackName)
+	apiURL := fmt.Sprintf("https://lrclib.net/api/search?q=%s", url.QueryEscape(query))
+
+	resp, err := c.httpClient.Get(apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read failed: %v", err)
+	}
+
+	var results []LRCLibResponse
+	if err := json.Unmarshal(body, &results); err != nil {
+		return nil, fmt.Errorf("parse failed: %v", err)
+	}
+
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no results found")
+	}
+
+	// Find best match - prefer one with synced lyrics
+	var best *LRCLibResponse
+	for i := range results {
+		if results[i].SyncedLyrics != "" {
+			best = &results[i]
+			break
+		}
+		if best == nil && results[i].PlainLyrics != "" {
+			best = &results[i]
+		}
+	}
+
+	if best == nil {
+		best = &results[0]
+	}
+
+	return c.convertLRCLibToLyricsResponse(best), nil
+}
+
+// simplifyTrackName removes common suffixes like "(feat. X)", "(Remastered)", etc.
+func simplifyTrackName(name string) string {
+	// Remove content in parentheses
+	if idx := strings.Index(name, "("); idx > 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+	// Remove content after " - " (like "From the Motion Picture")
+	if idx := strings.Index(name, " - "); idx > 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+	return name
+}
+
+// FetchLyricsAllSources tries all sources to get lyrics
+func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName string) (*LyricsResponse, string, error) {
+	// 1. Try Spotify API
+	if spotifyID != "" {
+		resp, err := c.FetchLyrics(spotifyID)
+		if err == nil && resp != nil && len(resp.Lines) > 0 {
+			return resp, "Spotify", nil
+		}
+		fmt.Printf("   ↳ Spotify API: %v\n", err)
+	}
+
+	// 2. Try LRCLIB exact match
+	resp, err := c.FetchLyricsWithMetadata(trackName, artistName)
+	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
+		return resp, "LRCLIB", nil
+	}
+	fmt.Printf("   ↳ LRCLIB exact: %v\n", err)
+
+	// 3. Try LRCLIB search
+	resp, err = c.FetchLyricsFromLRCLibSearch(trackName, artistName)
+	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
+		return resp, "LRCLIB Search", nil
+	}
+	fmt.Printf("   ↳ LRCLIB search: %v\n", err)
+
+	// 4. Try with simplified track name (remove parentheses, subtitles)
+	simplifiedTrack := simplifyTrackName(trackName)
+	if simplifiedTrack != trackName {
+		fmt.Printf("   ↳ Trying simplified name: %s\n", simplifiedTrack)
+		
+		resp, err = c.FetchLyricsWithMetadata(simplifiedTrack, artistName)
+		if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
+			return resp, "LRCLIB (simplified)", nil
+		}
+
+		resp, err = c.FetchLyricsFromLRCLibSearch(simplifiedTrack, artistName)
+		if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
+			return resp, "LRCLIB Search (simplified)", nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("lyrics not found in any source")
+}
+
+// FetchLyrics fetches lyrics from the Spotify Lyrics API with LRCLIB fallback
 func (c *LyricsClient) FetchLyrics(spotifyID string) (*LyricsResponse, error) {
 	// Decode base64 API URL
 	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9zcG90aWZ5LWx5cmljcy1hcGktcGkudmVyY2VsLmFwcC8/dHJhY2tpZD0=")
-	url := fmt.Sprintf("%s%s", string(apiBase), spotifyID)
+	apiURL := fmt.Sprintf("%s%s", string(apiBase), spotifyID)
 
-	resp, err := c.httpClient.Get(url)
+	resp, err := c.httpClient.Get(apiURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch lyrics: %v", err)
 	}
