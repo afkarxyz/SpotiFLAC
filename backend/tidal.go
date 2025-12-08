@@ -611,22 +611,13 @@ func (t *TidalDownloader) DownloadAlbumArt(albumID string) ([]byte, error) {
 }
 
 func (t *TidalDownloader) DownloadFile(url, filepath string) error {
-<<<<<<< HEAD
 	// Check if this is a manifest-based download
 	if strings.HasPrefix(url, "MANIFEST:") {
 		return t.DownloadFromManifest(strings.TrimPrefix(url, "MANIFEST:"), filepath)
 	}
 
 	resp, err := t.client.Get(url)
-=======
-	// Use a separate client with a longer timeout. The default client's 60s limit
-	// causes downloads to fail on slow connections or for large Hi-Res files.
-	downloadClient := &http.Client{
-		Timeout: 5 * time.Minute, // 5 minutes for large files
-	}
 
-	resp, err := downloadClient.Get(url)
->>>>>>> feature/lyrics-embed
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
