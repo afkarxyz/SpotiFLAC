@@ -86,7 +86,6 @@ func SanitizeFolderPath(folderPath string) string {
 			continue
 		}
 
-
 		// Sanitize each folder name (but don't replace / or \ since we already normalized)
 		sanitized := sanitizeFolderName(part)
 		if sanitized != "" {
