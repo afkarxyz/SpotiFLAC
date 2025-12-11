@@ -130,7 +130,8 @@ export function Settings() {
     if (open) {
       setTempSettings(savedSettings);
     }
-  }, [open, savedSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const handleSave = () => {
     saveSettings(tempSettings);
@@ -187,12 +188,9 @@ export function Settings() {
     try {
       // Call backend to open folder selection dialog
       const selectedPath = await SelectFolder(tempSettings.downloadPath || "");
-      console.log("Selected path:", selectedPath);
-      
+
       if (selectedPath && selectedPath.trim() !== "") {
         setTempSettings((prev) => ({ ...prev, downloadPath: selectedPath }));
-      } else {
-        console.log("No folder selected or user cancelled");
       }
     } catch (error) {
       console.error("Error selecting folder:", error);

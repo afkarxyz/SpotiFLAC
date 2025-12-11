@@ -80,6 +80,12 @@ func SanitizeFolderPath(folderPath string) string {
 			continue
 		}
 
+		// Keep empty first part for absolute paths on Unix (e.g., "/Users/...")
+		if i == 0 && part == "" {
+			sanitizedParts = append(sanitizedParts, part)
+			continue
+		}
+
 		// Sanitize each folder name (but don't replace / or \ since we already normalized)
 		sanitized := sanitizeFolderName(part)
 		if sanitized != "" {
