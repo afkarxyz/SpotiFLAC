@@ -169,7 +169,13 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string) (string,
 
 func (q *QobuzDownloader) DownloadFile(url, filepath string) error {
 	fmt.Println("Starting file download...")
-	resp, err := q.client.Get(url)
+	// Use a separate client with a longer timeout. The default client's 60s limit
+	// causes downloads to fail on slow connections or for large Hi-Res files.
+	downloadClient := &http.Client{
+		Timeout: 5 * time.Minute, // 5 minutes for large files
+	}
+
+	resp, err := downloadClient.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}

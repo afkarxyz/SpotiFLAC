@@ -617,6 +617,7 @@ func (t *TidalDownloader) DownloadFile(url, filepath string) error {
 	}
 
 	resp, err := t.client.Get(url)
+
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
