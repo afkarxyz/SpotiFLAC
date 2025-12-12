@@ -80,7 +80,7 @@ func SanitizeFolderPath(folderPath string) string {
 			continue
 		}
 
-		// Keep empty string at the start for absolute paths on Unix
+		// Keep empty first part for absolute paths on Unix (e.g., "/Users/...")
 		if i == 0 && part == "" {
 			sanitizedParts = append(sanitizedParts, part)
 			continue

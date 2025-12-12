@@ -22,6 +22,7 @@ export function useDownload() {
 
   const downloadWithAutoFallback = async (
     isrc: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     settings: any,
     trackName?: string,
     artistName?: string,
@@ -32,7 +33,7 @@ export function useDownload() {
     durationMs?: number,
     releaseYear?: string
   ) => {
-    let service = settings.downloader;
+    const service = settings.downloader;
 
     const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
     const os = settings.operatingSystem;
@@ -65,7 +66,7 @@ export function useDownload() {
           outputDir = joinPath(os, outputDir, sanitizePath(part, os));
         }
       }
-      
+
       // Use album track number if template contains {album}
       if (settings.folderTemplate.includes("{album}")) {
         useAlbumTrackNumber = true;
@@ -78,6 +79,7 @@ export function useDownload() {
 
     if (service === "auto") {
       // Get all streaming URLs once from song.link API
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let streamingURLs: any = null;
       if (spotifyId) {
         try {
@@ -246,6 +248,7 @@ export function useDownload() {
 
   const downloadWithItemID = async (
     isrc: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     settings: any,
     itemID: string,
     trackName?: string,
@@ -258,7 +261,7 @@ export function useDownload() {
     isAlbum?: boolean,
     releaseYear?: string
   ) => {
-    let service = settings.downloader;
+    const service = settings.downloader;
 
     const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
     const os = settings.operatingSystem;
@@ -302,6 +305,7 @@ export function useDownload() {
 
     if (service === "auto") {
       // Get all streaming URLs once from song.link API
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let streamingURLs: any = null;
       if (spotifyId) {
         try {

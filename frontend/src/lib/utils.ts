@@ -19,10 +19,10 @@ export function sanitizePath(input: string, os: string): string {
 
 export function joinPath(os: string, ...parts: string[]): string {
   const sep = os === "Windows" ? "\\" : "/";
-  
+
   const filtered = parts.filter(Boolean);
   if (filtered.length === 0) return "";
-  
+
   const joined = filtered
     .map((p, i) => {
       // For first part, only remove trailing slashes (preserve leading slash for absolute paths)
@@ -34,7 +34,7 @@ export function joinPath(os: string, ...parts: string[]): string {
     })
     .filter(Boolean) // Remove empty strings after trimming
     .join(sep);
-  
+
   return joined;
 }
 
