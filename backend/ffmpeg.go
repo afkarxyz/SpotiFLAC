@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/ulikunitz/xz"
