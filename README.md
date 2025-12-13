@@ -16,7 +16,7 @@ Get Spotify tracks in true FLAC from Tidal, Deezer, Qobuz & Amazon Music — no 
 
 ## Screenshot
 
-![Image](https://github.com/user-attachments/assets/4da39b61-dcf8-4018-83e4-b8750a671245)
+![Image](https://github.com/user-attachments/assets/9cd9436e-9612-4153-a0bb-b6ec47320b56)
 
 ## Lossless Audio Checker
 
