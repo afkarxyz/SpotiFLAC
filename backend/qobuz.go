@@ -122,15 +122,20 @@ func (q *QobuzDownloader) SearchByISRC(isrc string) (*QobuzTrack, error) {
 func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string) (string, error) {
 	// Map quality to Qobuz quality code
 	// Qobuz uses: 5 (MP3 320), 6 (FLAC 16-bit), 7 (FLAC 24-bit), 27 (Hi-Res)
-	qualityCode := "27" // Default to Hi-Res
+	qualityCode := quality // Use the provided quality parameter
+	if qualityCode == "" {
+		qualityCode = "6" // Default to FLAC 16-bit if not specified
+	}
 
-	fmt.Printf("Getting download URL for track ID: %d\n", trackID)
+	fmt.Printf("Getting download URL for track ID: %d with requested quality: %s\n", trackID, qualityCode)
+	fmt.Printf("Quality codes: 6=FLAC 16-bit, 7=FLAC 24-bit, 27=Hi-Res\n")
 
 	// Decode base64 API URLs
 	primaryBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9kYWIueWVldC5zdS9hcGkvc3RyZWFtP3RyYWNrSWQ9")
 
 	// Try primary API first
 	primaryURL := fmt.Sprintf("%s%d&quality=%s", string(primaryBase), trackID, qualityCode)
+	fmt.Printf("Qobuz API URL: %s\n", primaryURL)
 
 	resp, err := q.client.Get(primaryURL)
 	if err == nil && resp.StatusCode == 200 {

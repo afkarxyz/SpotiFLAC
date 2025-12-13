@@ -254,7 +254,12 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 	case "qobuz":
 		downloader := backend.NewQobuzDownloader()
-		filename, err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
+		// Default to "6" (FLAC 16-bit) for Qobuz if not specified
+		quality := req.AudioFormat
+		if quality == "" {
+			quality = "6"
+		}
+		filename, err = downloader.DownloadByISRC(req.ISRC, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.UseAlbumTrackNumber)
 
 	default: // deezer
 		downloader := backend.NewDeezerDownloader()

@@ -26,7 +26,10 @@ export interface Settings {
   trackNumber: boolean;
   sfxEnabled: boolean;
   embedLyrics: boolean;
-  operatingSystem: "Windows" | "linux/MacOS"
+  operatingSystem: "Windows" | "linux/MacOS";
+  // Quality settings for specific sources
+  tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
+  qobuzQuality: "6" | "7" | "27";
 }
 
 // Folder preset templates
@@ -83,7 +86,9 @@ export const DEFAULT_SETTINGS: Settings = {
   trackNumber: false,
   sfxEnabled: true,
   embedLyrics: false,
-  operatingSystem: detectOS()
+  operatingSystem: detectOS(),
+  tidalQuality: "LOSSLESS", // Default: 16-bit lossless
+  qobuzQuality: "6" // Default: FLAC 16-bit
 };
 
 export const FONT_OPTIONS: { value: FontFamily; label: string; fontFamily: string }[] = [
@@ -160,6 +165,13 @@ export function getSettings(): Settings {
       }
       // Always use detected OS (don't persist it)
       parsed.operatingSystem = detectOS();
+      // Set default quality if not present
+      if (!('tidalQuality' in parsed)) {
+        parsed.tidalQuality = "LOSSLESS";
+      }
+      if (!('qobuzQuality' in parsed)) {
+        parsed.qobuzQuality = "6";
+      }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (error) {

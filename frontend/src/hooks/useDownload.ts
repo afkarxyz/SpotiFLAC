@@ -115,6 +115,7 @@ export function useDownload() {
             service_url: streamingURLs.tidal_url,
             duration: durationSeconds,
             item_id: itemID, // Pass the same itemID through all attempts
+            audio_format: settings.tidalQuality || "LOSSLESS", // Use default LOSSLESS for auto mode
           });
 
           if (tidalResponse.success) {
@@ -209,6 +210,7 @@ export function useDownload() {
             embed_lyrics: settings.embedLyrics,
             duration: durationMs ? Math.round(durationMs / 1000) : undefined,
             item_id: itemID,
+            audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode
           });
 
       // If Qobuz also failed, mark the item as failed
@@ -223,6 +225,14 @@ export function useDownload() {
     // Single service download (not auto-fallback)
     // Convert duration from ms to seconds for backend
     const durationSecondsForFallback = durationMs ? Math.round(durationMs / 1000) : undefined;
+
+    // Determine audio format based on service
+    let audioFormat: string | undefined;
+    if (service === "tidal") {
+      audioFormat = settings.tidalQuality || "LOSSLESS";
+    } else if (service === "qobuz") {
+      audioFormat = settings.qobuzQuality || "6";
+    }
 
     const singleServiceResponse = await downloadTrack({
       isrc,
@@ -240,6 +250,7 @@ export function useDownload() {
       embed_lyrics: settings.embedLyrics,
       duration: durationSecondsForFallback,
       item_id: itemID, // Pass itemID for tracking
+      audio_format: audioFormat,
     });
 
     // Mark as failed if download failed for single-service attempt
@@ -344,6 +355,7 @@ export function useDownload() {
             service_url: streamingURLs.tidal_url,
             duration: durationSeconds,
             item_id: itemID,
+            audio_format: settings.tidalQuality || "LOSSLESS", // Use default LOSSLESS for auto mode
           });
 
           if (tidalResponse.success) {
@@ -429,6 +441,7 @@ export function useDownload() {
             embed_lyrics: settings.embedLyrics,
             duration: durationMs ? Math.round(durationMs / 1000) : undefined,
             item_id: itemID,
+            audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode
           });
 
       // If Qobuz also failed, mark the item as failed
@@ -442,6 +455,14 @@ export function useDownload() {
 
     // Single service download
     const durationSecondsForFallback = durationMs ? Math.round(durationMs / 1000) : undefined;
+
+    // Determine audio format based on service
+    let audioFormat: string | undefined;
+    if (service === "tidal") {
+      audioFormat = settings.tidalQuality || "LOSSLESS";
+    } else if (service === "qobuz") {
+      audioFormat = settings.qobuzQuality || "6";
+    }
 
     const singleServiceResponse = await downloadTrack({
       isrc,
@@ -459,6 +480,7 @@ export function useDownload() {
       embed_lyrics: settings.embedLyrics,
       duration: durationSecondsForFallback,
       item_id: itemID,
+      audio_format: audioFormat,
     });
 
     // Mark as failed if download failed for single-service attempt

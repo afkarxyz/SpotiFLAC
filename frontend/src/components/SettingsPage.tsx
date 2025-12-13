@@ -221,29 +221,62 @@ export function SettingsPage() {
           {/* Source Selection */}
           <div className="space-y-2">
             <Label htmlFor="downloader" className="text-sm">Source</Label>
-            <Select
-              value={tempSettings.downloader}
-              onValueChange={(value: "auto" | "deezer" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
-            >
-              <SelectTrigger id="downloader" className="h-9">
-                <SelectValue placeholder="Select a source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto</SelectItem>
-                <SelectItem value="tidal">
-                  <span className="flex items-center"><TidalIcon />Tidal</span>
-                </SelectItem>
-                <SelectItem value="deezer">
-                  <span className="flex items-center"><DeezerIcon />Deezer</span>
-                </SelectItem>
-                <SelectItem value="qobuz">
-                  <span className="flex items-center"><QobuzIcon />Qobuz</span>
-                </SelectItem>
-                <SelectItem value="amazon">
-                  <span className="flex items-center"><AmazonIcon />Amazon Music</span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select
+                value={tempSettings.downloader}
+                onValueChange={(value: "auto" | "deezer" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
+              >
+                <SelectTrigger id="downloader" className="h-9 w-fit">
+                  <SelectValue placeholder="Select a source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="tidal">
+                    <span className="flex items-center"><TidalIcon />Tidal</span>
+                  </SelectItem>
+                  <SelectItem value="deezer">
+                    <span className="flex items-center"><DeezerIcon />Deezer</span>
+                  </SelectItem>
+                  <SelectItem value="qobuz">
+                    <span className="flex items-center"><QobuzIcon />Qobuz</span>
+                  </SelectItem>
+                  <SelectItem value="amazon">
+                    <span className="flex items-center"><AmazonIcon />Amazon Music</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Quality dropdown for Tidal */}
+              {tempSettings.downloader === "tidal" && (
+                <Select
+                  value={tempSettings.tidalQuality}
+                  onValueChange={(value: "LOSSLESS" | "HI_RES_LOSSLESS") => setTempSettings((prev) => ({ ...prev, tidalQuality: value }))}
+                >
+                  <SelectTrigger className="h-9 w-fit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOSSLESS">Lossless (16-bit/CD Quality)</SelectItem>
+                    <SelectItem value="HI_RES_LOSSLESS">Hi-Res Lossless (24-bit/48kHz+)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              {/* Quality dropdown for Qobuz */}
+              {tempSettings.downloader === "qobuz" && (
+                <Select
+                  value={tempSettings.qobuzQuality}
+                  onValueChange={(value: "6" | "7" | "27") => setTempSettings((prev) => ({ ...prev, qobuzQuality: value }))}
+                >
+                  <SelectTrigger className="h-9 w-fit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="6">FLAC 16-bit (CD Quality)</SelectItem>
+                    <SelectItem value="7">FLAC 24-bit</SelectItem>
+                    <SelectItem value="27">Hi-Res (24-bit/96kHz+)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
 
           {/* Embed Lyrics */}
@@ -256,7 +289,7 @@ export function SettingsPage() {
             />
           </div>
 
-          <div className="border-t pt-4" />
+          <div className="border-t pt-2" />
 
           {/* Folder Structure */}
           <div className="space-y-2">
@@ -306,7 +339,7 @@ export function SettingsPage() {
             )}
           </div>
 
-          <div className="border-t pt-4" />
+          <div className="border-t pt-2" />
 
           {/* Filename Format */}
           <div className="space-y-2">

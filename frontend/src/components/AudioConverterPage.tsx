@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -11,10 +11,10 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
-  Loader2,
   Trash2,
   FileMusic,
 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import {
   IsFFmpegInstalled,
   DownloadFFmpeg,
@@ -47,9 +47,9 @@ export function AudioConverterPage() {
   const [ffmpegInstalled, setFfmpegInstalled] = useState<boolean>(false);
   const [installingFfmpeg, setInstallingFfmpeg] = useState(false);
   const [files, setFiles] = useState<AudioFile[]>(() => {
-    // Initialize from localStorage synchronously
+    // Initialize from sessionStorage synchronously
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.files && Array.isArray(parsed.files) && parsed.files.length > 0) {
@@ -63,7 +63,7 @@ export function AudioConverterPage() {
   });
   const [outputFormat, setOutputFormat] = useState<"mp3" | "m4a">(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.outputFormat === "mp3" || parsed.outputFormat === "m4a") {
@@ -77,7 +77,7 @@ export function AudioConverterPage() {
   });
   const [bitrate, setBitrate] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = sessionStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.bitrate) {
@@ -92,38 +92,47 @@ export function AudioConverterPage() {
   const [converting, setConverting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingFFmpeg, setIsDraggingFFmpeg] = useState(false);
-  const isInitialMount = useRef(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Helper function to save state
+  // Helper function to save state to sessionStorage
   const saveState = useCallback((stateToSave: { files: AudioFile[]; outputFormat: "mp3" | "m4a"; bitrate: string }) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (err) {
       console.error("Failed to save state:", err);
     }
   }, []);
 
-  // Load saved state from localStorage on mount (only for ffmpeg check)
+  // Load saved state from sessionStorage on mount (only for ffmpeg check)
   useEffect(() => {
     checkFfmpegInstallation();
   }, []);
 
-  // Save state to localStorage whenever files, outputFormat, or bitrate changes
-  // Skip on initial mount to avoid overwriting with empty state
+  // Save state to sessionStorage whenever files, outputFormat, or bitrate changes
   useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
     saveState({ files, outputFormat, bitrate });
   }, [files, outputFormat, bitrate, saveState]);
 
-  // Save state on unmount as well
+  // Detect fullscreen/maximized window
   useEffect(() => {
-    return () => {
-      saveState({ files, outputFormat, bitrate });
+    const checkFullscreen = () => {
+      // Check if window is maximized or fullscreen
+      // For Wails, we can check if window height is close to screen height
+      const isMaximized = window.innerHeight >= window.screen.height * 0.9;
+      setIsFullscreen(isMaximized);
     };
-  }, [files, outputFormat, bitrate, saveState]);
+
+    checkFullscreen();
+    window.addEventListener("resize", checkFullscreen);
+    
+    // Also check on window focus in case user maximizes externally
+    window.addEventListener("focus", checkFullscreen);
+
+    return () => {
+      window.removeEventListener("resize", checkFullscreen);
+      window.removeEventListener("focus", checkFullscreen);
+    };
+  }, []);
 
   const checkFfmpegInstallation = async () => {
     try {
@@ -373,7 +382,7 @@ export function AudioConverterPage() {
   const getStatusIcon = (status: AudioFile["status"]) => {
     switch (status) {
       case "converting":
-        return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+        return <Spinner className="h-4 w-4 text-primary" />;
       case "success":
         return <CheckCircle2 className="h-4 w-4 text-green-500" />;
       case "error":
@@ -390,13 +399,15 @@ export function AudioConverterPage() {
   // Show FFmpeg installation prompt if not installed
   if (ffmpegInstalled === false) {
     return (
-      <div className="space-y-6">
+      <div className={`space-y-6 ${isFullscreen ? "h-full flex flex-col" : ""}`}>
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold">Audio Converter</h1>
         </div>
 
         <div
-          className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${
+          className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all ${
+            isFullscreen ? "flex-1 min-h-[400px]" : "h-[400px]"
+          } ${
             isDraggingFFmpeg
               ? "border-primary bg-primary/10"
               : "border-muted-foreground/30"
@@ -433,7 +444,7 @@ export function AudioConverterPage() {
           >
             {installingFfmpeg ? (
               <>
-                <Loader2 className="h-5 w-5" />
+                <Spinner className="h-5 w-5" />
                 Installing FFmpeg...
               </>
             ) : (
@@ -449,7 +460,7 @@ export function AudioConverterPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${isFullscreen ? "h-full flex flex-col" : ""}`}>
       {/* Header */}
       <div className="flex items-center gap-4">
         <h1 className="text-2xl font-bold">Audio Converter</h1>
@@ -457,7 +468,9 @@ export function AudioConverterPage() {
 
       {/* Drop Zone / File List */}
       <div
-        className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${
+        className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all ${
+          isFullscreen ? "flex-1 min-h-[400px]" : "h-[400px]"
+        } ${
           isDragging
             ? "border-primary bg-primary/10"
             : "border-muted-foreground/30"
@@ -599,15 +612,15 @@ export function AudioConverterPage() {
             </div>
 
               {/* Convert Button */}
-              <div className="flex justify-end pt-4 border-t shrink-0">
-              <Button
-                onClick={handleConvert}
-                disabled={converting || convertableCount === 0}
-                size="lg"
-              >
+              <div className="flex justify-center pt-4 border-t shrink-0">
+                <Button
+                  onClick={handleConvert}
+                  disabled={converting || convertableCount === 0}
+                  size="lg"
+                >
                 {converting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Spinner className="h-4 w-4" />
                     Converting...
                   </>
                 ) : (

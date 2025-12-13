@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,8 +8,7 @@ import {
   TrendingUp,
   FileAudio,
   Clock,
-  Gauge,
-  HardDrive
+  Gauge
 } from "lucide-react";
 import type { AnalysisResult } from "@/types/api";
 
@@ -80,30 +79,13 @@ export function AudioAnalysis({
   // Calculate Nyquist frequency (half of sample rate)
   const nyquistFreq = result.sample_rate / 2;
 
-  // Calculate approximate data size (uncompressed PCM)
-  // Formula: sample_rate * channels * (bits_per_sample / 8) * duration
-  const dataSizeBytes = result.sample_rate * result.channels * (result.bits_per_sample / 8) * result.duration;
-  const dataSizeMB = dataSizeBytes / (1024 * 1024);
-
-  const formatDataSize = (mb: number) => {
-    if (mb >= 1024) {
-      return `${(mb / 1024).toFixed(2)} GB`;
-    }
-    return `${mb.toFixed(2)} MB`;
-  };
-
   return (
     <Card>
       <CardHeader>
-        <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Audio Quality Analysis
-          </CardTitle>
-          <CardDescription>
-            Technical analysis of audio file properties
-          </CardDescription>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5" />
+          Audio Quality Analysis
+        </CardTitle>
       </CardHeader>
 
       <CardContent className="px-6 space-y-6">
@@ -148,14 +130,6 @@ export function AudioAnalysis({
               Nyquist Frequency
             </div>
             <p className="font-semibold">{(nyquistFreq / 1000).toFixed(1)} kHz</p>
-          </div>
-
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <HardDrive className="h-3 w-3" />
-              Data Size
-            </div>
-            <p className="font-semibold">{formatDataSize(dataSizeMB)}</p>
           </div>
         </div>
 
