@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // BuildExpectedFilename builds the expected filename based on track metadata and settings
@@ -52,12 +54,63 @@ func BuildExpectedFilename(trackName, artistName, filenameFormat string, include
 
 // sanitizeFilename removes invalid characters from filename
 func sanitizeFilename(name string) string {
+	// First, remove invalid filesystem characters
 	re := regexp.MustCompile(`[<>:"/\\|?*]`)
 	sanitized := re.ReplaceAllString(name, "_")
+	
+	// Remove control characters (0x00-0x1F, 0x7F)
+	var result strings.Builder
+	for _, r := range sanitized {
+		// Keep printable characters and valid Unicode characters
+		// Remove control characters, but keep spaces, tabs, newlines for now
+		if r < 0x20 && r != 0x09 && r != 0x0A && r != 0x0D {
+			continue
+		}
+		if r == 0x7F {
+			continue
+		}
+		// Remove emoji and other symbols that might cause issues
+		// Keep letters, numbers, and common punctuation
+		if unicode.IsControl(r) && r != 0x09 && r != 0x0A && r != 0x0D {
+			continue
+		}
+		// Remove emoji ranges (most emoji are in these ranges)
+		if (r >= 0x1F300 && r <= 0x1F9FF) || // Miscellaneous Symbols and Pictographs, Emoticons
+			(r >= 0x2600 && r <= 0x26FF) ||   // Miscellaneous Symbols
+			(r >= 0x2700 && r <= 0x27BF) ||   // Dingbats
+			(r >= 0xFE00 && r <= 0xFE0F) ||   // Variation Selectors
+			(r >= 0x1F900 && r <= 0x1F9FF) || // Supplemental Symbols and Pictographs
+			(r >= 0x1F600 && r <= 0x1F64F) || // Emoticons
+			(r >= 0x1F680 && r <= 0x1F6FF) || // Transport and Map Symbols
+			(r >= 0x1F1E0 && r <= 0x1F1FF) {  // Regional Indicator Symbols (flags)
+			continue
+		}
+		result.WriteRune(r)
+	}
+	
+	sanitized = result.String()
 	sanitized = strings.TrimSpace(sanitized)
+	
+	// Remove leading/trailing dots and spaces (Windows doesn't allow these)
+	sanitized = strings.Trim(sanitized, ". ")
+	
+	// Remove consecutive spaces and underscores
+	re = regexp.MustCompile(`[\s_]+`)
+	sanitized = re.ReplaceAllString(sanitized, "_")
+	
+	// Remove leading/trailing underscores
+	sanitized = strings.Trim(sanitized, "_")
+	
 	if sanitized == "" {
 		return "Unknown"
 	}
+	
+	// Ensure the result is valid UTF-8
+	if !utf8.ValidString(sanitized) {
+		// If invalid UTF-8, try to fix it
+		sanitized = strings.ToValidUTF8(sanitized, "_")
+	}
+	
 	return sanitized
 }
 
@@ -98,12 +151,6 @@ func SanitizeFolderPath(folderPath string) string {
 
 // sanitizeFolderName removes invalid characters from a single folder name
 func sanitizeFolderName(name string) string {
-	// Remove or replace invalid characters for folder names (excluding path separators)
-	re := regexp.MustCompile(`[<>:"|?*]`)
-	sanitized := re.ReplaceAllString(name, "_")
-	sanitized = strings.TrimSpace(sanitized)
-	if sanitized == "" {
-		return "Unknown"
-	}
-	return sanitized
+	// Use the same sanitization as filename
+	return sanitizeFilename(name)
 }
