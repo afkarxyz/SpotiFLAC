@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, ImageDown } from "lucide-react";
+import { Download, FolderOpen, ImageDown, FileText } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchAndSort } from "./SearchAndSort";
@@ -51,6 +51,7 @@ interface ArtistInfoProps {
   skippedCovers?: Set<string>;
   downloadingCoverTrack?: string | null;
   isBulkDownloadingCovers?: boolean;
+  isBulkDownloadingLyrics?: boolean;
   onSearchChange: (value: string) => void;
   onSortChange: (value: string) => void;
   onToggleTrack: (isrc: string) => void;
@@ -59,6 +60,7 @@ interface ArtistInfoProps {
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
   onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
   onCheckAvailability?: (spotifyId: string) => void;
+  onDownloadAllLyrics?: () => void;
   onDownloadAllCovers?: () => void;
   onDownloadAll: () => void;
   onDownloadSelected: () => void;
@@ -98,6 +100,7 @@ export function ArtistInfo({
   skippedCovers,
   downloadingCoverTrack,
   isBulkDownloadingCovers,
+  isBulkDownloadingLyrics,
   onSearchChange,
   onSortChange,
   onToggleTrack,
@@ -106,6 +109,7 @@ export function ArtistInfo({
   onDownloadLyrics,
   onDownloadCover,
   onCheckAvailability,
+  onDownloadAllLyrics,
   onDownloadAllCovers,
   onDownloadAll,
   onDownloadSelected,
@@ -211,6 +215,23 @@ export function ArtistInfo({
                   )}
                   Download Selected ({selectedTracks.length})
                 </Button>
+              )}
+              {onDownloadAllLyrics && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      onClick={onDownloadAllLyrics}
+                      size="sm"
+                      variant="outline"
+                      disabled={isBulkDownloadingLyrics}
+                    >
+                      {isBulkDownloadingLyrics ? <Spinner /> : <FileText className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Download All Lyrics</p>
+                  </TooltipContent>
+                </Tooltip>
               )}
               {onDownloadAllCovers && (
                 <Tooltip>

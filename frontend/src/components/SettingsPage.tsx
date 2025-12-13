@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderOpen, Save, RotateCcw, Info, Volume2 } from "lucide-react";
+import { FolderOpen, Save, RotateCcw, Info } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
@@ -139,34 +139,6 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* Source Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="downloader">Source</Label>
-            <Select
-              value={tempSettings.downloader}
-              onValueChange={(value: "auto" | "deezer" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
-            >
-              <SelectTrigger id="downloader">
-                <SelectValue placeholder="Select a source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto</SelectItem>
-                <SelectItem value="tidal">
-                  <span className="flex items-center"><TidalIcon />Tidal</span>
-                </SelectItem>
-                <SelectItem value="deezer">
-                  <span className="flex items-center"><DeezerIcon />Deezer</span>
-                </SelectItem>
-                <SelectItem value="qobuz">
-                  <span className="flex items-center"><QobuzIcon />Qobuz</span>
-                </SelectItem>
-                <SelectItem value="amazon">
-                  <span className="flex items-center"><AmazonIcon />Amazon Music</span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Theme Mode */}
           <div className="space-y-2">
             <Label htmlFor="theme-mode">Mode</Label>
@@ -232,10 +204,60 @@ export function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Sound Effects */}
+          <div className="flex items-center gap-3">
+            <Label htmlFor="sfx-enabled" className="cursor-pointer text-sm">Sound Effects</Label>
+            <Switch
+              id="sfx-enabled"
+              checked={tempSettings.sfxEnabled}
+              onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))}
+            />
+          </div>
         </div>
 
         {/* Right Column */}
         <div className="space-y-4">
+          {/* Source Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="downloader" className="text-sm">Source</Label>
+            <Select
+              value={tempSettings.downloader}
+              onValueChange={(value: "auto" | "deezer" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
+            >
+              <SelectTrigger id="downloader" className="h-9">
+                <SelectValue placeholder="Select a source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Auto</SelectItem>
+                <SelectItem value="tidal">
+                  <span className="flex items-center"><TidalIcon />Tidal</span>
+                </SelectItem>
+                <SelectItem value="deezer">
+                  <span className="flex items-center"><DeezerIcon />Deezer</span>
+                </SelectItem>
+                <SelectItem value="qobuz">
+                  <span className="flex items-center"><QobuzIcon />Qobuz</span>
+                </SelectItem>
+                <SelectItem value="amazon">
+                  <span className="flex items-center"><AmazonIcon />Amazon Music</span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Embed Lyrics */}
+          <div className="flex items-center gap-3">
+            <Label htmlFor="embed-lyrics" className="cursor-pointer text-sm">Embed Lyrics</Label>
+            <Switch
+              id="embed-lyrics"
+              checked={tempSettings.embedLyrics}
+              onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedLyrics: checked }))}
+            />
+          </div>
+
+          <div className="border-t pt-4" />
+
           {/* Folder Structure */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -332,19 +354,6 @@ export function SettingsPage() {
                 Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{title\}/g, "Shake It Off").replace(/\{track\}/g, "01").replace(/\{year\}/g, "2014")}.flac</span>
               </p>
             )}
-          </div>
-
-          <div className="border-t pt-4" />
-
-          {/* Sound Effects */}
-          <div className="flex items-center gap-3">
-            <Volume2 className="h-4 w-4 text-muted-foreground" />
-            <Label htmlFor="sfx-enabled" className="cursor-pointer text-sm">Sound Effects</Label>
-            <Switch
-              id="sfx-enabled"
-              checked={tempSettings.sfxEnabled}
-              onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))}
-            />
           </div>
         </div>
       </div>

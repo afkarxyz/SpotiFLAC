@@ -28,6 +28,7 @@ import { ArtistInfo } from "@/components/ArtistInfo";
 import { DownloadQueue } from "@/components/DownloadQueue";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
+import { AudioConverterPage } from "@/components/AudioConverterPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { DebugLoggerPage } from "@/components/DebugLoggerPage";
 import type { HistoryItem } from "@/components/FetchHistory";
@@ -55,7 +56,7 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.7";
+  const CURRENT_VERSION = "6.8";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -319,6 +320,7 @@ function App() {
           skippedCovers={cover.skippedCovers}
           downloadingCoverTrack={cover.downloadingCoverTrack}
           isBulkDownloadingCovers={cover.isBulkDownloadingCovers}
+          isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
           onToggleTrack={toggleTrackSelection}
@@ -331,6 +333,7 @@ function App() {
             cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, position, trackId)
           }
           onCheckAvailability={availability.checkAvailability}
+          onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, album_info.name)}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name)}
           onDownloadAll={() => download.handleDownloadAll(track_list, undefined, true)}
           onDownloadSelected={() =>
@@ -385,6 +388,7 @@ function App() {
           skippedCovers={cover.skippedCovers}
           downloadingCoverTrack={cover.downloadingCoverTrack}
           isBulkDownloadingCovers={cover.isBulkDownloadingCovers}
+          isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
           onToggleTrack={toggleTrackSelection}
@@ -397,6 +401,7 @@ function App() {
             cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.owner.name, position, trackId)
           }
           onCheckAvailability={availability.checkAvailability}
+          onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, playlist_info.owner.name)}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlist_info.owner.name)}
           onDownloadAll={() => download.handleDownloadAll(track_list, playlist_info.owner.name)}
           onDownloadSelected={() =>
@@ -457,6 +462,7 @@ function App() {
           skippedCovers={cover.skippedCovers}
           downloadingCoverTrack={cover.downloadingCoverTrack}
           isBulkDownloadingCovers={cover.isBulkDownloadingCovers}
+          isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics}
           onSearchChange={handleSearchChange}
           onSortChange={setSortBy}
           onToggleTrack={toggleTrackSelection}
@@ -469,6 +475,7 @@ function App() {
             cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, position, trackId)
           }
           onCheckAvailability={availability.checkAvailability}
+          onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, artist_info.name)}
           onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name)}
           onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name)}
           onDownloadSelected={() =>
@@ -506,6 +513,8 @@ function App() {
         return <DebugLoggerPage />;
       case "audio-analysis":
         return <AudioAnalysisPage />;
+      case "audio-converter":
+        return <AudioConverterPage />;
       default:
         return (
           <>

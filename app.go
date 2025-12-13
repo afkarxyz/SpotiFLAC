@@ -51,6 +51,7 @@ type DownloadRequest struct {
 	Position            int    `json:"position,omitempty"`               // Position in playlist/album (1-based)
 	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
 	SpotifyID           string `json:"spotify_id,omitempty"`             // Spotify track ID
+	EmbedLyrics         bool   `json:"embed_lyrics,omitempty"`           // Whether to embed lyrics into the audio file
 	ServiceURL          string `json:"service_url,omitempty"`            // Direct service URL (Tidal/Deezer/Amazon) to skip song.link API call
 	Duration            int    `json:"duration,omitempty"`               // Track duration in seconds for better matching
 	ItemID              string `json:"item_id,omitempty"`                // Optional queue item ID for multi-service fallback tracking
@@ -299,8 +300,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		filename = strings.TrimPrefix(filename, "EXISTS:")
 	}
 
-	// Embed lyrics after successful download (only for new downloads with Spotify ID)
-	if !alreadyExists && req.SpotifyID != "" && strings.HasSuffix(filename, ".flac") {
+	// Embed lyrics after successful download (only for new downloads with Spotify ID and if embedLyrics is enabled)
+	if !alreadyExists && req.SpotifyID != "" && req.EmbedLyrics && strings.HasSuffix(filename, ".flac") {
 		go func(filePath, spotifyID, trackName, artistName string) {
 			fmt.Printf("\n========== LYRICS FETCH START ==========\n")
 			fmt.Printf("Spotify ID: %s\n", spotifyID)
@@ -313,24 +314,24 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			// Try all sources with fallbacks
 			lyricsResp, source, err := lyricsClient.FetchLyricsAllSources(spotifyID, trackName, artistName)
 			if err != nil {
-				fmt.Printf("❌ All sources failed: %v\n", err)
+				fmt.Printf("All sources failed: %v\n", err)
 				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
 				return
 			}
 			
 			if lyricsResp == nil || len(lyricsResp.Lines) == 0 {
-				fmt.Println("❌ No lyrics content found")
+				fmt.Println("No lyrics content found")
 				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
 				return
 			}
 			
-			fmt.Printf("✓ Lyrics found from: %s\n", source)
-			fmt.Printf("✓ Sync type: %s\n", lyricsResp.SyncType)
-			fmt.Printf("✓ Total lines: %d\n", len(lyricsResp.Lines))
+			fmt.Printf("Lyrics found from: %s\n", source)
+			fmt.Printf("Sync type: %s\n", lyricsResp.SyncType)
+			fmt.Printf("Total lines: %d\n", len(lyricsResp.Lines))
 			
 			lyrics := lyricsClient.ConvertToLRC(lyricsResp, trackName, artistName)
 			if lyrics == "" {
-				fmt.Println("❌ No lyrics content to embed")
+				fmt.Println("No lyrics content to embed")
 				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
 				return
 			}
@@ -342,10 +343,10 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			
 			fmt.Printf("Embedding into: %s\n", filePath)
 			if err := backend.EmbedLyricsOnly(filePath, lyrics); err != nil {
-				fmt.Printf("❌ Failed to embed lyrics: %v\n", err)
+				fmt.Printf("Failed to embed lyrics: %v\n", err)
 				fmt.Printf("========== LYRICS FETCH END (FAILED) ==========\n\n")
 			} else {
-				fmt.Printf("✓ Lyrics embedded successfully!\n")
+				fmt.Printf("Lyrics embedded successfully!\n")
 				fmt.Printf("========== LYRICS FETCH END (SUCCESS) ==========\n\n")
 			}
 		}(filename, req.SpotifyID, req.TrackName, req.ArtistName)
@@ -597,4 +598,83 @@ func (a *App) CheckTrackAvailability(spotifyTrackID string, isrc string) (string
 	}
 
 	return string(jsonData), nil
+}
+
+// IsFFmpegInstalled checks if ffmpeg is installed
+func (a *App) IsFFmpegInstalled() (bool, error) {
+	return backend.IsFFmpegInstalled()
+}
+
+// GetFFmpegPath returns the path to ffmpeg
+func (a *App) GetFFmpegPath() (string, error) {
+	return backend.GetFFmpegPath()
+}
+
+// DownloadFFmpegRequest represents a request to download ffmpeg
+type DownloadFFmpegRequest struct{}
+
+// DownloadFFmpegResponse represents the response from downloading ffmpeg
+type DownloadFFmpegResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+// DownloadFFmpeg downloads and installs ffmpeg
+func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
+	err := backend.DownloadFFmpeg(func(progress int) {
+		fmt.Printf("[FFmpeg] Download progress: %d%%\n", progress)
+	})
+	if err != nil {
+		return DownloadFFmpegResponse{
+			Success: false,
+			Error:   err.Error(),
+		}
+	}
+
+	return DownloadFFmpegResponse{
+		Success: true,
+		Message: "FFmpeg installed successfully",
+	}
+}
+
+// InstallFFmpegFromFile installs ffmpeg from a local file path
+func (a *App) InstallFFmpegFromFile(filePath string) DownloadFFmpegResponse {
+	err := backend.InstallFFmpegFromFile(filePath)
+	if err != nil {
+		return DownloadFFmpegResponse{
+			Success: false,
+			Error:   err.Error(),
+		}
+	}
+	return DownloadFFmpegResponse{
+		Success: true,
+		Message: "FFmpeg installed successfully from file",
+	}
+}
+
+// ConvertAudioRequest represents a request to convert audio files
+type ConvertAudioRequest struct {
+	InputFiles   []string `json:"input_files"`
+	OutputFormat string   `json:"output_format"`
+	Bitrate      string   `json:"bitrate"`
+}
+
+// ConvertAudio converts audio files using ffmpeg
+func (a *App) ConvertAudio(req ConvertAudioRequest) ([]backend.ConvertAudioResult, error) {
+	backendReq := backend.ConvertAudioRequest{
+		InputFiles:   req.InputFiles,
+		OutputFormat: req.OutputFormat,
+		Bitrate:      req.Bitrate,
+	}
+	return backend.ConvertAudio(backendReq)
+}
+
+// SelectAudioFiles opens a file dialog to select audio files for conversion
+func (a *App) SelectAudioFiles() ([]string, error) {
+	files, err := backend.SelectMultipleFiles(a.ctx)
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
 }

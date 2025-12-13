@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -126,8 +127,23 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLink
 			URL string `json:"url"`
 		} `json:"linksByPlatform"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
+	}
+
+	if err := json.Unmarshal(body, &songLinkResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	urls := &SongLinkURLs{}
@@ -245,8 +261,23 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string, isrc stri
 			URL string `json:"url"`
 		} `json:"linksByPlatform"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
+	}
+
+	if err := json.Unmarshal(body, &songLinkResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	availability := &TrackAvailability{

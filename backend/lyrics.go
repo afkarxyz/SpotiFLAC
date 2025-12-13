@@ -74,10 +74,12 @@ func NewLyricsClient() *LyricsClient {
 	}
 }
 
-// FetchLyricsWithMetadata fetches lyrics using track name and artist (for LRCLIB fallback)
+// FetchLyricsWithMetadata fetches lyrics using track name and artist from LRCLIB
 func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName string) (*LyricsResponse, error) {
 	// Try LRCLIB API
-	apiURL := fmt.Sprintf("https://lrclib.net/api/get?artist_name=%s&track_name=%s",
+	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9scmNsaWIubmV0L2FwaS9nZXQ/YXJ0aXN0X25hbWU9")
+	apiURL := fmt.Sprintf("%s%s&track_name=%s",
+		string(apiBase),
 		url.QueryEscape(artistName),
 		url.QueryEscape(trackName))
 
@@ -174,7 +176,8 @@ func lrcTimestampToMs(timestamp string) int64 {
 // FetchLyricsFromLRCLibSearch fetches lyrics using LRCLIB search API
 func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string) (*LyricsResponse, error) {
 	query := fmt.Sprintf("%s %s", artistName, trackName)
-	apiURL := fmt.Sprintf("https://lrclib.net/api/search?q=%s", url.QueryEscape(query))
+	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9scmNsaWIubmV0L2FwaS9zZWFyY2g/cT0=")
+	apiURL := fmt.Sprintf("%s%s", string(apiBase), url.QueryEscape(query))
 
 	resp, err := c.httpClient.Get(apiURL)
 	if err != nil {
@@ -232,35 +235,26 @@ func simplifyTrackName(name string) string {
 	return name
 }
 
-// FetchLyricsAllSources tries all sources to get lyrics
+// FetchLyricsAllSources tries all LRCLIB sources to get lyrics
 func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName string) (*LyricsResponse, string, error) {
-	// 1. Try Spotify API
-	if spotifyID != "" {
-		resp, err := c.FetchLyrics(spotifyID)
-		if err == nil && resp != nil && len(resp.Lines) > 0 {
-			return resp, "Spotify", nil
-		}
-		fmt.Printf("   ↳ Spotify API: %v\n", err)
-	}
-
-	// 2. Try LRCLIB exact match
+	// 1. Try LRCLIB exact match
 	resp, err := c.FetchLyricsWithMetadata(trackName, artistName)
 	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
 		return resp, "LRCLIB", nil
 	}
-	fmt.Printf("   ↳ LRCLIB exact: %v\n", err)
+	fmt.Printf("   LRCLIB exact: %v\n", err)
 
-	// 3. Try LRCLIB search
+	// 2. Try LRCLIB search
 	resp, err = c.FetchLyricsFromLRCLibSearch(trackName, artistName)
 	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
 		return resp, "LRCLIB Search", nil
 	}
-	fmt.Printf("   ↳ LRCLIB search: %v\n", err)
+	fmt.Printf("   LRCLIB search: %v\n", err)
 
-	// 4. Try with simplified track name (remove parentheses, subtitles)
+	// 3. Try with simplified track name (remove parentheses, subtitles)
 	simplifiedTrack := simplifyTrackName(trackName)
 	if simplifiedTrack != trackName {
-		fmt.Printf("   ↳ Trying simplified name: %s\n", simplifiedTrack)
+		fmt.Printf("   Trying simplified name: %s\n", simplifiedTrack)
 		
 		resp, err = c.FetchLyricsWithMetadata(simplifiedTrack, artistName)
 		if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
@@ -276,34 +270,6 @@ func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName st
 	return nil, "", fmt.Errorf("lyrics not found in any source")
 }
 
-// FetchLyrics fetches lyrics from the Spotify Lyrics API with LRCLIB fallback
-func (c *LyricsClient) FetchLyrics(spotifyID string) (*LyricsResponse, error) {
-	// Decode base64 API URL
-	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9zcG90aWZ5LWx5cmljcy1hcGktcGkudmVyY2VsLmFwcC8/dHJhY2tpZD0=")
-	apiURL := fmt.Sprintf("%s%s", string(apiBase), spotifyID)
-
-	resp, err := c.httpClient.Get(apiURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch lyrics: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %v", err)
-	}
-
-	var lyricsResp LyricsResponse
-	if err := json.Unmarshal(body, &lyricsResp); err != nil {
-		return nil, fmt.Errorf("failed to parse lyrics response: %v", err)
-	}
-
-	if lyricsResp.Error {
-		return nil, fmt.Errorf("lyrics not found for this track")
-	}
-
-	return &lyricsResp, nil
-}
 
 // ConvertToLRC converts lyrics response to LRC format
 func (c *LyricsClient) ConvertToLRC(lyrics *LyricsResponse, trackName, artistName string) string {
@@ -426,8 +392,8 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		}, nil
 	}
 
-	// Fetch lyrics
-	lyrics, err := c.FetchLyrics(req.SpotifyID)
+	// Fetch lyrics from LRCLIB
+	lyrics, _, err := c.FetchLyricsAllSources(req.SpotifyID, req.TrackName, req.ArtistName)
 	if err != nil {
 		return &LyricsDownloadResponse{
 			Success: false,

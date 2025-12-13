@@ -82,13 +82,28 @@ func (d *DeezerDownloader) GetDeezerURLFromSpotify(spotifyTrackID string) (strin
 		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return "", fmt.Errorf("API returned empty response")
+	}
+
 	var songLinkResp struct {
 		LinksByPlatform map[string]struct {
 			URL string `json:"url"`
 		} `json:"linksByPlatform"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+	if err := json.Unmarshal(body, &songLinkResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]
@@ -134,12 +149,28 @@ func (d *DeezerDownloader) GetTrackByID(trackID int64) (*DeezerTrack, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read body first to handle encoding issues and provide better error messages
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
 	}
 
 	var track DeezerTrack
-	if err := json.NewDecoder(resp.Body).Decode(&track); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	if err := json.Unmarshal(body, &track); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	if track.ID == 0 {
@@ -160,9 +191,24 @@ func (d *DeezerDownloader) GetDownloadURL(trackID int64) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	// Read body first to handle encoding issues and provide better error messages
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return "", fmt.Errorf("API returned empty response")
+	}
+
 	var apiResp DeezMateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return "", fmt.Errorf("failed to decode API response: %w", err)
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", fmt.Errorf("failed to decode API response: %w (response: %s)", err, bodyStr)
 	}
 
 	if !apiResp.Success || apiResp.Links.FLAC == "" {

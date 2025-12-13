@@ -25,6 +25,7 @@ export interface Settings {
   albumSubfolder?: boolean;
   trackNumber: boolean;
   sfxEnabled: boolean;
+  embedLyrics: boolean;
   operatingSystem: "Windows" | "linux/MacOS"
 }
 
@@ -81,6 +82,7 @@ export const DEFAULT_SETTINGS: Settings = {
   filenameTemplate: "{title} - {artist}",
   trackNumber: false,
   sfxEnabled: true,
+  embedLyrics: false,
   operatingSystem: detectOS()
 };
 

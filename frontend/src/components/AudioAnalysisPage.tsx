@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Activity, Upload, ArrowLeft } from "lucide-react";
+import { Upload, ArrowLeft } from "lucide-react";
 import { AudioAnalysis } from "@/components/AudioAnalysis";
 import { SpectrumVisualization } from "@/components/SpectrumVisualization";
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis";
@@ -82,10 +82,10 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
       {/* File Selection */}
       {!result && !analyzing && (
         <div
-          className={`flex flex-col items-center justify-center py-24 border-2 border-dashed rounded-lg transition-colors ${
+          className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${
             isDragging
               ? "border-primary bg-primary/10"
-              : "border-muted-foreground/30 hover:border-muted-foreground/50"
+              : "border-muted-foreground/30"
           }`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -101,11 +101,10 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
           }}
           style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
         >
-          <Activity
-            className={`h-20 w-20 mb-4 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground/50"}`}
-          />
-          <h3 className="text-xl font-medium mb-2">Analyze FLAC Audio Quality</h3>
-          <p className="text-sm text-muted-foreground mb-6 text-center max-w-md">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <Upload className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground mb-4 text-center">
             {isDragging
               ? "Drop your FLAC file here"
               : "Drag and drop a FLAC file here, or click the button below to select"}
@@ -128,10 +127,13 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
       {/* Analysis Results */}
       {result && (
         <div className="space-y-4">
-          {/* File Info */}
-          <div className="p-3 bg-muted/30 rounded-lg">
-            <p className="text-xs text-muted-foreground">Analyzing file:</p>
-            <p className="text-sm font-mono truncate">{selectedFilePath}</p>
+          {/* File Info with Analyze Another Button */}
+          <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+            <p className="text-sm font-mono truncate flex-1 min-w-0">{selectedFilePath}</p>
+            <Button onClick={handleAnalyzeAnother} variant="outline" size="sm" className="ml-4 shrink-0">
+              <Upload className="h-4 w-4" />
+              Analyze Another File
+            </Button>
           </div>
 
           {/* Spectrum Visualization */}
@@ -144,14 +146,6 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
 
           {/* Detailed Analysis */}
           <AudioAnalysis result={result} analyzing={analyzing} showAnalyzeButton={false} />
-
-          {/* Actions */}
-          <div className="flex gap-2 justify-end pt-2">
-            <Button onClick={handleAnalyzeAnother} variant="outline">
-              <Upload className="h-4 w-4" />
-              Analyze Another File
-            </Button>
-          </div>
         </div>
       )}
     </div>

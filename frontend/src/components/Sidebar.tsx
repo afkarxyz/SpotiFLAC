@@ -1,4 +1,4 @@
-import { Home, Settings, Bug, Activity, LayoutGrid } from "lucide-react";
+import { Home, Settings, Bug, Activity, FileMusic, LayoutGrid } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -7,7 +7,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { openExternal } from "@/lib/utils";
 
-export type PageType = "main" | "settings" | "debug" | "audio-analysis";
+export type PageType = "main" | "settings" | "debug" | "audio-analysis" | "audio-converter";
 
 interface SidebarProps {
   currentPage: PageType;
@@ -19,6 +19,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
     { id: "main" as PageType, icon: Home, label: "Home" },
     { id: "settings" as PageType, icon: Settings, label: "Settings" },
     { id: "audio-analysis" as PageType, icon: Activity, label: "Audio Quality Analyzer" },
+    { id: "audio-converter" as PageType, icon: FileMusic, label: "Audio Converter" },
     { id: "debug" as PageType, icon: Bug, label: "Debug Logs" },
   ];
 

@@ -123,6 +123,7 @@ export interface DownloadRequest {
   position?: number;
   use_album_track_number?: boolean;
   spotify_id?: string;
+  embed_lyrics?: boolean; // Whether to embed lyrics into the audio file
   service_url?: string;
   duration?: number; // Track duration in seconds for better matching
   item_id?: string; // Optional queue item ID for multi-service fallback tracking

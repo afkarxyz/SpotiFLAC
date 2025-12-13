@@ -111,6 +111,7 @@ export function useDownload() {
             position,
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
             service_url: streamingURLs.tidal_url,
             duration: durationSeconds,
             item_id: itemID, // Pass the same itemID through all attempts
@@ -143,6 +144,7 @@ export function useDownload() {
             position,
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
             service_url: streamingURLs.deezer_url,
             item_id: itemID,
           });
@@ -174,6 +176,7 @@ export function useDownload() {
             position,
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
             service_url: streamingURLs.amazon_url,
             item_id: itemID,
           });
@@ -202,10 +205,11 @@ export function useDownload() {
         track_number: settings.trackNumber,
         position,
         use_album_track_number: useAlbumTrackNumber,
-        spotify_id: spotifyId,
-        duration: durationMs ? Math.round(durationMs / 1000) : undefined,
-        item_id: itemID,
-      });
+            spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
+            duration: durationMs ? Math.round(durationMs / 1000) : undefined,
+            item_id: itemID,
+          });
 
       // If Qobuz also failed, mark the item as failed
       if (!qobuzResponse.success) {
@@ -233,6 +237,7 @@ export function useDownload() {
       position,
       use_album_track_number: useAlbumTrackNumber,
       spotify_id: spotifyId,
+      embed_lyrics: settings.embedLyrics,
       duration: durationSecondsForFallback,
       item_id: itemID, // Pass itemID for tracking
     });
@@ -335,6 +340,7 @@ export function useDownload() {
             position,
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
             service_url: streamingURLs.tidal_url,
             duration: durationSeconds,
             item_id: itemID,
@@ -364,6 +370,7 @@ export function useDownload() {
             position,
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
             service_url: streamingURLs.deezer_url,
             item_id: itemID,
           });
@@ -392,6 +399,7 @@ export function useDownload() {
             position,
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
             service_url: streamingURLs.amazon_url,
             item_id: itemID,
           });
@@ -417,10 +425,11 @@ export function useDownload() {
         track_number: settings.trackNumber,
         position,
         use_album_track_number: useAlbumTrackNumber,
-        spotify_id: spotifyId,
-        duration: durationMs ? Math.round(durationMs / 1000) : undefined,
-        item_id: itemID,
-      });
+            spotify_id: spotifyId,
+            embed_lyrics: settings.embedLyrics,
+            duration: durationMs ? Math.round(durationMs / 1000) : undefined,
+            item_id: itemID,
+          });
 
       // If Qobuz also failed, mark the item as failed
       if (!qobuzResponse.success) {
@@ -447,6 +456,7 @@ export function useDownload() {
       position,
       use_album_track_number: useAlbumTrackNumber,
       spotify_id: spotifyId,
+      embed_lyrics: settings.embedLyrics,
       duration: durationSecondsForFallback,
       item_id: itemID,
     });

@@ -93,8 +93,23 @@ func (q *QobuzDownloader) SearchByISRC(isrc string) (*QobuzTrack, error) {
 	}
 
 	var searchResp QobuzSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
+	}
+
+	if err := json.Unmarshal(body, &searchResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	if len(searchResp.Tracks.Items) == 0 {
@@ -151,12 +166,25 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string) (string,
 		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return "", fmt.Errorf("API returned empty response")
+	}
+
 	fmt.Printf("Fallback API response: %s\n", string(body))
 
 	var streamResp QobuzStreamResponse
 	if err := json.Unmarshal(body, &streamResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	if streamResp.URL == "" {

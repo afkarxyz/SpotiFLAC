@@ -571,8 +571,13 @@ func (t *TidalDownloader) GetDownloadURL(trackID int64, quality string) (string,
 	// Fallback to v1 format (array with OriginalTrackUrl)
 	var apiResponses []TidalAPIResponse
 	if err := json.Unmarshal(body, &apiResponses); err != nil {
-		fmt.Printf("✗ Failed to decode Tidal API response: %v\n", err)
-		return "", fmt.Errorf("failed to decode response: %w", err)
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		fmt.Printf("✗ Failed to decode Tidal API response: %v (response: %s)\n", err, bodyStr)
+		return "", fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	if len(apiResponses) == 0 {

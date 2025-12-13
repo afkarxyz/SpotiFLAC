@@ -142,9 +142,24 @@ func (a *AmazonDownloader) GetAmazonURLFromSpotify(spotifyTrackID string) (strin
 	}
 	defer resp.Body.Close()
 
+	// Read body first to handle encoding issues and provide better error messages
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return "", fmt.Errorf("API returned empty response")
+	}
+
 	var songLinkResp SongLinkResponse
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+	if err := json.Unmarshal(body, &songLinkResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	amazonLink, ok := songLinkResp.LinksByPlatform["amazonMusic"]

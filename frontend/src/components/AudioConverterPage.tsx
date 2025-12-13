@@ -1,0 +1,629 @@
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group";
+import {
+  Upload,
+  Download,
+  X,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Trash2,
+  FileMusic,
+} from "lucide-react";
+import {
+  IsFFmpegInstalled,
+  DownloadFFmpeg,
+  InstallFFmpegFromFile,
+  ConvertAudio,
+  SelectAudioFiles,
+} from "../../wailsjs/go/main/App";
+import { toastWithSound as toast } from "@/lib/toast-with-sound";
+import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
+
+interface AudioFile {
+  path: string;
+  name: string;
+  format: string;
+  status: "pending" | "converting" | "success" | "error";
+  error?: string;
+  outputPath?: string;
+}
+
+const BITRATE_OPTIONS = [
+  { value: "320k", label: "320k" },
+  { value: "256k", label: "256k" },
+  { value: "192k", label: "192k" },
+  { value: "128k", label: "128k" },
+];
+
+const STORAGE_KEY = "spotiflac_audio_converter_state";
+
+export function AudioConverterPage() {
+  const [ffmpegInstalled, setFfmpegInstalled] = useState<boolean>(false);
+  const [installingFfmpeg, setInstallingFfmpeg] = useState(false);
+  const [files, setFiles] = useState<AudioFile[]>(() => {
+    // Initialize from localStorage synchronously
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.files && Array.isArray(parsed.files) && parsed.files.length > 0) {
+          return parsed.files;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load saved state:", err);
+    }
+    return [];
+  });
+  const [outputFormat, setOutputFormat] = useState<"mp3" | "m4a">(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.outputFormat === "mp3" || parsed.outputFormat === "m4a") {
+          return parsed.outputFormat;
+        }
+      }
+    } catch (err) {
+      // Ignore
+    }
+    return "mp3";
+  });
+  const [bitrate, setBitrate] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.bitrate) {
+          return parsed.bitrate;
+        }
+      }
+    } catch (err) {
+      // Ignore
+    }
+    return "320k";
+  });
+  const [converting, setConverting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingFFmpeg, setIsDraggingFFmpeg] = useState(false);
+  const isInitialMount = useRef(true);
+
+  // Helper function to save state
+  const saveState = useCallback((stateToSave: { files: AudioFile[]; outputFormat: "mp3" | "m4a"; bitrate: string }) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+    } catch (err) {
+      console.error("Failed to save state:", err);
+    }
+  }, []);
+
+  // Load saved state from localStorage on mount (only for ffmpeg check)
+  useEffect(() => {
+    checkFfmpegInstallation();
+  }, []);
+
+  // Save state to localStorage whenever files, outputFormat, or bitrate changes
+  // Skip on initial mount to avoid overwriting with empty state
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    saveState({ files, outputFormat, bitrate });
+  }, [files, outputFormat, bitrate, saveState]);
+
+  // Save state on unmount as well
+  useEffect(() => {
+    return () => {
+      saveState({ files, outputFormat, bitrate });
+    };
+  }, [files, outputFormat, bitrate, saveState]);
+
+  const checkFfmpegInstallation = async () => {
+    try {
+      const installed = await IsFFmpegInstalled();
+      setFfmpegInstalled(installed);
+    } catch (err) {
+      console.error("Failed to check ffmpeg:", err);
+      setFfmpegInstalled(false);
+    }
+  };
+
+  const handleInstallFfmpeg = async () => {
+    setInstallingFfmpeg(true);
+    try {
+      const result = await DownloadFFmpeg();
+      if (result.success) {
+        toast.success("FFmpeg Installed", {
+          description: "FFmpeg has been installed successfully",
+        });
+        setFfmpegInstalled(true);
+      } else {
+        toast.error("Installation Failed", {
+          description: result.error || "Failed to install FFmpeg",
+        });
+      }
+    } catch (err) {
+      toast.error("Installation Failed", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+    } finally {
+      setInstallingFfmpeg(false);
+    }
+  };
+
+  const handleFFmpegFileDrop = useCallback(
+    async (_x: number, _y: number, paths: string[]) => {
+      setIsDraggingFFmpeg(false);
+
+      if (paths.length === 0) return;
+
+      // Only process the first file
+      const filePath = paths[0];
+      const fileName = filePath.split(/[/\\]/).pop()?.toLowerCase() || "";
+
+      // Check if it's likely an ffmpeg executable
+      if (!fileName.includes("ffmpeg")) {
+        toast.error("Invalid File", {
+          description: "Please drop an FFmpeg executable file",
+        });
+        return;
+      }
+
+      setInstallingFfmpeg(true);
+      try {
+        const result = await InstallFFmpegFromFile(filePath);
+        if (result.success) {
+          toast.success("FFmpeg Installed", {
+            description: "FFmpeg has been installed successfully from file",
+          });
+          setFfmpegInstalled(true);
+        } else {
+          toast.error("Installation Failed", {
+            description: result.error || "Failed to install FFmpeg",
+          });
+        }
+      } catch (err) {
+        toast.error("Installation Failed", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        });
+      } finally {
+        setInstallingFfmpeg(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (ffmpegInstalled === false) {
+      // Set up drag and drop for FFmpeg installation
+      OnFileDrop((x, y, paths) => {
+        handleFFmpegFileDrop(x, y, paths);
+      }, true);
+
+      return () => {
+        OnFileDropOff();
+      };
+    }
+  }, [ffmpegInstalled, handleFFmpegFileDrop]);
+
+  const handleSelectFiles = async () => {
+    try {
+      const selectedFiles = await SelectAudioFiles();
+      if (selectedFiles && selectedFiles.length > 0) {
+        addFiles(selectedFiles);
+      }
+    } catch (err) {
+      toast.error("File Selection Failed", {
+        description: err instanceof Error ? err.message : "Failed to select files",
+      });
+    }
+  };
+
+  const addFiles = useCallback((paths: string[]) => {
+    const validExtensions = [".mp3", ".m4a", ".flac"];
+    setFiles((prev) => {
+      const newFiles: AudioFile[] = paths
+        .filter((path) => {
+          const ext = path.toLowerCase().slice(path.lastIndexOf("."));
+          return validExtensions.includes(ext);
+        })
+        .filter((path) => !prev.some((f) => f.path === path))
+        .map((path) => {
+          const name = path.split(/[/\\]/).pop() || path;
+          const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+          return {
+            path,
+            name,
+            format: ext,
+            status: "pending" as const,
+          };
+        });
+
+      if (newFiles.length > 0) {
+        if (paths.length > newFiles.length) {
+          const skipped = paths.length - newFiles.length;
+          toast.info("Some files skipped", {
+            description: `${skipped} file(s) were skipped (unsupported format or already added)`,
+          });
+        }
+
+        return [...prev, ...newFiles];
+      }
+
+      if (paths.length > 0) {
+        toast.info("No new files added", {
+          description: "All files were already added or have unsupported format",
+        });
+      }
+
+      return prev;
+    });
+  }, []);
+
+  const handleFileDrop = useCallback(
+    async (_x: number, _y: number, paths: string[]) => {
+      setIsDragging(false);
+
+      if (paths.length === 0) return;
+
+      addFiles(paths);
+    },
+    [addFiles]
+  );
+
+  useEffect(() => {
+    // Only enable drag and drop for audio files if FFmpeg is installed
+    if (ffmpegInstalled === true) {
+      OnFileDrop((x, y, paths) => {
+        handleFileDrop(x, y, paths);
+      }, true);
+
+      return () => {
+        OnFileDropOff();
+      };
+    }
+  }, [handleFileDrop, ffmpegInstalled]);
+
+
+  const removeFile = (path: string) => {
+    setFiles((prev) => prev.filter((f) => f.path !== path));
+  };
+
+  const clearFiles = () => {
+    setFiles([]);
+  };
+
+  const handleConvert = async () => {
+    if (files.length === 0) {
+      toast.error("No files selected", {
+        description: "Please add audio files to convert",
+      });
+      return;
+    }
+
+    setConverting(true);
+
+    try {
+      // Include all files (including previously successful ones) for conversion
+      const inputPaths = files.map((f) => f.path);
+
+      // Mark all files as converting (including previously successful ones)
+      setFiles((prev) =>
+        prev.map((f) => {
+          if (inputPaths.includes(f.path)) {
+            return { ...f, status: "converting" as const, error: undefined };
+          }
+          return f;
+        })
+      );
+
+      const results = await ConvertAudio({
+        input_files: inputPaths,
+        output_format: outputFormat,
+        bitrate: bitrate,
+      });
+
+      // Update file statuses based on results
+      setFiles((prev) =>
+        prev.map((f) => {
+          const result = results.find((r) => r.input_file === f.path);
+          if (result) {
+            return {
+              ...f,
+              status: result.success ? "success" : "error",
+              error: result.error,
+              outputPath: result.output_file,
+            };
+          }
+          return f;
+        })
+      );
+
+      const successCount = results.filter((r) => r.success).length;
+      const failCount = results.filter((r) => !r.success).length;
+
+      if (successCount > 0) {
+        toast.success("Conversion Complete", {
+          description: `Successfully converted ${successCount} file(s)${failCount > 0 ? `, ${failCount} failed` : ""}`,
+        });
+      } else if (failCount > 0) {
+        toast.error("Conversion Failed", {
+          description: `All ${failCount} file(s) failed to convert`,
+        });
+      }
+    } catch (err) {
+      toast.error("Conversion Error", {
+        description: err instanceof Error ? err.message : "Unknown error",
+      });
+      setFiles((prev) =>
+        prev.map((f) => ({ ...f, status: "error" as const, error: "Conversion failed" }))
+      );
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  const getStatusIcon = (status: AudioFile["status"]) => {
+    switch (status) {
+      case "converting":
+        return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+      case "success":
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "error":
+        return <AlertCircle className="h-4 w-4 text-destructive" />;
+      default:
+        return <FileMusic className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  // Count files that can be converted (pending + success files that can be re-converted)
+  const convertableCount = files.filter((f) => f.status === "pending" || f.status === "success").length;
+  const successCount = files.filter((f) => f.status === "success").length;
+
+  // Show FFmpeg installation prompt if not installed
+  if (ffmpegInstalled === false) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">Audio Converter</h1>
+        </div>
+
+        <div
+          className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${
+            isDraggingFFmpeg
+              ? "border-primary bg-primary/10"
+              : "border-muted-foreground/30"
+          }`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDraggingFFmpeg(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDraggingFFmpeg(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDraggingFFmpeg(false);
+          }}
+          style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
+        >
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <Download className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground mb-2 text-center">
+            FFmpeg is required to convert audio files.
+          </p>
+          <p className="text-sm text-muted-foreground mb-4 text-center">
+            {isDraggingFFmpeg
+              ? "Drop your FFmpeg executable here"
+              : "Drag and drop your FFmpeg executable here, or click the button below to download automatically."}
+          </p>
+          <Button
+            onClick={handleInstallFfmpeg}
+            disabled={installingFfmpeg}
+            size="lg"
+          >
+            {installingFfmpeg ? (
+              <>
+                <Loader2 className="h-5 w-5" />
+                Installing FFmpeg...
+              </>
+            ) : (
+              <>
+                <Download className="h-5 w-5" />
+                Install FFmpeg
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <h1 className="text-2xl font-bold">Audio Converter</h1>
+      </div>
+
+      {/* Drop Zone / File List */}
+      <div
+        className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${
+          isDragging
+            ? "border-primary bg-primary/10"
+            : "border-muted-foreground/30"
+        }`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setIsDragging(false);
+        }}
+        style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
+      >
+        {files.length === 0 ? (
+          <>
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <Upload className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <p className="text-sm text-muted-foreground mb-2 text-center">
+              {isDragging
+                ? "Drop your audio files here"
+                : "Drag and drop audio files here, or click the button below to select"}
+            </p>
+            <p className="text-xs text-muted-foreground mb-4 text-center">
+              Supported formats: MP3, M4A, FLAC
+            </p>
+            <Button onClick={handleSelectFiles} size="lg">
+              <Upload className="h-5 w-5" />
+              Select Files
+            </Button>
+          </>
+        ) : (
+          <div className="w-full h-full p-6 space-y-4 flex flex-col">
+            {/* Settings Row - Only show when files exist */}
+            <div className="space-y-2 pb-4 border-b shrink-0">
+                {/* Format and Bitrate in one line */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap">Format:</Label>
+                    <ToggleGroup
+                      type="single"
+                      variant="outline"
+                      value={outputFormat}
+                      onValueChange={(value) => {
+                        if (value) setOutputFormat(value as "mp3" | "m4a");
+                      }}
+                    >
+                      <ToggleGroupItem value="mp3" aria-label="MP3">
+                        MP3
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="m4a" aria-label="M4A">
+                        M4A
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="whitespace-nowrap">Bitrate:</Label>
+                    <ToggleGroup
+                      type="single"
+                      variant="outline"
+                      value={bitrate}
+                      onValueChange={(value) => {
+                        if (value) setBitrate(value);
+                      }}
+                    >
+                      {BITRATE_OPTIONS.map((option) => (
+                        <ToggleGroupItem
+                          key={option.value}
+                          value={option.value}
+                          aria-label={option.label}
+                        >
+                          {option.label}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  </div>
+                  <div className="flex gap-2 ml-auto">
+                    <Button variant="outline" size="sm" onClick={handleSelectFiles}>
+                      <Upload className="h-4 w-4" />
+                      Add More
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={clearFiles}
+                      disabled={converting}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Clear All
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* File List Header */}
+              <div className="flex items-center justify-between shrink-0">
+                <div className="text-sm text-muted-foreground">
+                  {files.length} file(s) • {successCount} converted
+                </div>
+              </div>
+
+              {/* File List */}
+              <div className="flex-1 space-y-2 overflow-y-auto min-h-0">
+              {files.map((file) => (
+                <div
+                  key={file.path}
+                  className="flex items-center gap-3 rounded-lg border p-3"
+                >
+                  {getStatusIcon(file.status)}
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-medium">{file.name}</p>
+                    {file.error && (
+                      <p className="truncate text-xs text-destructive">
+                        {file.error}
+                      </p>
+                    )}
+                  </div>
+                  <span className="text-xs uppercase text-muted-foreground">
+                    {file.format}
+                  </span>
+                  {file.status !== "converting" && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => removeFile(file.path)}
+                      disabled={converting}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+              {/* Convert Button */}
+              <div className="flex justify-end pt-4 border-t shrink-0">
+              <Button
+                onClick={handleConvert}
+                disabled={converting || convertableCount === 0}
+                size="lg"
+              >
+                {converting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Converting...
+                  </>
+                ) : (
+                  <>
+                    <FileMusic className="h-4 w-4" />
+                    Convert {convertableCount > 0 ? `${convertableCount} File(s)` : ""}
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+
