@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -141,9 +142,24 @@ func (a *AmazonDownloader) GetAmazonURLFromSpotify(spotifyTrackID string) (strin
 	}
 	defer resp.Body.Close()
 
+	// Read body first to handle encoding issues and provide better error messages
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return "", fmt.Errorf("API returned empty response")
+	}
+
 	var songLinkResp SongLinkResponse
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+	if err := json.Unmarshal(body, &songLinkResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	amazonLink, ok := songLinkResp.LinksByPlatform["amazonMusic"]
@@ -356,7 +372,7 @@ func (a *AmazonDownloader) DownloadFromService(amazonURL, outputDir string) (str
 	return "", fmt.Errorf("all regions failed. Last error: %v", lastError)
 }
 
-func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, spotifyCoverURL, spotifyISRC string, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, embedMaxQualityCover bool) (string, error) {
 	// Create output directory if needed
 	if outputDir != "." {
 		if err := os.MkdirAll(outputDir, 0755); err != nil {
@@ -366,7 +382,7 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat st
 
 	// Check if file with expected name already exists (Amazon doesn't provide ISRC before download)
 	if spotifyTrackName != "" && spotifyArtistName != "" {
-		expectedFilename := BuildExpectedFilename(spotifyTrackName, spotifyArtistName, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+		expectedFilename := BuildExpectedFilename(spotifyTrackName, spotifyArtistName, filenameFormat, includeTrackNumber, position, false)
 		expectedPath := filepath.Join(outputDir, expectedFilename)
 
 		if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
@@ -383,25 +399,44 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat st
 		return "", err
 	}
 
-	// File already has embedded metadata, just rename if needed
+	// Rename file based on Spotify metadata
 	if spotifyTrackName != "" && spotifyArtistName != "" {
 		safeArtist := sanitizeFilename(spotifyArtistName)
 		safeTitle := sanitizeFilename(spotifyTrackName)
 
 		// Build filename based on format settings
 		var newFilename string
-		switch filenameFormat {
-		case "artist-title":
-			newFilename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
-		case "title":
-			newFilename = safeTitle
-		default: // "title-artist"
-			newFilename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
-		}
 
-		// Add track number prefix if enabled
-		if includeTrackNumber && position > 0 {
-			newFilename = fmt.Sprintf("%02d. %s", position, newFilename)
+		// Check if format is a template (contains {})
+		if strings.Contains(filenameFormat, "{") {
+			newFilename = filenameFormat
+			newFilename = strings.ReplaceAll(newFilename, "{title}", safeTitle)
+			newFilename = strings.ReplaceAll(newFilename, "{artist}", safeArtist)
+
+			// Handle track number - if position is 0, remove {track} and surrounding separators
+			if position > 0 {
+				newFilename = strings.ReplaceAll(newFilename, "{track}", fmt.Sprintf("%02d", position))
+			} else {
+				// Remove {track} with common separators
+				newFilename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(newFilename, "")
+				newFilename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(newFilename, "")
+				newFilename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(newFilename, "")
+			}
+		} else {
+			// Legacy format support
+			switch filenameFormat {
+			case "artist-title":
+				newFilename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
+			case "title":
+				newFilename = safeTitle
+			default: // "title-artist"
+				newFilename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
+			}
+
+			// Add track number prefix if enabled (legacy behavior)
+			if includeTrackNumber && position > 0 {
+				newFilename = fmt.Sprintf("%02d. %s", position, newFilename)
+			}
 		}
 
 		newFilename = newFilename + ".flac"
@@ -416,17 +451,64 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat st
 		}
 	}
 
+	// Embed Spotify metadata (replace Amazon's embedded metadata)
+	fmt.Println("Embedding Spotify metadata...")
+
+	coverPath := ""
+	// Download Spotify cover (with max resolution if enabled)
+	if spotifyCoverURL != "" {
+		coverPath = filePath + ".cover.jpg"
+		coverClient := NewCoverClient()
+		if err := coverClient.DownloadCoverToPath(spotifyCoverURL, coverPath, embedMaxQualityCover); err != nil {
+			fmt.Printf("Warning: Failed to download Spotify cover: %v\n", err)
+			coverPath = ""
+		} else {
+			defer os.Remove(coverPath)
+			fmt.Println("Spotify cover downloaded")
+		}
+	}
+
+	// Determine track number to embed
+	// Use Spotify track number (album track number) if available, otherwise use position
+	trackNumberToEmbed := spotifyTrackNumber
+	if trackNumberToEmbed == 0 {
+		trackNumberToEmbed = position // Fallback to playlist position
+	}
+	if trackNumberToEmbed == 0 {
+		trackNumberToEmbed = 1 // Default to track 1 for single track downloads without track number
+	}
+
+	// Build metadata from Spotify
+	metadata := Metadata{
+		Title:       spotifyTrackName,
+		Artist:      spotifyArtistName,
+		Album:       spotifyAlbumName,
+		AlbumArtist: spotifyAlbumArtist,
+		Date:        spotifyReleaseDate, // Recorded date (full date YYYY-MM-DD)
+		TrackNumber: trackNumberToEmbed,
+		TotalTracks: spotifyTotalTracks, // Total tracks in album from Spotify
+		DiscNumber:  spotifyDiscNumber,  // Disc number from Spotify
+		ISRC:        spotifyISRC,        // Use ISRC from Spotify
+		Description: "https://github.com/afkarxyz/SpotiFLAC",
+	}
+
+	if err := EmbedMetadata(filePath, metadata, coverPath); err != nil {
+		fmt.Printf("Warning: Failed to embed metadata: %v\n", err)
+	} else {
+		fmt.Println("Metadata embedded successfully")
+	}
+
 	fmt.Println("Done")
 	fmt.Println("✓ Downloaded successfully from Amazon Music")
 	return filePath, nil
 }
 
-func (a *AmazonDownloader) DownloadBySpotifyID(spotifyTrackID, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+func (a *AmazonDownloader) DownloadBySpotifyID(spotifyTrackID, outputDir, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, spotifyCoverURL, spotifyISRC string, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, embedMaxQualityCover bool) (string, error) {
 	// Get Amazon URL from Spotify track ID
 	amazonURL, err := a.GetAmazonURLFromSpotify(spotifyTrackID)
 	if err != nil {
 		return "", err
 	}
 
-	return a.DownloadByURL(amazonURL, outputDir, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useAlbumTrackNumber)
+	return a.DownloadByURL(amazonURL, outputDir, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, spotifyCoverURL, spotifyISRC, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, embedMaxQualityCover)
 }

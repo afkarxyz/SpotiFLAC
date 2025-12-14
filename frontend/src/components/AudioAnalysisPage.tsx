@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Activity, Upload, ArrowLeft } from "lucide-react";
+import { Upload, ArrowLeft, Trash2 } from "lucide-react";
 import { AudioAnalysis } from "@/components/AudioAnalysis";
 import { SpectrumVisualization } from "@/components/SpectrumVisualization";
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis";
@@ -13,15 +13,13 @@ interface AudioAnalysisPageProps {
 }
 
 export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
-  const { analyzing, result, analyzeFile, clearResult } = useAudioAnalysis();
-  const [selectedFilePath, setSelectedFilePath] = useState<string>("");
+  const { analyzing, result, analyzeFile, clearResult, selectedFilePath, spectrumLoading } = useAudioAnalysis();
   const [isDragging, setIsDragging] = useState(false);
 
   const handleSelectFile = async () => {
     try {
       const filePath = await SelectFile();
       if (filePath) {
-        setSelectedFilePath(filePath);
         await analyzeFile(filePath);
       }
     } catch (err) {
@@ -46,7 +44,6 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
         return;
       }
 
-      setSelectedFilePath(filePath);
       await analyzeFile(filePath);
     },
     [analyzeFile]
@@ -64,28 +61,35 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
 
   const handleAnalyzeAnother = () => {
     clearResult();
-    setSelectedFilePath("");
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        {onBack && (
-          <Button variant="ghost" size="icon" onClick={onBack}>
-            <ArrowLeft className="h-5 w-5" />
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {onBack && (
+            <Button variant="ghost" size="icon" onClick={onBack}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <h1 className="text-2xl font-bold">Audio Quality Analyzer</h1>
+        </div>
+        {result && (
+          <Button onClick={handleAnalyzeAnother} variant="outline" size="sm">
+            <Trash2 className="h-4 w-4" />
+            Clear
           </Button>
         )}
-        <h1 className="text-2xl font-bold">Audio Quality Analyzer</h1>
       </div>
 
       {/* File Selection */}
       {!result && !analyzing && (
         <div
-          className={`flex flex-col items-center justify-center py-24 border-2 border-dashed rounded-lg transition-colors ${
+          className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${
             isDragging
               ? "border-primary bg-primary/10"
-              : "border-muted-foreground/30 hover:border-muted-foreground/50"
+              : "border-muted-foreground/30"
           }`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -101,11 +105,10 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
           }}
           style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
         >
-          <Activity
-            className={`h-20 w-20 mb-4 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground/50"}`}
-          />
-          <h3 className="text-xl font-medium mb-2">Analyze FLAC Audio Quality</h3>
-          <p className="text-sm text-muted-foreground mb-6 text-center max-w-md">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <Upload className="h-8 w-8 text-primary" />
+          </div>
+          <p className="text-sm text-muted-foreground mb-4 text-center">
             {isDragging
               ? "Drop your FLAC file here"
               : "Drag and drop a FLAC file here, or click the button below to select"}
@@ -128,30 +131,23 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
       {/* Analysis Results */}
       {result && (
         <div className="space-y-4">
-          {/* File Info */}
-          <div className="p-3 bg-muted/30 rounded-lg">
-            <p className="text-xs text-muted-foreground">Analyzing file:</p>
-            <p className="text-sm font-mono truncate">{selectedFilePath}</p>
-          </div>
+          {/* Detailed Analysis */}
+          <AudioAnalysis result={result} analyzing={analyzing} showAnalyzeButton={false} filePath={selectedFilePath} />
 
           {/* Spectrum Visualization */}
-          <SpectrumVisualization
-            sampleRate={result.sample_rate}
-            bitsPerSample={result.bits_per_sample}
-            duration={result.duration}
-            spectrumData={result.spectrum}
-          />
-
-          {/* Detailed Analysis */}
-          <AudioAnalysis result={result} analyzing={analyzing} showAnalyzeButton={false} />
-
-          {/* Actions */}
-          <div className="flex gap-2 justify-end pt-2">
-            <Button onClick={handleAnalyzeAnother} variant="outline">
-              <Upload className="h-4 w-4" />
-              Analyze Another File
-            </Button>
-          </div>
+          {spectrumLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 border rounded-lg">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
+              <p className="text-sm text-muted-foreground">Loading spectrum data...</p>
+            </div>
+          ) : (
+            <SpectrumVisualization
+              sampleRate={result.sample_rate}
+              bitsPerSample={result.bits_per_sample}
+              duration={result.duration}
+              spectrumData={result.spectrum}
+            />
+          )}
         </div>
       )}
     </div>

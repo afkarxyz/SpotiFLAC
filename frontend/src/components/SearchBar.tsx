@@ -43,6 +43,7 @@ export function SearchBar({
             </TooltipTrigger>
             <TooltipContent side="right">
               <p>Supports track, album, playlist, and artist URLs</p>
+              <p className="mt-1">Note: Playlist must be public (not private)</p>
             </TooltipContent>
           </Tooltip>
         </div>

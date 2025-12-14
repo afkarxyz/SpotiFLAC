@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { downloadCover } from "@/lib/api";
-import { getSettings } from "@/lib/settings";
+import { getSettings, parseTemplate, type TemplateData } from "@/lib/settings";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
 import { logger } from "@/lib/logger";
@@ -22,7 +22,6 @@ export function useCover() {
     artistName: string,
     albumName?: string,
     playlistName?: string,
-    isArtistDiscography?: boolean,
     position?: number,
     trackId?: string
   ) => {
@@ -41,20 +40,30 @@ export function useCover() {
       const os = settings.operatingSystem;
       let outputDir = settings.downloadPath;
 
-      // Build output path similar to audio download
-      if (playlistName) {
-        outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+      // Replace forward slashes in template data values to prevent them from being interpreted as path separators
+      const placeholder = "__SLASH_PLACEHOLDER__";
+      const templateData: TemplateData = {
+        artist: artistName?.replace(/\//g, placeholder),
+        album: albumName?.replace(/\//g, placeholder),
+        title: trackName?.replace(/\//g, placeholder),
+        track: position,
+        playlist: playlistName?.replace(/\//g, placeholder),
+      };
 
-        if (isArtistDiscography) {
-          if (settings.albumSubfolder && albumName) {
-            outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
-          }
-        } else {
-          if (settings.artistSubfolder && artistName) {
-            outputDir = joinPath(os, outputDir, sanitizePath(artistName, os));
-          }
-          if (settings.albumSubfolder && albumName) {
-            outputDir = joinPath(os, outputDir, sanitizePath(albumName, os));
+      // For playlist/discography, prepend the folder name
+      if (playlistName) {
+        outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
+      }
+
+      // Apply folder template
+      if (settings.folderTemplate) {
+        const folderPath = parseTemplate(settings.folderTemplate, templateData);
+        if (folderPath) {
+          const parts = folderPath.split("/").filter((p: string) => p.trim());
+          for (const part of parts) {
+            // Restore any slashes that were in the original values as spaces
+            const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+            outputDir = joinPath(os, outputDir, sanitizePath(sanitizedPart, os));
           }
         }
       }
@@ -64,7 +73,7 @@ export function useCover() {
         track_name: trackName,
         artist_name: artistName,
         output_dir: outputDir,
-        filename_format: settings.filenameFormat,
+        filename_format: settings.filenameTemplate || "{title}",
         track_number: settings.trackNumber,
         position: position || 0,
       });
@@ -97,8 +106,7 @@ export function useCover() {
 
   const handleDownloadAllCovers = async (
     tracks: TrackMetadata[],
-    playlistName?: string,
-    isArtistDiscography?: boolean
+    playlistName?: string
   ) => {
     if (tracks.length === 0) {
       toast.error("No tracks to download covers");
@@ -135,19 +143,31 @@ export function useCover() {
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
 
-        if (playlistName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+        // Replace forward slashes in template data values to prevent them from being interpreted as path separators
+        const placeholder = "__SLASH_PLACEHOLDER__";
+        // Build output path using template system
+        const templateData: TemplateData = {
+          artist: track.artists?.replace(/\//g, placeholder),
+          album: track.album_name?.replace(/\//g, placeholder),
+          title: track.name?.replace(/\//g, placeholder),
+          track: i + 1,
+          playlist: playlistName?.replace(/\//g, placeholder),
+        };
 
-          if (isArtistDiscography) {
-            if (settings.albumSubfolder && track.album_name) {
-              outputDir = joinPath(os, outputDir, sanitizePath(track.album_name, os));
-            }
-          } else {
-            if (settings.artistSubfolder && track.artists) {
-              outputDir = joinPath(os, outputDir, sanitizePath(track.artists, os));
-            }
-            if (settings.albumSubfolder && track.album_name) {
-              outputDir = joinPath(os, outputDir, sanitizePath(track.album_name, os));
+        // For playlist/discography, prepend the folder name
+        if (playlistName) {
+          outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
+        }
+
+        // Apply folder template
+        if (settings.folderTemplate) {
+          const folderPath = parseTemplate(settings.folderTemplate, templateData);
+          if (folderPath) {
+            const parts = folderPath.split("/").filter((p: string) => p.trim());
+            for (const part of parts) {
+              // Restore any slashes that were in the original values as spaces
+              const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+              outputDir = joinPath(os, outputDir, sanitizePath(sanitizedPart, os));
             }
           }
         }
@@ -157,7 +177,7 @@ export function useCover() {
           track_name: track.name,
           artist_name: track.artists,
           output_dir: outputDir,
-          filename_format: settings.filenameFormat,
+          filename_format: settings.filenameTemplate || "{title}",
           track_number: settings.trackNumber,
           position: i + 1,
         });

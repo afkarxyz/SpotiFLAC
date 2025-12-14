@@ -243,10 +243,21 @@ jobs:
         run: |
           upx --best --lzma build/bin/SpotiFLAC
 
+      - name: Cache appimagetool
+        id: cache-appimagetool
+        uses: actions/cache@v4
+        with:
+          path: appimagetool
+          key: appimagetool-x86_64-v1
+
       - name: Download appimagetool
+        if: steps.cache-appimagetool.outputs.cache-hit != 'true'
         run: |
-          wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod +x appimagetool
+          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage || \
+          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+
+      - name: Make appimagetool executable
+        run: chmod +x appimagetool
 
       - name: Create AppImage
         run: |

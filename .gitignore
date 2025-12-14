@@ -56,6 +56,9 @@ temp/
 *.bak
 *.old
 
+# Test files
+test
+
 # Build notes (optional - uncomment if you don't want to commit)
 # BUILD_NOTES.md
 build.txt

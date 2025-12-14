@@ -9,12 +9,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderOpen, Save, RotateCcw, Info, Volume2 } from "lucide-react";
+import { FolderOpen, Save, RotateCcw, Info } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, type Settings as SettingsType, type FontFamily } from "@/lib/settings";
+import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
@@ -24,12 +23,6 @@ const TidalIcon = () => (
   <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
     <path d="M4.022 4.5 0 8.516l3.997 3.99 3.997-3.984L4.022 4.5Zm7.956 0L7.994 8.522l4.003 3.984L16 8.484 11.978 4.5Zm8.007 0L24 8.528l-4.003 3.978L16 8.484 19.985 4.5Z"></path>
     <path d="m8.012 16.534 3.991 3.966L16 16.49l-4.003-3.984-3.985 4.028Z"></path>
-  </svg>
-);
-
-const DeezerIcon = () => (
-  <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
-    <path d="M18.77 5.55c.19-1.07.46-1.75.76-1.75.56 0 1.02 2.34 1.02 5.23 0 2.89-.46 5.23-1.02 5.23-.23 0-.44-.4-.61-1.06-.27 2.43-.83 4.11-1.48 4.11-.5 0-.96-1-1.26-2.6-.2 3.03-.73 5.17-1.33 5.17-.39 0-.73-.85-.99-2.23-.31 2.85-1.03 4.85-1.86 4.85-.83 0-1.55-2-1.86-4.85-.25 1.38-.6 2.23-.99 2.23-.6 0-1.12-2.14-1.33-5.16-.3 1.58-.75 2.6-1.26 2.6-.65 0-1.2-1.68-1.48-4.12-.17.66-.38 1.06-.61 1.06-.56 0-1.02-2.34-1.02-5.23 0-2.89.46-5.23 1.02-5.23.3 0 .57.68.76 1.75C5.53 3.7 6 2.5 6.56 2.5c.66 0 1.22 1.7 1.49 4.17.26-1.8.66-2.94 1.1-2.94.63 0 1.16 2.25 1.36 5.4.36-1.62.9-2.63 1.5-2.63.58 0 1.12 1.01 1.49 2.62.2-3.14.72-5.4 1.35-5.4.44 0 .84 1.15 1.1 2.95.27-2.47.84-4.17 1.49-4.17.55 0 1.03 1.2 1.33 3.05ZM2 8.52c0-1.3.26-2.34.58-2.34.32 0 .57 1.05.57 2.34 0 1.29-.25 2.34-.57 2.34-.32 0-.58-1.05-.58-2.34Zm18.85 0c0-1.3.25-2.34.57-2.34.32 0 .58 1.05.58 2.34 0 1.29-.26 2.34-.58 2.34-.32 0-.57-1.05-.57-2.34Z"></path>
   </svg>
 );
 
@@ -140,34 +133,6 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* Source Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="downloader">Source</Label>
-            <Select
-              value={tempSettings.downloader}
-              onValueChange={(value: "auto" | "deezer" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
-            >
-              <SelectTrigger id="downloader">
-                <SelectValue placeholder="Select a source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Auto</SelectItem>
-                <SelectItem value="tidal">
-                  <span className="flex items-center"><TidalIcon />Tidal</span>
-                </SelectItem>
-                <SelectItem value="deezer">
-                  <span className="flex items-center"><DeezerIcon />Deezer</span>
-                </SelectItem>
-                <SelectItem value="qobuz">
-                  <span className="flex items-center"><QobuzIcon />Qobuz</span>
-                </SelectItem>
-                <SelectItem value="amazon">
-                  <span className="flex items-center"><AmazonIcon />Amazon Music</span>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Theme Mode */}
           <div className="space-y-2">
             <Label htmlFor="theme-mode">Mode</Label>
@@ -233,98 +198,196 @@ export function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
-        </div>
-
-        {/* Right Column */}
-        <div className="space-y-4">
-          {/* Filename Format */}
-          <div className="space-y-2">
-            <Label className="text-sm">Filename Format</Label>
-            <RadioGroup
-              value={tempSettings.filenameFormat}
-              onValueChange={(value) => setTempSettings(prev => ({ ...prev, filenameFormat: value as any }))}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="title-artist" id="title-artist" />
-                <Label htmlFor="title-artist" className="cursor-pointer font-normal text-sm">Title - Artist</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="artist-title" id="artist-title" />
-                <Label htmlFor="artist-title" className="cursor-pointer font-normal text-sm">Artist - Title</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="title" id="title" />
-                <Label htmlFor="title" className="cursor-pointer font-normal text-sm">Title</Label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          <div className="border-t pt-4" />
-
-          {/* Folder Settings */}
-          <div className="space-y-2">
-            <h3 className="font-medium text-sm">Folder Settings</h3>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="track-number"
-                checked={tempSettings.trackNumber}
-                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, trackNumber: checked as boolean }))}
-              />
-              <Label htmlFor="track-number" className="cursor-pointer text-sm">Track Number</Label>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs">
-                  <p className="text-xs text-center">Adds track numbers to filenames</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="artist-subfolder"
-                checked={tempSettings.artistSubfolder}
-                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, artistSubfolder: checked as boolean }))}
-              />
-              <Label htmlFor="artist-subfolder" className="cursor-pointer text-sm">Artist Subfolder</Label>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs">
-                  <p className="text-xs text-center">Playlist only</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="album-subfolder"
-                checked={tempSettings.albumSubfolder}
-                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, albumSubfolder: checked as boolean }))}
-              />
-              <Label htmlFor="album-subfolder" className="cursor-pointer text-sm">Album Subfolder</Label>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs">
-                  <p className="text-xs text-center">Playlist & Discography</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-
-          <div className="border-t pt-4" />
 
           {/* Sound Effects */}
           <div className="flex items-center gap-3">
-            <Volume2 className="h-4 w-4 text-muted-foreground" />
             <Label htmlFor="sfx-enabled" className="cursor-pointer text-sm">Sound Effects</Label>
             <Switch
               id="sfx-enabled"
               checked={tempSettings.sfxEnabled}
               onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))}
             />
+          </div>
+        </div>
+
+        {/* Right Column */}
+        <div className="space-y-4">
+          {/* Source Selection */}
+          <div className="space-y-2">
+            <Label htmlFor="downloader" className="text-sm">Source</Label>
+            <div className="flex gap-2">
+              <Select
+                value={tempSettings.downloader}
+                onValueChange={(value: "auto" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
+              >
+                <SelectTrigger id="downloader" className="h-9 w-fit">
+                  <SelectValue placeholder="Select a source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="tidal">
+                    <span className="flex items-center"><TidalIcon />Tidal</span>
+                  </SelectItem>
+                  <SelectItem value="qobuz">
+                    <span className="flex items-center"><QobuzIcon />Qobuz</span>
+                  </SelectItem>
+                  <SelectItem value="amazon">
+                    <span className="flex items-center"><AmazonIcon />Amazon Music</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {/* Quality dropdown for Tidal */}
+              {tempSettings.downloader === "tidal" && (
+                <Select
+                  value={tempSettings.tidalQuality}
+                  onValueChange={(value: "LOSSLESS" | "HI_RES_LOSSLESS") => setTempSettings((prev) => ({ ...prev, tidalQuality: value }))}
+                >
+                  <SelectTrigger className="h-9 w-fit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOSSLESS">Lossless (16-bit/CD Quality)</SelectItem>
+                    <SelectItem value="HI_RES_LOSSLESS">Hi-Res Lossless (24-bit/48kHz+)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              {/* Quality dropdown for Qobuz */}
+              {tempSettings.downloader === "qobuz" && (
+                <Select
+                  value={tempSettings.qobuzQuality}
+                  onValueChange={(value: "6" | "7" | "27") => setTempSettings((prev) => ({ ...prev, qobuzQuality: value }))}
+                >
+                  <SelectTrigger className="h-9 w-fit">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="6">FLAC 16-bit (CD Quality)</SelectItem>
+                    <SelectItem value="7">FLAC 24-bit</SelectItem>
+                    <SelectItem value="27">Hi-Res (24-bit/96kHz+)</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
+          {/* Embed Lyrics & Embed Max Quality Cover */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="embed-lyrics" className="cursor-pointer text-sm">Embed Lyrics</Label>
+              <Switch
+                id="embed-lyrics"
+                checked={tempSettings.embedLyrics}
+                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedLyrics: checked }))}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Label htmlFor="embed-max-quality-cover" className="cursor-pointer text-sm">Embed Max Quality Cover</Label>
+              <Switch
+                id="embed-max-quality-cover"
+                checked={tempSettings.embedMaxQualityCover}
+                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedMaxQualityCover: checked }))}
+              />
+            </div>
+          </div>
+
+          <div className="border-t" />
+
+          {/* Folder Structure */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">Folder Structure</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p className="text-xs whitespace-nowrap">Variables: {TEMPLATE_VARIABLES.map(v => v.key).join(", ")}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Select
+              value={tempSettings.folderPreset}
+              onValueChange={(value: FolderPreset) => {
+                const preset = FOLDER_PRESETS[value];
+                setTempSettings(prev => ({
+                  ...prev,
+                  folderPreset: value,
+                  folderTemplate: value === "custom" ? prev.folderTemplate : preset.template
+                }));
+              }}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(FOLDER_PRESETS).map(([key, { label }]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {tempSettings.folderPreset === "custom" && (
+              <InputWithContext
+                value={tempSettings.folderTemplate}
+                onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))}
+                placeholder="{artist}/{album}"
+                className="h-9 text-sm"
+              />
+            )}
+            {tempSettings.folderTemplate && (
+              <p className="text-xs text-muted-foreground">
+                Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{album\}/g, "1989").replace(/\{year\}/g, "2014")}/</span>
+              </p>
+            )}
+          </div>
+
+          <div className="border-t" />
+
+          {/* Filename Format */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">Filename Format</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p className="text-xs whitespace-nowrap">Variables: {TEMPLATE_VARIABLES.map(v => v.key).join(", ")}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Select
+              value={tempSettings.filenamePreset}
+              onValueChange={(value: FilenamePreset) => {
+                const preset = FILENAME_PRESETS[value];
+                setTempSettings(prev => ({
+                  ...prev,
+                  filenamePreset: value,
+                  filenameTemplate: value === "custom" ? prev.filenameTemplate : preset.template
+                }));
+              }}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(FILENAME_PRESETS).map(([key, { label }]) => (
+                  <SelectItem key={key} value={key}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {tempSettings.filenamePreset === "custom" && (
+              <InputWithContext
+                value={tempSettings.filenameTemplate}
+                onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))}
+                placeholder="{track}. {title}"
+                className="h-9 text-sm"
+              />
+            )}
+            {tempSettings.filenameTemplate && (
+              <p className="text-xs text-muted-foreground">
+                Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Taylor Swift").replace(/\{title\}/g, "Shake It Off").replace(/\{track\}/g, "01").replace(/\{year\}/g, "2014")}.flac</span>
+              </p>
+            )}
           </div>
         </div>
       </div>

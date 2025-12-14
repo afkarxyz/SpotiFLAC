@@ -1,20 +1,69 @@
 import { GetDefaults } from "../../wailsjs/go/main/App";
 
-export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk";
+export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans";
+
+// Folder structure presets
+export type FolderPreset = "none" | "artist" | "album" | "artist-album" | "artist-year-album" | "custom";
+
+// Filename format presets
+export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "custom";
 
 export interface Settings {
   downloadPath: string;
-  downloader: "auto" | "deezer" | "tidal" | "qobuz" | "amazon";
+  downloader: "auto" | "tidal" | "qobuz" | "amazon";
   theme: string;
   themeMode: "auto" | "light" | "dark";
   fontFamily: FontFamily;
-  filenameFormat: "title-artist" | "artist-title" | "title";
-  artistSubfolder: boolean;
-  albumSubfolder: boolean;
+  // New template system
+  folderPreset: FolderPreset;
+  folderTemplate: string;
+  filenamePreset: FilenamePreset;
+  filenameTemplate: string;
+  // Legacy settings (kept for migration)
+  filenameFormat?: "title-artist" | "artist-title" | "title";
+  artistSubfolder?: boolean;
+  albumSubfolder?: boolean;
   trackNumber: boolean;
   sfxEnabled: boolean;
-  operatingSystem: "Windows" | "linux/MacOS"
+  embedLyrics: boolean;
+  embedMaxQualityCover: boolean;
+  operatingSystem: "Windows" | "linux/MacOS";
+  // Quality settings for specific sources
+  tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
+  qobuzQuality: "6" | "7" | "27";
 }
+
+// Folder preset templates
+export const FOLDER_PRESETS: Record<FolderPreset, { label: string; template: string }> = {
+  "none": { label: "No Subfolder", template: "" },
+  "artist": { label: "Artist", template: "{artist}" },
+  "album": { label: "Album", template: "{album}" },
+  "artist-album": { label: "Artist / Album", template: "{artist}/{album}" },
+  "artist-year-album": { label: "Artist / [Year] Album", template: "{artist}/[{year}] {album}" },
+  "custom": { label: "Custom...", template: "" },
+};
+
+// Filename preset templates
+export const FILENAME_PRESETS: Record<FilenamePreset, { label: string; template: string }> = {
+  "title": { label: "Title", template: "{title}" },
+  "title-artist": { label: "Title - Artist", template: "{title} - {artist}" },
+  "artist-title": { label: "Artist - Title", template: "{artist} - {title}" },
+  "track-title": { label: "Track. Title", template: "{track}. {title}" },
+  "track-title-artist": { label: "Track. Title - Artist", template: "{track}. {title} - {artist}" },
+  "track-artist-title": { label: "Track. Artist - Title", template: "{track}. {artist} - {title}" },
+  "custom": { label: "Custom...", template: "" },
+};
+
+// Available template variables
+export const TEMPLATE_VARIABLES = [
+  { key: "{artist}", description: "Artist name", example: "Taylor Swift" },
+  { key: "{album}", description: "Album name", example: "1989" },
+  { key: "{title}", description: "Track title", example: "Shake It Off" },
+  { key: "{track}", description: "Track number", example: "01" },
+  { key: "{year}", description: "Release year", example: "2014" },
+  { key: "{isrc}", description: "ISRC code", example: "USCJY1431309" },
+  { key: "{playlist}", description: "Playlist name", example: "My Playlist" },
+];
 
 // Auto-detect operating system
 function detectOS(): "Windows" | "linux/MacOS" {
@@ -31,22 +80,35 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "yellow",
   themeMode: "auto",
   fontFamily: "google-sans",
-  filenameFormat: "title-artist",
-  artistSubfolder: false,
-  albumSubfolder: false,
+  folderPreset: "none",
+  folderTemplate: "",
+  filenamePreset: "title-artist",
+  filenameTemplate: "{title} - {artist}",
   trackNumber: false,
   sfxEnabled: true,
-  operatingSystem: detectOS()
+  embedLyrics: false,
+  embedMaxQualityCover: false,
+  operatingSystem: detectOS(),
+  tidalQuality: "LOSSLESS", // Default: 16-bit lossless
+  qobuzQuality: "6" // Default: FLAC 16-bit
 };
 
 export const FONT_OPTIONS: { value: FontFamily; label: string; fontFamily: string }[] = [
+  { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
+  { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
+  { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
   { value: "google-sans", label: "Google Sans Flex", fontFamily: '"Google Sans Flex", system-ui, sans-serif' },
   { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
-  { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
-  { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
-  { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
-  { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+  { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
   { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
+  { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
+  { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
+  { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
+  { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+  { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
+  { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
+  { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
+  { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
   { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
 ];
 
@@ -80,14 +142,80 @@ export function getSettings(): Settings {
         parsed.themeMode = parsed.darkMode ? 'dark' : 'light';
         delete parsed.darkMode;
       }
+      // Migrate old folder/filename settings to new template system
+      if (!('folderPreset' in parsed) && ('artistSubfolder' in parsed || 'albumSubfolder' in parsed)) {
+        const hasArtist = parsed.artistSubfolder;
+        const hasAlbum = parsed.albumSubfolder;
+        if (hasArtist && hasAlbum) {
+          parsed.folderPreset = "artist-album";
+          parsed.folderTemplate = "{artist}/{album}";
+        } else if (hasArtist) {
+          parsed.folderPreset = "artist";
+          parsed.folderTemplate = "{artist}";
+        } else if (hasAlbum) {
+          parsed.folderPreset = "album";
+          parsed.folderTemplate = "{album}";
+        } else {
+          parsed.folderPreset = "none";
+          parsed.folderTemplate = "";
+        }
+      }
+      if (!('filenamePreset' in parsed) && 'filenameFormat' in parsed) {
+        const format = parsed.filenameFormat;
+        if (format === "title-artist") {
+          parsed.filenamePreset = "artist-title";
+          parsed.filenameTemplate = "{artist} - {title}";
+        } else if (format === "artist-title") {
+          parsed.filenamePreset = "artist-title";
+          parsed.filenameTemplate = "{artist} - {title}";
+        } else {
+          parsed.filenamePreset = "title";
+          parsed.filenameTemplate = "{title}";
+        }
+      }
       // Always use detected OS (don't persist it)
       parsed.operatingSystem = detectOS();
+      // Set default quality if not present
+      if (!('tidalQuality' in parsed)) {
+        parsed.tidalQuality = "LOSSLESS";
+      }
+      if (!('qobuzQuality' in parsed)) {
+        parsed.qobuzQuality = "6";
+      }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (error) {
     console.error("Failed to load settings:", error);
   }
   return DEFAULT_SETTINGS;
+}
+
+// Parse template and replace variables with actual values
+export interface TemplateData {
+  artist?: string;
+  album?: string;
+  title?: string;
+  track?: number;
+  year?: string;
+  isrc?: string;
+  playlist?: string;
+}
+
+export function parseTemplate(template: string, data: TemplateData): string {
+  if (!template) return "";
+  
+  let result = template;
+  
+  // Replace each variable
+  result = result.replace(/\{artist\}/g, data.artist || "Unknown Artist");
+  result = result.replace(/\{album\}/g, data.album || "Unknown Album");
+  result = result.replace(/\{title\}/g, data.title || "Unknown Title");
+  result = result.replace(/\{track\}/g, data.track ? String(data.track).padStart(2, "0") : "00");
+  result = result.replace(/\{year\}/g, data.year || "0000");
+  result = result.replace(/\{isrc\}/g, data.isrc || "");
+  result = result.replace(/\{playlist\}/g, data.playlist || "");
+  
+  return result;
 }
 
 export async function getSettingsWithDefaults(): Promise<Settings> {
