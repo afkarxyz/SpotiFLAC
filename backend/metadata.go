@@ -3,6 +3,7 @@ package backend
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	pathfilepath "path/filepath"
 	"strconv"
 	"strings"
@@ -364,14 +365,22 @@ func extractLyricsFromMp3(filePath string) (string, error) {
 
 	usltFrames := tag.GetFrames(tag.CommonID("Unsynchronised lyrics/text transcription"))
 	if len(usltFrames) == 0 {
+		fmt.Printf("[ExtractLyrics] No USLT frames found in MP3: %s\n", filePath)
 		return "", nil
 	}
 
 	uslt, ok := usltFrames[0].(id3v2.UnsynchronisedLyricsFrame)
 	if !ok {
+		fmt.Printf("[ExtractLyrics] USLT frame type assertion failed in MP3: %s\n", filePath)
 		return "", nil
 	}
 
+	if uslt.Lyrics == "" {
+		fmt.Printf("[ExtractLyrics] USLT frame has empty lyrics in MP3: %s\n", filePath)
+		return "", nil
+	}
+
+	fmt.Printf("[ExtractLyrics] Successfully extracted lyrics from MP3: %s (%d characters)\n", filePath, len(uslt.Lyrics))
 	return uslt.Lyrics, nil
 }
 
@@ -395,13 +404,16 @@ func extractLyricsFromFlac(filePath string) (string, error) {
 				if len(parts) == 2 {
 					fieldName := strings.ToUpper(parts[0])
 					if fieldName == "LYRICS" || fieldName == "UNSYNCEDLYRICS" {
-						return parts[1], nil
+						lyrics := parts[1]
+						fmt.Printf("[ExtractLyrics] Successfully extracted lyrics from FLAC: %s (%d characters)\n", filePath, len(lyrics))
+						return lyrics, nil
 					}
 				}
 			}
 		}
 	}
 
+	fmt.Printf("[ExtractLyrics] No lyrics found in FLAC: %s\n", filePath)
 	return "", nil
 }
 
@@ -492,7 +504,58 @@ func EmbedLyricsOnlyMP3(filepath string, lyrics string) error {
 	return nil
 }
 
-// EmbedLyricsOnlyUniversal embeds lyrics to MP3 or FLAC file
+// embedLyricsToM4A adds lyrics to an M4A file using ffmpeg
+func embedLyricsToM4A(filepath string, lyrics string) error {
+	// Use ffmpeg to embed lyrics into M4A file
+	// M4A uses iTunes metadata format with atom '©lyr' for lyrics
+	ffmpegPath, err := GetFFmpegPath()
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found: %w", err)
+	}
+
+	// Create temporary output file with proper extension so ffmpeg can detect format
+	tmpOutputFile := strings.TrimSuffix(filepath, pathfilepath.Ext(filepath)) + ".tmp" + pathfilepath.Ext(filepath)
+	defer func() {
+		// Only remove if file still exists (rename might have failed)
+		if _, err := os.Stat(tmpOutputFile); err == nil {
+			os.Remove(tmpOutputFile)
+		}
+	}()
+
+	// Use ffmpeg to copy file and add lyrics metadata
+	// For M4A, we need to use the correct metadata tag format and specify output format
+	// Use -f ipod for M4A format (iPod format is compatible with M4A)
+	cmd := exec.Command(ffmpegPath,
+		"-i", filepath,
+		"-map", "0",
+		"-map_metadata", "0",
+		"-metadata", "lyrics-eng="+lyrics,
+		"-metadata", "lyrics="+lyrics,
+		"-codec", "copy",
+		"-f", "ipod", // Explicitly specify M4A/iPod format
+		"-y", // Overwrite
+		tmpOutputFile,
+	)
+
+	// Hide console window on Windows
+	setHideWindow(cmd)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("[FFmpeg] Error embedding lyrics to M4A: %s\n", string(output))
+		return fmt.Errorf("ffmpeg failed to embed lyrics: %s - %w", string(output), err)
+	}
+
+	// Replace original file with new file
+	if err := os.Rename(tmpOutputFile, filepath); err != nil {
+		return fmt.Errorf("failed to replace original file: %w", err)
+	}
+
+	fmt.Printf("[FFmpeg] Lyrics embedded to M4A successfully: %d characters\n", len(lyrics))
+	return nil
+}
+
+// EmbedLyricsOnlyUniversal embeds lyrics to MP3, FLAC, or M4A file
 func EmbedLyricsOnlyUniversal(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil
@@ -504,6 +567,8 @@ func EmbedLyricsOnlyUniversal(filepath string, lyrics string) error {
 		return EmbedLyricsOnlyMP3(filepath, lyrics)
 	case ".flac":
 		return EmbedLyricsOnly(filepath, lyrics)
+	case ".m4a":
+		return embedLyricsToM4A(filepath, lyrics)
 	default:
 		return fmt.Errorf("unsupported file format for lyrics embedding: %s", ext)
 	}

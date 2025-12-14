@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Trash2,
   FileMusic,
+  WandSparkles,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -112,6 +113,19 @@ export function AudioConverterPage() {
   useEffect(() => {
     saveState({ files, outputFormat, bitrate });
   }, [files, outputFormat, bitrate, saveState]);
+
+  // Auto-set output format to M4A if all files are MP3
+  useEffect(() => {
+    if (files.length === 0) return;
+    
+    const allMP3 = files.every((f) => f.format === "mp3");
+    if (allMP3 && outputFormat !== "m4a") {
+      setOutputFormat("m4a");
+    }
+  }, [files, outputFormat]);
+
+  // Check if format selection should be disabled (all files are MP3)
+  const isFormatDisabled = files.length > 0 && files.every((f) => f.format === "mp3");
 
   // Detect fullscreen/maximized window
   useEffect(() => {
@@ -236,7 +250,20 @@ export function AudioConverterPage() {
   };
 
   const addFiles = useCallback((paths: string[]) => {
-    const validExtensions = [".mp3", ".m4a", ".flac"];
+    const validExtensions = [".mp3", ".flac"];
+    
+    // Check for M4A files specifically
+    const m4aFiles = paths.filter((path) => {
+      const ext = path.toLowerCase().slice(path.lastIndexOf("."));
+      return ext === ".m4a";
+    });
+
+    if (m4aFiles.length > 0) {
+      toast.error("M4A files not supported", {
+        description: "Only FLAC and MP3 files are supported as input. Please convert M4A files first.",
+      });
+    }
+
     setFiles((prev) => {
       const newFiles: AudioFile[] = paths
         .filter((path) => {
@@ -266,7 +293,7 @@ export function AudioConverterPage() {
         return [...prev, ...newFiles];
       }
 
-      if (paths.length > 0) {
+      if (paths.length > 0 && m4aFiles.length === 0) {
         toast.info("No new files added", {
           description: "All files were already added or have unsupported format",
         });
@@ -462,8 +489,25 @@ export function AudioConverterPage() {
   return (
     <div className={`space-y-6 ${isFullscreen ? "h-full flex flex-col" : ""}`}>
       {/* Header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Audio Converter</h1>
+        {files.length > 0 && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleSelectFiles}>
+              <Upload className="h-4 w-4" />
+              Add More
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={clearFiles}
+              disabled={converting}
+            >
+              <Trash2 className="h-4 w-4" />
+              Clear All
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Drop Zone / File List */}
@@ -492,7 +536,7 @@ export function AudioConverterPage() {
         {files.length === 0 ? (
           <>
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <Upload className="h-8 w-8 text-muted-foreground" />
+              <Upload className="h-8 w-8 text-primary" />
             </div>
             <p className="text-sm text-muted-foreground mb-2 text-center">
               {isDragging
@@ -500,7 +544,7 @@ export function AudioConverterPage() {
                 : "Drag and drop audio files here, or click the button below to select"}
             </p>
             <p className="text-xs text-muted-foreground mb-4 text-center">
-              Supported formats: MP3, M4A, FLAC
+              Supported formats: FLAC, MP3
             </p>
             <Button onClick={handleSelectFiles} size="lg">
               <Upload className="h-5 w-5" />
@@ -520,13 +564,16 @@ export function AudioConverterPage() {
                       variant="outline"
                       value={outputFormat}
                       onValueChange={(value) => {
-                        if (value) setOutputFormat(value as "mp3" | "m4a");
+                        if (value && !isFormatDisabled) setOutputFormat(value as "mp3" | "m4a");
                       }}
+                      disabled={isFormatDisabled}
                     >
-                      <ToggleGroupItem value="mp3" aria-label="MP3">
-                        MP3
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="m4a" aria-label="M4A">
+                      {!isFormatDisabled && (
+                        <ToggleGroupItem value="mp3" aria-label="MP3">
+                          MP3
+                        </ToggleGroupItem>
+                      )}
+                      <ToggleGroupItem value="m4a" aria-label="M4A" disabled={isFormatDisabled}>
                         M4A
                       </ToggleGroupItem>
                     </ToggleGroup>
@@ -551,21 +598,6 @@ export function AudioConverterPage() {
                         </ToggleGroupItem>
                       ))}
                     </ToggleGroup>
-                  </div>
-                  <div className="flex gap-2 ml-auto">
-                    <Button variant="outline" size="sm" onClick={handleSelectFiles}>
-                      <Upload className="h-4 w-4" />
-                      Add More
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={clearFiles}
-                      disabled={converting}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Clear All
-                    </Button>
                   </div>
                 </div>
               </div>
@@ -625,7 +657,7 @@ export function AudioConverterPage() {
                   </>
                 ) : (
                   <>
-                    <FileMusic className="h-4 w-4" />
+                    <WandSparkles className="h-4 w-4" />
                     Convert {convertableCount > 0 ? `${convertableCount} File(s)` : ""}
                   </>
                 )}

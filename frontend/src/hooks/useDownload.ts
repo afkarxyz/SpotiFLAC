@@ -41,20 +41,22 @@ export function useDownload() {
     let outputDir = settings.downloadPath;
     let useAlbumTrackNumber = false;
 
+    // Replace forward slashes in template data values to prevent them from being interpreted as path separators
+    const placeholder = "__SLASH_PLACEHOLDER__";
     // Build template data for folder path
     const templateData: TemplateData = {
-      artist: artistName,
-      album: albumName,
-      title: trackName,
+      artist: artistName?.replace(/\//g, placeholder),
+      album: albumName?.replace(/\//g, placeholder),
+      title: trackName?.replace(/\//g, placeholder),
       track: position,
       year: releaseYear,
-      playlist: playlistName,
+      playlist: playlistName?.replace(/\//g, placeholder),
       isrc: isrc,
     };
 
     // For playlist/discography downloads, always create a folder with the playlist/artist name
     if (playlistName) {
-      outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+      outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
     }
 
     // Apply folder template if available
@@ -63,7 +65,9 @@ export function useDownload() {
       if (folderPath) {
         const parts = folderPath.split("/").filter((p: string) => p.trim());
         for (const part of parts) {
-          outputDir = joinPath(os, outputDir, sanitizePath(part, os));
+          // Restore any slashes that were in the original values as spaces
+          const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+          outputDir = joinPath(os, outputDir, sanitizePath(sanitizedPart, os));
         }
       }
 
@@ -112,6 +116,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.tidal_url,
             duration: durationSeconds,
             item_id: itemID, // Pass the same itemID through all attempts
@@ -146,6 +151,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.deezer_url,
             item_id: itemID,
           });
@@ -178,6 +184,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.amazon_url,
             item_id: itemID,
           });
@@ -208,6 +215,7 @@ export function useDownload() {
         use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             duration: durationMs ? Math.round(durationMs / 1000) : undefined,
             item_id: itemID,
             audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode
@@ -285,20 +293,21 @@ export function useDownload() {
     let outputDir = settings.downloadPath;
     let useAlbumTrackNumber = false;
 
-    // Build template data for folder path
+    // Replace forward slashes in template data values to prevent them from being interpreted as path separators
+    const placeholder = "__SLASH_PLACEHOLDER__";
     const templateData: TemplateData = {
-      artist: artistName,
-      album: albumName,
-      title: trackName,
+      artist: artistName?.replace(/\//g, placeholder),
+      album: albumName?.replace(/\//g, placeholder),
+      title: trackName?.replace(/\//g, placeholder),
       track: position,
       year: releaseYear,
-      playlist: folderName,
+      playlist: folderName?.replace(/\//g, placeholder),
       isrc: isrc,
     };
 
     // For playlist/discography downloads, always create a folder with the playlist/artist name
     if (folderName && !isAlbum) {
-      outputDir = joinPath(os, outputDir, sanitizePath(folderName, os));
+      outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
     }
 
     // Apply folder template if available
@@ -306,10 +315,12 @@ export function useDownload() {
       // Parse and apply folder template
       const folderPath = parseTemplate(settings.folderTemplate, templateData);
       if (folderPath) {
-        // Split by / and sanitize each part
+        // Split by / (template separators), then restore placeholders as spaces
         const parts = folderPath.split("/").filter(p => p.trim());
         for (const part of parts) {
-          outputDir = joinPath(os, outputDir, sanitizePath(part, os));
+          // Restore any slashes that were in the original values as spaces
+          const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+          outputDir = joinPath(os, outputDir, sanitizePath(sanitizedPart, os));
         }
       }
       
@@ -352,6 +363,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.tidal_url,
             duration: durationSeconds,
             item_id: itemID,
@@ -383,6 +395,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.deezer_url,
             item_id: itemID,
           });
@@ -412,6 +425,7 @@ export function useDownload() {
             use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.amazon_url,
             item_id: itemID,
           });
@@ -439,6 +453,7 @@ export function useDownload() {
         use_album_track_number: useAlbumTrackNumber,
             spotify_id: spotifyId,
             embed_lyrics: settings.embedLyrics,
+            embed_max_quality_cover: settings.embedMaxQualityCover,
             duration: durationMs ? Math.round(durationMs / 1000) : undefined,
             item_id: itemID,
             audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode

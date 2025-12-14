@@ -124,6 +124,7 @@ export interface DownloadRequest {
   use_album_track_number?: boolean;
   spotify_id?: string;
   embed_lyrics?: boolean; // Whether to embed lyrics into the audio file
+  embed_max_quality_cover?: boolean; // Whether to embed max quality cover art
   service_url?: string;
   duration?: number; // Track duration in seconds for better matching
   item_id?: string; // Optional queue item ID for multi-service fallback tracking

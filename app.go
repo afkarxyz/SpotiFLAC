@@ -52,6 +52,7 @@ type DownloadRequest struct {
 	UseAlbumTrackNumber bool   `json:"use_album_track_number,omitempty"` // Use album track number instead of playlist position
 	SpotifyID           string `json:"spotify_id,omitempty"`             // Spotify track ID
 	EmbedLyrics         bool   `json:"embed_lyrics,omitempty"`           // Whether to embed lyrics into the audio file
+	EmbedMaxQualityCover bool   `json:"embed_max_quality_cover,omitempty"` // Whether to embed max quality cover art
 	ServiceURL          string `json:"service_url,omitempty"`            // Direct service URL (Tidal/Deezer/Amazon) to skip song.link API call
 	Duration            int    `json:"duration,omitempty"`               // Track duration in seconds for better matching
 	ItemID              string `json:"item_id,omitempty"`                // Optional queue item ID for multi-service fallback tracking

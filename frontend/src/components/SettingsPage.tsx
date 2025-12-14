@@ -279,17 +279,27 @@ export function SettingsPage() {
             </div>
           </div>
 
-          {/* Embed Lyrics */}
-          <div className="flex items-center gap-3">
-            <Label htmlFor="embed-lyrics" className="cursor-pointer text-sm">Embed Lyrics</Label>
-            <Switch
-              id="embed-lyrics"
-              checked={tempSettings.embedLyrics}
-              onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedLyrics: checked }))}
-            />
+          {/* Embed Lyrics & Embed Max Quality Cover */}
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="embed-lyrics" className="cursor-pointer text-sm">Embed Lyrics</Label>
+              <Switch
+                id="embed-lyrics"
+                checked={tempSettings.embedLyrics}
+                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedLyrics: checked }))}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Label htmlFor="embed-max-quality-cover" className="cursor-pointer text-sm">Embed Max Quality Cover</Label>
+              <Switch
+                id="embed-max-quality-cover"
+                checked={tempSettings.embedMaxQualityCover}
+                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedMaxQualityCover: checked }))}
+              />
+            </div>
           </div>
 
-          <div className="border-t pt-2" />
+          <div className="border-t" />
 
           {/* Folder Structure */}
           <div className="space-y-2">
@@ -339,7 +349,7 @@ export function SettingsPage() {
             )}
           </div>
 
-          <div className="border-t pt-2" />
+          <div className="border-t" />
 
           {/* Filename Format */}
           <div className="space-y-2">

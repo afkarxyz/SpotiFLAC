@@ -54,9 +54,12 @@ func BuildExpectedFilename(trackName, artistName, filenameFormat string, include
 
 // sanitizeFilename removes invalid characters from filename
 func sanitizeFilename(name string) string {
-	// First, remove invalid filesystem characters
-	re := regexp.MustCompile(`[<>:"/\\|?*]`)
-	sanitized := re.ReplaceAllString(name, "_")
+	// Replace forward slash with space (more natural than underscore)
+	sanitized := strings.ReplaceAll(name, "/", " ")
+	
+	// Remove other invalid filesystem characters (replace with space)
+	re := regexp.MustCompile(`[<>:"\\|?*]`)
+	sanitized = re.ReplaceAllString(sanitized, " ")
 	
 	// Remove control characters (0x00-0x1F, 0x7F)
 	var result strings.Builder
@@ -94,12 +97,16 @@ func sanitizeFilename(name string) string {
 	// Remove leading/trailing dots and spaces (Windows doesn't allow these)
 	sanitized = strings.Trim(sanitized, ". ")
 	
-	// Remove consecutive spaces and underscores
-	re = regexp.MustCompile(`[\s_]+`)
+	// Normalize consecutive spaces to single space
+	re = regexp.MustCompile(`\s+`)
+	sanitized = re.ReplaceAllString(sanitized, " ")
+	
+	// Normalize consecutive underscores to single underscore
+	re = regexp.MustCompile(`_+`)
 	sanitized = re.ReplaceAllString(sanitized, "_")
 	
-	// Remove leading/trailing underscores
-	sanitized = strings.Trim(sanitized, "_")
+	// Remove leading/trailing underscores and spaces
+	sanitized = strings.Trim(sanitized, "_ ")
 	
 	if sanitized == "" {
 		return "Unknown"

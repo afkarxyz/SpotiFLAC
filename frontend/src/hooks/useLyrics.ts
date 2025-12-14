@@ -37,17 +37,19 @@ export function useLyrics() {
       let outputDir = settings.downloadPath;
 
       // Build output path using template system
+      // Replace forward slashes in template data values to prevent them from being interpreted as path separators
+      const placeholder = "__SLASH_PLACEHOLDER__";
       const templateData: TemplateData = {
-        artist: artistName,
-        album: albumName,
-        title: trackName,
+        artist: artistName?.replace(/\//g, placeholder),
+        album: albumName?.replace(/\//g, placeholder),
+        title: trackName?.replace(/\//g, placeholder),
         track: position,
-        playlist: playlistName,
+        playlist: playlistName?.replace(/\//g, placeholder),
       };
 
       // For playlist/discography, prepend the folder name
       if (playlistName) {
-        outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+        outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
       }
 
       // Apply folder template
@@ -56,7 +58,9 @@ export function useLyrics() {
         if (folderPath) {
           const parts = folderPath.split("/").filter((p: string) => p.trim());
           for (const part of parts) {
-            outputDir = joinPath(os, outputDir, sanitizePath(part, os));
+            // Restore any slashes that were in the original values as spaces
+            const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+            outputDir = joinPath(os, outputDir, sanitizePath(sanitizedPart, os));
           }
         }
       }
@@ -136,18 +140,20 @@ export function useLyrics() {
         const os = settings.operatingSystem;
         let outputDir = settings.downloadPath;
 
+        // Replace forward slashes in template data values to prevent them from being interpreted as path separators
+        const placeholder = "__SLASH_PLACEHOLDER__";
         // Build output path using template system
         const templateData: TemplateData = {
-          artist: track.artists,
-          album: track.album_name,
-          title: track.name,
+          artist: track.artists?.replace(/\//g, placeholder),
+          album: track.album_name?.replace(/\//g, placeholder),
+          title: track.name?.replace(/\//g, placeholder),
           track: track.track_number,
-          playlist: playlistName,
+          playlist: playlistName?.replace(/\//g, placeholder),
         };
 
         // For playlist/discography, prepend the folder name
         if (playlistName) {
-          outputDir = joinPath(os, outputDir, sanitizePath(playlistName, os));
+          outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
 
         // Apply folder template
@@ -156,7 +162,9 @@ export function useLyrics() {
           if (folderPath) {
             const parts = folderPath.split("/").filter((p: string) => p.trim());
             for (const part of parts) {
-              outputDir = joinPath(os, outputDir, sanitizePath(part, os));
+              // Restore any slashes that were in the original values as spaces
+              const sanitizedPart = part.replace(new RegExp(placeholder, "g"), " ");
+              outputDir = joinPath(os, outputDir, sanitizePath(sanitizedPart, os));
             }
           }
         }

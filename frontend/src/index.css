@@ -125,6 +125,54 @@
   @apply text-blue-600;
 }
 
+/* Ensure description text uses same color as title */
+[data-sonner-toast] [data-description],
+[data-sonner-toast] [data-description] * {
+  opacity: 1 !important;
+}
+
+/* Specific color for each toast type - match icon color */
+[data-sonner-toast][data-type="success"] [data-description],
+[data-sonner-toast][data-type="success"] [data-description] * {
+  color: rgb(22 163 74) !important; /* green-600 - same as icon */
+}
+
+[data-sonner-toast][data-type="error"] [data-description],
+[data-sonner-toast][data-type="error"] [data-description] * {
+  color: rgb(220 38 38) !important; /* red-600 - same as icon */
+}
+
+[data-sonner-toast][data-type="warning"] [data-description],
+[data-sonner-toast][data-type="warning"] [data-description] * {
+  color: rgb(202 138 4) !important; /* yellow-600 - same as icon */
+}
+
+[data-sonner-toast][data-type="info"] [data-description],
+[data-sonner-toast][data-type="info"] [data-description] * {
+  color: rgb(37 99 235) !important; /* blue-600 - same as icon */
+}
+
+/* Dark mode - use same icon colors */
+.dark [data-sonner-toast][data-type="success"] [data-description],
+.dark [data-sonner-toast][data-type="success"] [data-description] * {
+  color: rgb(22 163 74) !important; /* green-600 */
+}
+
+.dark [data-sonner-toast][data-type="error"] [data-description],
+.dark [data-sonner-toast][data-type="error"] [data-description] * {
+  color: rgb(220 38 38) !important; /* red-600 */
+}
+
+.dark [data-sonner-toast][data-type="warning"] [data-description],
+.dark [data-sonner-toast][data-type="warning"] [data-description] * {
+  color: rgb(202 138 4) !important; /* yellow-600 */
+}
+
+.dark [data-sonner-toast][data-type="info"] [data-description],
+.dark [data-sonner-toast][data-type="info"] [data-description] * {
+  color: rgb(37 99 235) !important; /* blue-600 */
+}
+
 /* Dark mode toast styling */
 .dark [data-sonner-toast][data-type="success"] {
   @apply bg-green-950 border-green-800 text-green-100;

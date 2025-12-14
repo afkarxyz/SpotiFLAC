@@ -350,7 +350,14 @@ func ConvertAudio(req ConvertAudioRequest) ([]ConvertAudioResult, error) {
 			var lyrics string
 			
 			coverArtPath, _ = ExtractCoverArt(inputFile)
-			lyrics, _ = ExtractLyrics(inputFile)
+			lyrics, err = ExtractLyrics(inputFile)
+			if err != nil {
+				fmt.Printf("[FFmpeg] Warning: Failed to extract lyrics from %s: %v\n", inputFile, err)
+			} else if lyrics != "" {
+				fmt.Printf("[FFmpeg] Lyrics extracted from %s: %d characters\n", inputFile, len(lyrics))
+			} else {
+				fmt.Printf("[FFmpeg] No lyrics found in %s\n", inputFile)
+			}
 
 			// Build ffmpeg command
 			args := []string{
