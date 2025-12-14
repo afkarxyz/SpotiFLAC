@@ -25,7 +25,7 @@ interface TrackInfoProps {
   checkingAvailability?: boolean;
   availability?: TrackAvailability;
   downloadingCover?: boolean;
-  onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string) => void;
+  onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string) => void;
   onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
   onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string) => void;
@@ -120,7 +120,7 @@ export function TrackInfo({
             {track.isrc && (
               <div className="flex gap-2 flex-wrap">
                 <Button
-                  onClick={() => onDownload(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, undefined, track.duration_ms, undefined, track.album_artist, track.release_date)}
+                  onClick={() => onDownload(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, undefined, track.duration_ms, track.track_number, track.album_artist, track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks)}
                   disabled={isDownloading || downloadingTrack === track.isrc}
                 >
                   {downloadingTrack === track.isrc ? (

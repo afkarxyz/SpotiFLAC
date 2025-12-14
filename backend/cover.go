@@ -107,6 +107,46 @@ func (c *CoverClient) getMaxResolutionURL(coverURL string) string {
 	return coverURL
 }
 
+// DownloadCoverToPath downloads cover art from URL to a specific path
+// If embedMaxQualityCover is true, it will try to get max resolution
+func (c *CoverClient) DownloadCoverToPath(coverURL, outputPath string, embedMaxQualityCover bool) error {
+	if coverURL == "" {
+		return fmt.Errorf("cover URL is required")
+	}
+
+	// Use max quality URL if setting is enabled
+	downloadURL := coverURL
+	if embedMaxQualityCover {
+		downloadURL = c.getMaxResolutionURL(coverURL)
+	}
+
+	// Download cover image
+	resp, err := c.httpClient.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("failed to download cover: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download cover: HTTP %d", resp.StatusCode)
+	}
+
+	// Create file
+	file, err := os.Create(outputPath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %v", err)
+	}
+	defer file.Close()
+
+	// Write content to file
+	_, err = io.Copy(file, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write cover file: %v", err)
+	}
+
+	return nil
+}
+
 // DownloadCover downloads cover art for a single track
 func (c *CoverClient) DownloadCover(req CoverDownloadRequest) (*CoverDownloadResponse, error) {
 	if req.CoverURL == "" {

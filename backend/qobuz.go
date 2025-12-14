@@ -307,7 +307,7 @@ func buildQobuzFilename(title, artist string, trackNumber int, format string, in
 	return filename + ".flac"
 }
 
-func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool) (string, error) {
+func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int) (string, error) {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	// Create output directory if it doesn't exist
@@ -322,28 +322,10 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 		return "", err
 	}
 
-	// Use Spotify metadata if provided, otherwise fallback to Qobuz metadata
+	// All metadata from Spotify - no fallback to Qobuz
 	artists := spotifyArtistName
 	trackTitle := spotifyTrackName
 	albumTitle := spotifyAlbumName
-
-	if artists == "" {
-		artists = track.Performer.Name
-		if track.Album.Artist.Name != "" {
-			artists = track.Album.Artist.Name
-		}
-	}
-
-	if trackTitle == "" {
-		trackTitle = track.Title
-		if track.Version != "" && track.Version != "null" {
-			trackTitle = fmt.Sprintf("%s (%s)", track.Title, track.Version)
-		}
-	}
-
-	if albumTitle == "" {
-		albumTitle = track.Album.Title
-	}
 
 	fmt.Printf("Found track: %s - %s\n", artists, trackTitle)
 	fmt.Printf("Album: %s\n", albumTitle)
@@ -374,14 +356,14 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	safeArtist := sanitizeFilename(artists)
 	safeTitle := sanitizeFilename(trackTitle)
 
-	// Check if file with same ISRC already exists
-	if existingFile, exists := CheckISRCExists(outputDir, track.ISRC); exists {
-		fmt.Printf("File with ISRC %s already exists: %s\n", track.ISRC, existingFile)
+	// Check if file with same ISRC already exists (use Spotify ISRC)
+	if existingFile, exists := CheckISRCExists(outputDir, isrc); exists {
+		fmt.Printf("File with ISRC %s already exists: %s\n", isrc, existingFile)
 		return "EXISTS:" + existingFile, nil
 	}
 
-	// Build filename based on format settings
-	filename := buildQobuzFilename(safeTitle, safeArtist, track.TrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	// Build filename based on format settings (use Spotify track number)
+	filename := buildQobuzFilename(safeTitle, safeArtist, spotifyTrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filepath := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(filepath); err == nil && fileInfo.Size() > 0 {
@@ -397,56 +379,38 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	fmt.Printf("Downloaded: %s\n", filepath)
 
 	coverPath := ""
-	if track.Album.Image.Large != "" {
+	// Use Spotify cover URL (with max resolution if enabled) - all metadata from Spotify
+	if spotifyCoverURL != "" {
 		coverPath = filepath + ".cover.jpg"
-		fmt.Println("Downloading cover art...")
-		if err := q.DownloadCoverArt(track.Album.Image.Large, coverPath); err != nil {
-			fmt.Printf("Warning: Failed to download cover art: %v\n", err)
+		coverClient := NewCoverClient()
+		if err := coverClient.DownloadCoverToPath(spotifyCoverURL, coverPath, embedMaxQualityCover); err != nil {
+			fmt.Printf("Warning: Failed to download Spotify cover: %v\n", err)
+			coverPath = ""
 		} else {
 			defer os.Remove(coverPath)
+			fmt.Println("Spotify cover downloaded")
 		}
 	}
 
 	fmt.Println("Embedding metadata and cover art...")
 
-	// Use album track number if in album folder structure, otherwise use playlist position
-	trackNumberToEmbed := 0
-	if position > 0 {
-		if useAlbumTrackNumber && track.TrackNumber > 0 {
-			trackNumberToEmbed = track.TrackNumber
-		} else {
-			trackNumberToEmbed = position
-		}
-	} else if track.TrackNumber > 0 {
-		// Fallback to Qobuz track number if no position provided
-		trackNumberToEmbed = track.TrackNumber
+	// Determine track number to embed - ALL from Spotify
+	trackNumberToEmbed := spotifyTrackNumber
+	if position > 0 && !useAlbumTrackNumber {
+		trackNumberToEmbed = position // Use playlist position
 	}
 
-	// Use Spotify release date if provided, otherwise use Qobuz release date
-	finalReleaseDate := spotifyReleaseDate
-	if finalReleaseDate == "" {
-		finalReleaseDate = track.ReleaseDateOriginal
-	}
-
-	// Extract year from release date (format: YYYY-MM-DD or YYYY)
-	year := extractYear(finalReleaseDate)
-
-	// Use Spotify album artist if provided, otherwise use Qobuz performer
-	finalAlbumArtist := spotifyAlbumArtist
-	if finalAlbumArtist == "" && track.Performer.Name != "" {
-		finalAlbumArtist = track.Performer.Name
-	}
-
+	// ALL metadata from Spotify
 	metadata := Metadata{
 		Title:       trackTitle,
 		Artist:      artists,
 		Album:       albumTitle,
-		AlbumArtist: finalAlbumArtist,
-		Date:        year,             // Recorded date (year only)
-		ReleaseDate: finalReleaseDate, // Release date (full date)
+		AlbumArtist: spotifyAlbumArtist,
+		Date:        spotifyReleaseDate, // Recorded date (full date YYYY-MM-DD)
 		TrackNumber: trackNumberToEmbed,
-		DiscNumber:  track.MediaNumber,
-		ISRC:        track.ISRC,
+		TotalTracks: spotifyTotalTracks, // Total tracks in album from Spotify
+		DiscNumber:  spotifyDiscNumber,  // Disc number from Spotify
+		ISRC:        isrc,               // ISRC from Spotify (passed as parameter)
 		Description: "https://github.com/afkarxyz/SpotiFLAC",
 	}
 

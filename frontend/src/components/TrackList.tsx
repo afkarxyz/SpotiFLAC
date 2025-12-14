@@ -49,7 +49,7 @@ interface TrackListProps {
   downloadingCoverTrack?: string | null;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string) => void;
+  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
   onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
   onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
@@ -301,7 +301,7 @@ export function TrackList({
                           <TooltipTrigger asChild>
                             <Button
                               onClick={() =>
-                                onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, track.duration_ms, startIndex + index + 1, track.album_artist, track.release_date)
+                                onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, track.duration_ms, startIndex + index + 1, track.album_artist, track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks)
                               }
                               size="sm"
                               disabled={isDownloading || downloadingTrack === track.isrc}

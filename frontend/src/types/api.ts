@@ -13,6 +13,7 @@ export interface TrackMetadata {
   images: string;
   release_date: string;
   track_number: number;
+  total_tracks?: number; // Total tracks in album
   disc_number?: number;
   external_urls: string;
   isrc: string;
@@ -118,6 +119,7 @@ export interface DownloadRequest {
   album_name?: string;
   album_artist?: string;
   release_date?: string;
+  cover_url?: string; // Spotify cover URL for embedding
   api_url?: string;
   output_dir?: string;
   audio_format?: string;
@@ -132,6 +134,9 @@ export interface DownloadRequest {
   service_url?: string;
   duration?: number; // Track duration in seconds for better matching
   item_id?: string; // Optional queue item ID for multi-service fallback tracking
+  spotify_track_number?: number; // Track number from Spotify album
+  spotify_disc_number?: number; // Disc number from Spotify album
+  spotify_total_tracks?: number; // Total tracks in album from Spotify
 }
 
 export interface DownloadResponse {

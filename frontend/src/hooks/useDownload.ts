@@ -33,7 +33,11 @@ export function useDownload() {
     durationMs?: number,
     releaseYear?: string,
     albumArtist?: string,
-    releaseDate?: string
+    releaseDate?: string,
+    coverUrl?: string,
+    spotifyTrackNumber?: number,
+    spotifyDiscNumber?: number,
+    spotifyTotalTracks?: number
   ) => {
     const service = settings.downloader;
 
@@ -113,6 +117,7 @@ export function useDownload() {
             album_name: albumName,
             album_artist: albumArtist,
             release_date: releaseDate,
+            cover_url: coverUrl,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -125,6 +130,9 @@ export function useDownload() {
             duration: durationSeconds,
             item_id: itemID, // Pass the same itemID through all attempts
             audio_format: settings.tidalQuality || "LOSSLESS", // Use default LOSSLESS for auto mode
+            spotify_track_number: spotifyTrackNumber,
+            spotify_disc_number: spotifyDiscNumber,
+            spotify_total_tracks: spotifyTotalTracks,
           });
 
           if (tidalResponse.success) {
@@ -150,6 +158,7 @@ export function useDownload() {
             album_name: albumName,
             album_artist: albumArtist,
             release_date: releaseDate,
+            cover_url: coverUrl,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -160,6 +169,9 @@ export function useDownload() {
             embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.amazon_url,
             item_id: itemID,
+            spotify_track_number: spotifyTrackNumber,
+            spotify_disc_number: spotifyDiscNumber,
+            spotify_total_tracks: spotifyTotalTracks,
           });
 
           if (amazonResponse.success) {
@@ -183,18 +195,22 @@ export function useDownload() {
         album_name: albumName,
         album_artist: albumArtist,
         release_date: releaseDate,
+        cover_url: coverUrl,
         output_dir: outputDir,
         filename_format: settings.filenameTemplate,
         track_number: settings.trackNumber,
         position,
         use_album_track_number: useAlbumTrackNumber,
-            spotify_id: spotifyId,
-            embed_lyrics: settings.embedLyrics,
-            embed_max_quality_cover: settings.embedMaxQualityCover,
-            duration: durationMs ? Math.round(durationMs / 1000) : undefined,
-            item_id: itemID,
-            audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode
-          });
+        spotify_id: spotifyId,
+        embed_lyrics: settings.embedLyrics,
+        embed_max_quality_cover: settings.embedMaxQualityCover,
+        duration: durationMs ? Math.round(durationMs / 1000) : undefined,
+        item_id: itemID,
+        audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode
+        spotify_track_number: spotifyTrackNumber,
+        spotify_disc_number: spotifyDiscNumber,
+        spotify_total_tracks: spotifyTotalTracks,
+      });
 
       // If Qobuz also failed, mark the item as failed
       if (!qobuzResponse.success) {
@@ -226,6 +242,7 @@ export function useDownload() {
       album_name: albumName,
       album_artist: albumArtist,
       release_date: releaseDate,
+      cover_url: coverUrl,
       output_dir: outputDir,
       filename_format: settings.filenameTemplate,
       track_number: settings.trackNumber,
@@ -233,9 +250,13 @@ export function useDownload() {
       use_album_track_number: useAlbumTrackNumber,
       spotify_id: spotifyId,
       embed_lyrics: settings.embedLyrics,
+      embed_max_quality_cover: settings.embedMaxQualityCover,
       duration: durationSecondsForFallback,
       item_id: itemID, // Pass itemID for tracking
       audio_format: audioFormat,
+      spotify_track_number: spotifyTrackNumber,
+      spotify_disc_number: spotifyDiscNumber,
+      spotify_total_tracks: spotifyTotalTracks,
     });
 
     // Mark as failed if download failed for single-service attempt
@@ -262,7 +283,11 @@ export function useDownload() {
     isAlbum?: boolean,
     releaseYear?: string,
     albumArtist?: string,
-    releaseDate?: string
+    releaseDate?: string,
+    coverUrl?: string,
+    spotifyTrackNumber?: number,
+    spotifyDiscNumber?: number,
+    spotifyTotalTracks?: number
   ) => {
     const service = settings.downloader;
 
@@ -337,6 +362,7 @@ export function useDownload() {
             album_name: albumName,
             album_artist: albumArtist,
             release_date: releaseDate,
+            cover_url: coverUrl,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -349,6 +375,9 @@ export function useDownload() {
             duration: durationSeconds,
             item_id: itemID,
             audio_format: settings.tidalQuality || "LOSSLESS", // Use default LOSSLESS for auto mode
+            spotify_track_number: spotifyTrackNumber,
+            spotify_disc_number: spotifyDiscNumber,
+            spotify_total_tracks: spotifyTotalTracks,
           });
 
           if (tidalResponse.success) {
@@ -371,6 +400,7 @@ export function useDownload() {
             album_name: albumName,
             album_artist: albumArtist,
             release_date: releaseDate,
+            cover_url: coverUrl,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -381,6 +411,9 @@ export function useDownload() {
             embed_max_quality_cover: settings.embedMaxQualityCover,
             service_url: streamingURLs.amazon_url,
             item_id: itemID,
+            spotify_track_number: spotifyTrackNumber,
+            spotify_disc_number: spotifyDiscNumber,
+            spotify_total_tracks: spotifyTotalTracks,
           });
 
           if (amazonResponse.success) {
@@ -401,18 +434,22 @@ export function useDownload() {
         album_name: albumName,
         album_artist: albumArtist,
         release_date: releaseDate,
+        cover_url: coverUrl,
         output_dir: outputDir,
         filename_format: settings.filenameTemplate,
         track_number: settings.trackNumber,
         position,
         use_album_track_number: useAlbumTrackNumber,
-            spotify_id: spotifyId,
-            embed_lyrics: settings.embedLyrics,
-            embed_max_quality_cover: settings.embedMaxQualityCover,
-            duration: durationMs ? Math.round(durationMs / 1000) : undefined,
-            item_id: itemID,
-            audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode
-          });
+        spotify_id: spotifyId,
+        embed_lyrics: settings.embedLyrics,
+        embed_max_quality_cover: settings.embedMaxQualityCover,
+        duration: durationMs ? Math.round(durationMs / 1000) : undefined,
+        item_id: itemID,
+        audio_format: settings.qobuzQuality || "6", // Use default 6 (16-bit) for auto mode
+        spotify_track_number: spotifyTrackNumber,
+        spotify_disc_number: spotifyDiscNumber,
+        spotify_total_tracks: spotifyTotalTracks,
+      });
 
       // If Qobuz also failed, mark the item as failed
       if (!qobuzResponse.success) {
@@ -443,6 +480,7 @@ export function useDownload() {
       album_name: albumName,
       album_artist: albumArtist,
       release_date: releaseDate,
+      cover_url: coverUrl,
       output_dir: outputDir,
       filename_format: settings.filenameTemplate,
       track_number: settings.trackNumber,
@@ -450,9 +488,13 @@ export function useDownload() {
       use_album_track_number: useAlbumTrackNumber,
       spotify_id: spotifyId,
       embed_lyrics: settings.embedLyrics,
+      embed_max_quality_cover: settings.embedMaxQualityCover,
       duration: durationSecondsForFallback,
       item_id: itemID,
       audio_format: audioFormat,
+      spotify_track_number: spotifyTrackNumber,
+      spotify_disc_number: spotifyDiscNumber,
+      spotify_total_tracks: spotifyTotalTracks,
     });
 
     // Mark as failed if download failed for single-service attempt
@@ -474,7 +516,11 @@ export function useDownload() {
     durationMs?: number,
     position?: number,
     albumArtist?: string,
-    releaseDate?: string
+    releaseDate?: string,
+    coverUrl?: string,
+    spotifyTrackNumber?: number,
+    spotifyDiscNumber?: number,
+    spotifyTotalTracks?: number
   ) => {
     if (!isrc) {
       toast.error("No ISRC found for this track");
@@ -502,7 +548,11 @@ export function useDownload() {
         durationMs,
         releaseYear,
         albumArtist || "",
-        releaseDate
+        releaseDate,
+        coverUrl,
+        spotifyTrackNumber, // Spotify album track number
+        spotifyDiscNumber,  // Spotify disc number
+        spotifyTotalTracks  // Total tracks in album
       );
 
       if (response.success) {
@@ -603,7 +653,11 @@ export function useDownload() {
           isAlbum,
           releaseYear,
           track?.album_artist || "", // Use album_artist from Spotify metadata
-          track?.release_date
+          track?.release_date,
+          track?.images, // Spotify cover URL
+          track?.track_number, // Spotify album track number
+          track?.disc_number,  // Spotify disc number
+          track?.total_tracks  // Total tracks in album
         );
 
         if (response.success) {
@@ -736,7 +790,11 @@ export function useDownload() {
           isAlbum,
           releaseYear,
           track.album_artist || "", // Use album_artist from Spotify metadata
-          track.release_date
+          track.release_date,
+          track.images, // Spotify cover URL
+          track.track_number, // Spotify album track number
+          track.disc_number,  // Spotify disc number
+          track.total_tracks  // Total tracks in album
         );
 
         if (response.success) {

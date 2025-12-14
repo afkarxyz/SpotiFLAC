@@ -19,9 +19,10 @@ type Metadata struct {
 	Artist      string
 	Album       string
 	AlbumArtist string
-	Date        string // Recorded date (year only)
-	ReleaseDate string // Release date (full date)
+	Date        string // Recorded date (full date YYYY-MM-DD)
+	ReleaseDate string // Release date (full date) - kept for compatibility
 	TrackNumber int
+	TotalTracks int // Total tracks in album
 	DiscNumber  int
 	ISRC        string
 	Lyrics      string
@@ -61,6 +62,9 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	}
 	if metadata.TrackNumber > 0 {
 		_ = cmt.Add(flacvorbis.FIELD_TRACKNUMBER, strconv.Itoa(metadata.TrackNumber))
+	}
+	if metadata.TotalTracks > 0 {
+		_ = cmt.Add("TOTALTRACKS", strconv.Itoa(metadata.TotalTracks))
 	}
 	if metadata.DiscNumber > 0 {
 		_ = cmt.Add("DISCNUMBER", strconv.Itoa(metadata.DiscNumber))
@@ -277,7 +281,7 @@ func CheckISRCExists(outputDir string, targetISRC string) (string, bool) {
 // ExtractCoverArt extracts cover art from an audio file and saves it to a temporary file
 func ExtractCoverArt(filePath string) (string, error) {
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".mp3":
 		return extractCoverFromMp3(filePath)
@@ -324,7 +328,7 @@ func extractCoverFromMp3(filePath string) (string, error) {
 // extractCoverFromM4AOrFlac extracts cover art from M4A or FLAC file
 func extractCoverFromM4AOrFlac(filePath string) (string, error) {
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
-	
+
 	if ext == ".flac" {
 		f, err := flac.ParseFile(filePath)
 		if err != nil {
@@ -364,7 +368,7 @@ func extractCoverFromM4AOrFlac(filePath string) (string, error) {
 // ExtractLyrics extracts lyrics from an audio file
 func ExtractLyrics(filePath string) (string, error) {
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".mp3":
 		return extractLyricsFromMp3(filePath)
@@ -447,7 +451,7 @@ func EmbedCoverArtOnly(filePath string, coverPath string) error {
 	}
 
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".mp3":
 		return embedCoverToMp3(filePath, coverPath)
@@ -500,7 +504,7 @@ func EmbedLyricsOnlyMP3(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil
 	}
-	
+
 	tag, err := id3v2.Open(filepath, id3v2.Options{Parse: true})
 	if err != nil {
 		return fmt.Errorf("failed to open MP3 file: %w", err)
@@ -583,7 +587,7 @@ func EmbedLyricsOnlyUniversal(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil
 	}
-	
+
 	ext := strings.ToLower(pathfilepath.Ext(filepath))
 	switch ext {
 	case ".mp3":

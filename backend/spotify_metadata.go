@@ -66,6 +66,7 @@ type TrackMetadata struct {
 	Images      string `json:"images"`
 	ReleaseDate string `json:"release_date"`
 	TrackNumber int    `json:"track_number"`
+	TotalTracks int    `json:"total_tracks,omitempty"`
 	DiscNumber  int    `json:"disc_number,omitempty"`
 	ExternalURL string `json:"external_urls"`
 	ISRC        string `json:"isrc"`
@@ -89,6 +90,7 @@ type AlbumTrackMetadata struct {
 	Images      string         `json:"images"`
 	ReleaseDate string         `json:"release_date"`
 	TrackNumber int            `json:"track_number"`
+	TotalTracks int            `json:"total_tracks,omitempty"`
 	DiscNumber  int            `json:"disc_number,omitempty"`
 	ExternalURL string         `json:"external_urls"`
 	ISRC        string         `json:"isrc"`
@@ -517,6 +519,7 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 			Images:      firstNonEmpty(firstImageURL(item.Track.Album.Images), info.Owner.Images),
 			ReleaseDate: item.Track.Album.ReleaseDate,
 			TrackNumber: item.Track.TrackNumber,
+			TotalTracks: item.Track.Album.TotalTracks,
 			DiscNumber:  item.Track.DiscNumber,
 			ExternalURL: item.Track.ExternalURL.Spotify,
 			ISRC:        item.Track.ExternalID.ISRC,
@@ -568,6 +571,7 @@ func (c *SpotifyMetadataClient) formatAlbumData(ctx context.Context, raw *albumR
 			Images:      albumImage,
 			ReleaseDate: raw.Data.ReleaseDate,
 			TrackNumber: item.TrackNumber,
+			TotalTracks: raw.Data.TotalTracks,
 			DiscNumber:  item.DiscNumber,
 			ExternalURL: item.ExternalURL.Spotify,
 			ISRC:        isrc,
@@ -649,6 +653,7 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 				Images:      albumImage,
 				ReleaseDate: alb.ReleaseDate,
 				TrackNumber: tr.TrackNumber,
+				TotalTracks: alb.TotalTracks,
 				DiscNumber:  tr.DiscNumber,
 				ExternalURL: tr.ExternalURL.Spotify,
 				ISRC:        isrc,
@@ -697,6 +702,7 @@ func formatTrackData(raw *trackFull) TrackResponse {
 			Images:      firstImageURL(raw.Album.Images),
 			ReleaseDate: raw.Album.ReleaseDate,
 			TrackNumber: raw.TrackNumber,
+			TotalTracks: raw.Album.TotalTracks,
 			DiscNumber:  raw.DiscNumber,
 			ExternalURL: raw.ExternalURL.Spotify,
 			ISRC:        raw.ExternalID.ISRC,
