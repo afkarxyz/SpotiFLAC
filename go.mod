@@ -8,6 +8,7 @@ require (
 	github.com/go-flac/flacvorbis v0.2.0
 	github.com/go-flac/go-flac v1.0.0
 	github.com/mewkiz/flac v1.0.13
+	github.com/spf13/cobra v1.8.1
 	github.com/ulikunitz/xz v0.5.15
 	github.com/wailsapp/wails/v2 v2.11.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -36,7 +37,6 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/samber/lo v1.52.0 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tkrajina/go-reflector v0.5.8 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
