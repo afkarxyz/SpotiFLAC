@@ -93,8 +93,23 @@ func (q *QobuzDownloader) SearchByISRC(isrc string) (*QobuzTrack, error) {
 	}
 
 	var searchResp QobuzSearchResponse
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
+	}
+
+	if err := json.Unmarshal(body, &searchResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	if len(searchResp.Tracks.Items) == 0 {
@@ -107,15 +122,20 @@ func (q *QobuzDownloader) SearchByISRC(isrc string) (*QobuzTrack, error) {
 func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string) (string, error) {
 	// Map quality to Qobuz quality code
 	// Qobuz uses: 5 (MP3 320), 6 (FLAC 16-bit), 7 (FLAC 24-bit), 27 (Hi-Res)
-	qualityCode := "27" // Default to Hi-Res
+	qualityCode := quality // Use the provided quality parameter
+	if qualityCode == "" {
+		qualityCode = "6" // Default to FLAC 16-bit if not specified
+	}
 
-	fmt.Printf("Getting download URL for track ID: %d\n", trackID)
+	fmt.Printf("Getting download URL for track ID: %d with requested quality: %s\n", trackID, qualityCode)
+	fmt.Printf("Quality codes: 6=FLAC 16-bit, 7=FLAC 24-bit, 27=Hi-Res\n")
 
 	// Decode base64 API URLs
 	primaryBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9kYWIueWVldC5zdS9hcGkvc3RyZWFtP3RyYWNrSWQ9")
 
 	// Try primary API first
 	primaryURL := fmt.Sprintf("%s%d&quality=%s", string(primaryBase), trackID, qualityCode)
+	fmt.Printf("Qobuz API URL: %s\n", primaryURL)
 
 	resp, err := q.client.Get(primaryURL)
 	if err == nil && resp.StatusCode == 200 {
@@ -151,12 +171,25 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string) (string,
 		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return "", fmt.Errorf("API returned empty response")
+	}
+
 	fmt.Printf("Fallback API response: %s\n", string(body))
 
 	var streamResp QobuzStreamResponse
 	if err := json.Unmarshal(body, &streamResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return "", fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	if streamResp.URL == "" {
@@ -169,7 +202,13 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string) (string,
 
 func (q *QobuzDownloader) DownloadFile(url, filepath string) error {
 	fmt.Println("Starting file download...")
-	resp, err := q.client.Get(url)
+	// Use a separate client with a longer timeout. The default client's 60s limit
+	// causes downloads to fail on slow connections or for large Hi-Res files.
+	downloadClient := &http.Client{
+		Timeout: 5 * time.Minute, // 5 minutes for large files
+	}
+
+	resp, err := downloadClient.Get(url)
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
@@ -268,7 +307,7 @@ func buildQobuzFilename(title, artist string, trackNumber int, format string, in
 	return filename + ".flac"
 }
 
-func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int) (string, error) {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	// Create output directory if it doesn't exist
@@ -283,28 +322,10 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 		return "", err
 	}
 
-	// Use Spotify metadata if provided, otherwise fallback to Qobuz metadata
+	// All metadata from Spotify - no fallback to Qobuz
 	artists := spotifyArtistName
 	trackTitle := spotifyTrackName
 	albumTitle := spotifyAlbumName
-
-	if artists == "" {
-		artists = track.Performer.Name
-		if track.Album.Artist.Name != "" {
-			artists = track.Album.Artist.Name
-		}
-	}
-
-	if trackTitle == "" {
-		trackTitle = track.Title
-		if track.Version != "" && track.Version != "null" {
-			trackTitle = fmt.Sprintf("%s (%s)", track.Title, track.Version)
-		}
-	}
-
-	if albumTitle == "" {
-		albumTitle = track.Album.Title
-	}
 
 	fmt.Printf("Found track: %s - %s\n", artists, trackTitle)
 	fmt.Printf("Album: %s\n", albumTitle)
@@ -335,14 +356,14 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	safeArtist := sanitizeFilename(artists)
 	safeTitle := sanitizeFilename(trackTitle)
 
-	// Check if file with same ISRC already exists
-	if existingFile, exists := CheckISRCExists(outputDir, track.ISRC); exists {
-		fmt.Printf("File with ISRC %s already exists: %s\n", track.ISRC, existingFile)
+	// Check if file with same ISRC already exists (use Spotify ISRC)
+	if existingFile, exists := CheckISRCExists(outputDir, isrc); exists {
+		fmt.Printf("File with ISRC %s already exists: %s\n", isrc, existingFile)
 		return "EXISTS:" + existingFile, nil
 	}
 
-	// Build filename based on format settings
-	filename := buildQobuzFilename(safeTitle, safeArtist, track.TrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	// Build filename based on format settings (use Spotify track number)
+	filename := buildQobuzFilename(safeTitle, safeArtist, spotifyTrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filepath := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(filepath); err == nil && fileInfo.Size() > 0 {
@@ -358,41 +379,39 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	fmt.Printf("Downloaded: %s\n", filepath)
 
 	coverPath := ""
-	if track.Album.Image.Large != "" {
+	// Use Spotify cover URL (with max resolution if enabled) - all metadata from Spotify
+	if spotifyCoverURL != "" {
 		coverPath = filepath + ".cover.jpg"
-		fmt.Println("Downloading cover art...")
-		if err := q.DownloadCoverArt(track.Album.Image.Large, coverPath); err != nil {
-			fmt.Printf("Warning: Failed to download cover art: %v\n", err)
+		coverClient := NewCoverClient()
+		if err := coverClient.DownloadCoverToPath(spotifyCoverURL, coverPath, embedMaxQualityCover); err != nil {
+			fmt.Printf("Warning: Failed to download Spotify cover: %v\n", err)
+			coverPath = ""
 		} else {
 			defer os.Remove(coverPath)
+			fmt.Println("Spotify cover downloaded")
 		}
 	}
 
 	fmt.Println("Embedding metadata and cover art...")
 
-	releaseYear := ""
-	if len(track.ReleaseDateOriginal) >= 4 {
-		releaseYear = track.ReleaseDateOriginal[:4]
+	// Determine track number to embed - ALL from Spotify
+	trackNumberToEmbed := spotifyTrackNumber
+	if position > 0 && !useAlbumTrackNumber {
+		trackNumberToEmbed = position // Use playlist position
 	}
 
-	// Use album track number if in album folder structure, otherwise use playlist position
-	trackNumberToEmbed := 0
-	if position > 0 {
-		if useAlbumTrackNumber && track.TrackNumber > 0 {
-			trackNumberToEmbed = track.TrackNumber
-		} else {
-			trackNumberToEmbed = position
-		}
-	}
-
+	// ALL metadata from Spotify
 	metadata := Metadata{
 		Title:       trackTitle,
 		Artist:      artists,
 		Album:       albumTitle,
-		Date:        releaseYear,
+		AlbumArtist: spotifyAlbumArtist,
+		Date:        spotifyReleaseDate, // Recorded date (full date YYYY-MM-DD)
 		TrackNumber: trackNumberToEmbed,
-		DiscNumber:  track.MediaNumber,
-		ISRC:        track.ISRC,
+		TotalTracks: spotifyTotalTracks, // Total tracks in album from Spotify
+		DiscNumber:  spotifyDiscNumber,  // Disc number from Spotify
+		ISRC:        isrc,               // ISRC from Spotify (passed as parameter)
+		Description: "https://github.com/afkarxyz/SpotiFLAC",
 	}
 
 	if err := EmbedMetadata(filepath, metadata, coverPath); err != nil {

@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -18,7 +19,6 @@ type SongLinkClient struct {
 
 type SongLinkURLs struct {
 	TidalURL  string `json:"tidal_url"`
-	DeezerURL string `json:"deezer_url"`
 	AmazonURL string `json:"amazon_url"`
 }
 
@@ -26,11 +26,9 @@ type SongLinkURLs struct {
 type TrackAvailability struct {
 	SpotifyID string `json:"spotify_id"`
 	Tidal     bool   `json:"tidal"`
-	Deezer    bool   `json:"deezer"`
 	Amazon    bool   `json:"amazon"`
 	Qobuz     bool   `json:"qobuz"`
 	TidalURL  string `json:"tidal_url,omitempty"`
-	DeezerURL string `json:"deezer_url,omitempty"`
 	AmazonURL string `json:"amazon_url,omitempty"`
 	QobuzURL  string `json:"qobuz_url,omitempty"`
 }
@@ -126,8 +124,23 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLink
 			URL string `json:"url"`
 		} `json:"linksByPlatform"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
+	}
+
+	if err := json.Unmarshal(body, &songLinkResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	urls := &SongLinkURLs{}
@@ -136,12 +149,6 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLink
 	if tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]; ok && tidalLink.URL != "" {
 		urls.TidalURL = tidalLink.URL
 		fmt.Printf("✓ Tidal URL found\n")
-	}
-
-	// Extract Deezer URL
-	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
-		urls.DeezerURL = deezerLink.URL
-		fmt.Printf("✓ Deezer URL found\n")
 	}
 
 	// Extract Amazon URL
@@ -155,7 +162,7 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLink
 	}
 
 	// Check if at least one URL was found
-	if urls.TidalURL == "" && urls.DeezerURL == "" && urls.AmazonURL == "" {
+	if urls.TidalURL == "" && urls.AmazonURL == "" {
 		return nil, fmt.Errorf("no streaming URLs found")
 	}
 
@@ -245,8 +252,23 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string, isrc stri
 			URL string `json:"url"`
 		} `json:"linksByPlatform"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	// Read body first to handle encoding issues
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("API returned empty response")
+	}
+
+	if err := json.Unmarshal(body, &songLinkResp); err != nil {
+		// Truncate body for error message (max 200 chars)
+		bodyStr := string(body)
+		if len(bodyStr) > 200 {
+			bodyStr = bodyStr[:200] + "..."
+		}
+		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
 	}
 
 	availability := &TrackAvailability{
@@ -257,12 +279,6 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string, isrc stri
 	if tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]; ok && tidalLink.URL != "" {
 		availability.Tidal = true
 		availability.TidalURL = tidalLink.URL
-	}
-
-	// Check Deezer
-	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
-		availability.Deezer = true
-		availability.DeezerURL = deezerLink.URL
 	}
 
 	// Check Amazon

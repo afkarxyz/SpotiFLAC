@@ -1,6 +1,6 @@
 import { GetDefaults } from "../../wailsjs/go/main/App";
 
-export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk";
+export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans";
 
 // Folder structure presets
 export type FolderPreset = "none" | "artist" | "album" | "artist-album" | "artist-year-album" | "custom";
@@ -10,7 +10,7 @@ export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-
 
 export interface Settings {
   downloadPath: string;
-  downloader: "auto" | "deezer" | "tidal" | "qobuz" | "amazon";
+  downloader: "auto" | "tidal" | "qobuz" | "amazon";
   theme: string;
   themeMode: "auto" | "light" | "dark";
   fontFamily: FontFamily;
@@ -25,7 +25,12 @@ export interface Settings {
   albumSubfolder?: boolean;
   trackNumber: boolean;
   sfxEnabled: boolean;
-  operatingSystem: "Windows" | "linux/MacOS"
+  embedLyrics: boolean;
+  embedMaxQualityCover: boolean;
+  operatingSystem: "Windows" | "linux/MacOS";
+  // Quality settings for specific sources
+  tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
+  qobuzQuality: "6" | "7" | "27";
 }
 
 // Folder preset templates
@@ -81,17 +86,29 @@ export const DEFAULT_SETTINGS: Settings = {
   filenameTemplate: "{title} - {artist}",
   trackNumber: false,
   sfxEnabled: true,
-  operatingSystem: detectOS()
+  embedLyrics: false,
+  embedMaxQualityCover: false,
+  operatingSystem: detectOS(),
+  tidalQuality: "LOSSLESS", // Default: 16-bit lossless
+  qobuzQuality: "6" // Default: FLAC 16-bit
 };
 
 export const FONT_OPTIONS: { value: FontFamily; label: string; fontFamily: string }[] = [
+  { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
+  { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
+  { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
   { value: "google-sans", label: "Google Sans Flex", fontFamily: '"Google Sans Flex", system-ui, sans-serif' },
   { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
-  { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
-  { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
-  { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
-  { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+  { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
   { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
+  { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
+  { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
+  { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
+  { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+  { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
+  { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
+  { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
+  { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
   { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
 ];
 
@@ -158,6 +175,13 @@ export function getSettings(): Settings {
       }
       // Always use detected OS (don't persist it)
       parsed.operatingSystem = detectOS();
+      // Set default quality if not present
+      if (!('tidalQuality' in parsed)) {
+        parsed.tidalQuality = "LOSSLESS";
+      }
+      if (!('qobuzQuality' in parsed)) {
+        parsed.qobuzQuality = "6";
+      }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
   } catch (error) {
