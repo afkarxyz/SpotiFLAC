@@ -35,6 +35,18 @@ type DownloadItem struct {
 	FilePath     string         `json:"file_path"`     // Final file path
 }
 
+// ProgressReporterInterface defines an optional callback interface for progress reporting
+// This allows CLI or other interfaces to receive progress updates
+type ProgressReporterInterface interface {
+	OnAlbumStart(albumName string, trackCount int)
+	OnTrackStart(trackName, artistName string)
+	OnTrackProgress(downloaded, speed float64)
+	OnTrackComplete(trackName, filePath string, sizeMB float64)
+	OnTrackFailed(trackName, errorMsg string)
+	OnTrackSkipped(trackName, reason string)
+	OnAlbumComplete(successCount, failedCount, skippedCount int)
+}
+
 // Global progress tracker
 var (
 	currentProgress     float64
@@ -53,6 +65,10 @@ var (
 	totalDownloadedLock sync.RWMutex
 	sessionStartTime    int64
 	sessionStartLock    sync.RWMutex
+
+	// Optional progress reporter for CLI/other interfaces
+	globalReporter     ProgressReporterInterface
+	globalReporterLock sync.RWMutex
 )
 
 // ProgressInfo represents download progress information
@@ -73,6 +89,20 @@ type DownloadQueueInfo struct {
 	CompletedCount   int            `json:"completed_count"`
 	FailedCount      int            `json:"failed_count"`
 	SkippedCount     int            `json:"skipped_count"`
+}
+
+// SetProgressReporter sets a custom progress reporter for CLI or other interfaces
+func SetProgressReporter(reporter ProgressReporterInterface) {
+	globalReporterLock.Lock()
+	globalReporter = reporter
+	globalReporterLock.Unlock()
+}
+
+// ClearProgressReporter removes the custom progress reporter
+func ClearProgressReporter() {
+	globalReporterLock.Lock()
+	globalReporter = nil
+	globalReporterLock.Unlock()
 }
 
 // GetDownloadProgress returns current download progress
@@ -234,20 +264,31 @@ func AddToQueue(id, trackName, artistName, albumName, isrc string) {
 // StartDownloadItem marks an item as currently downloading
 func StartDownloadItem(id string) {
 	downloadQueueLock.Lock()
-	defer downloadQueueLock.Unlock()
-
+	var trackName, artistName string
 	for i := range downloadQueue {
 		if downloadQueue[i].ID == id {
 			downloadQueue[i].Status = StatusDownloading
 			downloadQueue[i].StartTime = time.Now().Unix()
 			downloadQueue[i].Progress = 0
+			trackName = downloadQueue[i].TrackName
+			artistName = downloadQueue[i].ArtistName
 			break
 		}
 	}
+	downloadQueueLock.Unlock()
 
 	currentItemLock.Lock()
 	currentItemID = id
 	currentItemLock.Unlock()
+
+	// Call custom reporter if set
+	if trackName != "" {
+		globalReporterLock.RLock()
+		if globalReporter != nil {
+			globalReporter.OnTrackStart(trackName, artistName)
+		}
+		globalReporterLock.RUnlock()
+	}
 }
 
 // UpdateItemProgress updates the progress of the current download item
@@ -262,6 +303,13 @@ func UpdateItemProgress(id string, progress, speed float64) {
 			break
 		}
 	}
+
+	// Call custom reporter if set
+	globalReporterLock.RLock()
+	if globalReporter != nil {
+		globalReporter.OnTrackProgress(progress, speed)
+	}
+	globalReporterLock.RUnlock()
 }
 
 // GetCurrentItemID returns the ID of the currently downloading item
@@ -274,8 +322,7 @@ func GetCurrentItemID() string {
 // CompleteDownloadItem marks an item as completed
 func CompleteDownloadItem(id, filePath string, finalSize float64) {
 	downloadQueueLock.Lock()
-	defer downloadQueueLock.Unlock()
-
+	var trackName string
 	for i := range downloadQueue {
 		if downloadQueue[i].ID == id {
 			downloadQueue[i].Status = StatusCompleted
@@ -283,6 +330,7 @@ func CompleteDownloadItem(id, filePath string, finalSize float64) {
 			downloadQueue[i].FilePath = filePath
 			downloadQueue[i].Progress = finalSize
 			downloadQueue[i].TotalSize = finalSize
+			trackName = downloadQueue[i].TrackName
 
 			// Add to total downloaded
 			totalDownloadedLock.Lock()
@@ -291,35 +339,65 @@ func CompleteDownloadItem(id, filePath string, finalSize float64) {
 			break
 		}
 	}
+	downloadQueueLock.Unlock()
+
+	// Call custom reporter if set
+	if trackName != "" {
+		globalReporterLock.RLock()
+		if globalReporter != nil {
+			globalReporter.OnTrackComplete(trackName, filePath, finalSize)
+		}
+		globalReporterLock.RUnlock()
+	}
 }
 
 // FailDownloadItem marks an item as failed
 func FailDownloadItem(id, errorMsg string) {
 	downloadQueueLock.Lock()
-	defer downloadQueueLock.Unlock()
-
+	var trackName string
 	for i := range downloadQueue {
 		if downloadQueue[i].ID == id {
 			downloadQueue[i].Status = StatusFailed
 			downloadQueue[i].EndTime = time.Now().Unix()
 			downloadQueue[i].ErrorMessage = errorMsg
+			trackName = downloadQueue[i].TrackName
 			break
 		}
+	}
+	downloadQueueLock.Unlock()
+
+	// Call custom reporter if set
+	if trackName != "" {
+		globalReporterLock.RLock()
+		if globalReporter != nil {
+			globalReporter.OnTrackFailed(trackName, errorMsg)
+		}
+		globalReporterLock.RUnlock()
 	}
 }
 
 // SkipDownloadItem marks an item as skipped (already exists)
 func SkipDownloadItem(id, filePath string) {
 	downloadQueueLock.Lock()
-	defer downloadQueueLock.Unlock()
-
+	var trackName string
 	for i := range downloadQueue {
 		if downloadQueue[i].ID == id {
 			downloadQueue[i].Status = StatusSkipped
 			downloadQueue[i].EndTime = time.Now().Unix()
 			downloadQueue[i].FilePath = filePath
+			trackName = downloadQueue[i].TrackName
 			break
 		}
+	}
+	downloadQueueLock.Unlock()
+
+	// Call custom reporter if set
+	if trackName != "" {
+		globalReporterLock.RLock()
+		if globalReporter != nil {
+			globalReporter.OnTrackSkipped(trackName, "file already exists")
+		}
+		globalReporterLock.RUnlock()
 	}
 }
 

@@ -1,0 +1,31 @@
+# SpotiFLAC CLI Configuration Example
+# Copy this file to ~/.spotiflac/config.yaml and customize as needed
+
+# Output directory for downloaded tracks
+# Use ~ for home directory expansion
+output_dir: ~/Music/SpotiFLAC
+
+# Audio format/quality
+# Options: LOSSLESS, HIGH, MEDIUM
+audio_format: LOSSLESS
+
+# Preferred streaming service for downloads
+# Options: tidal, deezer, amazon, qobuz
+# If the track is not available on the preferred service,
+# the CLI will automatically fallback to other services
+preferred_service: tidal
+
+# Filename format for downloaded tracks
+# Options:
+#   - title-artist: "Track Title - Artist Name.flac"
+#   - artist-title: "Artist Name - Track Title.flac"
+#   - track-title-artist: "Track Title - Artist Name.flac" (same as title-artist)
+filename_format: title-artist
+
+# Prepend track numbers to filenames (e.g., "01 - Track Title - Artist.flac")
+track_numbers: true
+
+# Create a subfolder for each album
+# When enabled, creates: output_dir/Artist - Album Name/tracks...
+# When disabled, all tracks go directly to output_dir
+album_folders: true
