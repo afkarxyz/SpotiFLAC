@@ -8,10 +8,12 @@ export interface TrackMetadata {
   artists: string;
   name: string;
   album_name: string;
+  album_artist?: string;
   duration_ms: number;
   images: string;
   release_date: string;
   track_number: number;
+  disc_number?: number;
   external_urls: string;
   isrc: string;
   album_type?: string;
@@ -109,11 +111,13 @@ export type SpotifyMetadataResponse =
 
 export interface DownloadRequest {
   isrc: string;
-  service: "deezer" | "tidal" | "qobuz" | "amazon";
+  service: "tidal" | "qobuz" | "amazon";
   query?: string;
   track_name?: string;
   artist_name?: string;
   album_name?: string;
+  album_artist?: string;
+  release_date?: string;
   api_url?: string;
   output_dir?: string;
   audio_format?: string;
@@ -193,11 +197,9 @@ export interface LyricsDownloadResponse {
 export interface TrackAvailability {
   spotify_id: string;
   tidal: boolean;
-  deezer: boolean;
   amazon: boolean;
   qobuz: boolean;
   tidal_url?: string;
-  deezer_url?: string;
   amazon_url?: string;
   qobuz_url?: string;
 }

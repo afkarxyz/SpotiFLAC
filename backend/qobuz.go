@@ -307,7 +307,7 @@ func buildQobuzFilename(title, artist string, trackNumber int, format string, in
 	return filename + ".flac"
 }
 
-func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName string, useAlbumTrackNumber bool) (string, error) {
+func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool) (string, error) {
 	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	// Create output directory if it doesn't exist
@@ -409,11 +409,6 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 
 	fmt.Println("Embedding metadata and cover art...")
 
-	releaseYear := ""
-	if len(track.ReleaseDateOriginal) >= 4 {
-		releaseYear = track.ReleaseDateOriginal[:4]
-	}
-
 	// Use album track number if in album folder structure, otherwise use playlist position
 	trackNumberToEmbed := 0
 	if position > 0 {
@@ -422,16 +417,37 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 		} else {
 			trackNumberToEmbed = position
 		}
+	} else if track.TrackNumber > 0 {
+		// Fallback to Qobuz track number if no position provided
+		trackNumberToEmbed = track.TrackNumber
+	}
+
+	// Use Spotify release date if provided, otherwise use Qobuz release date
+	finalReleaseDate := spotifyReleaseDate
+	if finalReleaseDate == "" {
+		finalReleaseDate = track.ReleaseDateOriginal
+	}
+
+	// Extract year from release date (format: YYYY-MM-DD or YYYY)
+	year := extractYear(finalReleaseDate)
+
+	// Use Spotify album artist if provided, otherwise use Qobuz performer
+	finalAlbumArtist := spotifyAlbumArtist
+	if finalAlbumArtist == "" && track.Performer.Name != "" {
+		finalAlbumArtist = track.Performer.Name
 	}
 
 	metadata := Metadata{
 		Title:       trackTitle,
 		Artist:      artists,
 		Album:       albumTitle,
-		Date:        releaseYear,
+		AlbumArtist: finalAlbumArtist,
+		Date:        year,             // Recorded date (year only)
+		ReleaseDate: finalReleaseDate, // Release date (full date)
 		TrackNumber: trackNumberToEmbed,
 		DiscNumber:  track.MediaNumber,
 		ISRC:        track.ISRC,
+		Description: "https://github.com/afkarxyz/SpotiFLAC",
 	}
 
 	if err := EmbedMetadata(filepath, metadata, coverPath); err != nil {

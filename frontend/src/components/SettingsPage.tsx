@@ -26,12 +26,6 @@ const TidalIcon = () => (
   </svg>
 );
 
-const DeezerIcon = () => (
-  <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
-    <path d="M18.77 5.55c.19-1.07.46-1.75.76-1.75.56 0 1.02 2.34 1.02 5.23 0 2.89-.46 5.23-1.02 5.23-.23 0-.44-.4-.61-1.06-.27 2.43-.83 4.11-1.48 4.11-.5 0-.96-1-1.26-2.6-.2 3.03-.73 5.17-1.33 5.17-.39 0-.73-.85-.99-2.23-.31 2.85-1.03 4.85-1.86 4.85-.83 0-1.55-2-1.86-4.85-.25 1.38-.6 2.23-.99 2.23-.6 0-1.12-2.14-1.33-5.16-.3 1.58-.75 2.6-1.26 2.6-.65 0-1.2-1.68-1.48-4.12-.17.66-.38 1.06-.61 1.06-.56 0-1.02-2.34-1.02-5.23 0-2.89.46-5.23 1.02-5.23.3 0 .57.68.76 1.75C5.53 3.7 6 2.5 6.56 2.5c.66 0 1.22 1.7 1.49 4.17.26-1.8.66-2.94 1.1-2.94.63 0 1.16 2.25 1.36 5.4.36-1.62.9-2.63 1.5-2.63.58 0 1.12 1.01 1.49 2.62.2-3.14.72-5.4 1.35-5.4.44 0 .84 1.15 1.1 2.95.27-2.47.84-4.17 1.49-4.17.55 0 1.03 1.2 1.33 3.05ZM2 8.52c0-1.3.26-2.34.58-2.34.32 0 .57 1.05.57 2.34 0 1.29-.25 2.34-.57 2.34-.32 0-.58-1.05-.58-2.34Zm18.85 0c0-1.3.25-2.34.57-2.34.32 0 .58 1.05.58 2.34 0 1.29-.26 2.34-.58 2.34-.32 0-.57-1.05-.57-2.34Z"></path>
-  </svg>
-);
-
 const QobuzIcon = () => (
   <svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
     <path d="M21.744 9.815C19.836 1.261 8.393-1 3.55 6.64-.618 13.214 4 22 11.988 22c2.387 0 4.63-.83 6.394-2.304l2.252 2.252 1.224-1.224-2.252-2.253c1.983-2.407 2.823-5.586 2.138-8.656Zm-3.508 7.297L16.4 15.275c-.786-.787-2.017.432-1.224 1.225L17 18.326C10.29 23.656.5 16 5.16 7.667c3.502-6.264 13.172-4.348 14.707 2.574.529 2.385-.06 4.987-1.63 6.87Z"></path>
@@ -224,7 +218,7 @@ export function SettingsPage() {
             <div className="flex gap-2">
               <Select
                 value={tempSettings.downloader}
-                onValueChange={(value: "auto" | "deezer" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
+                onValueChange={(value: "auto" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}
               >
                 <SelectTrigger id="downloader" className="h-9 w-fit">
                   <SelectValue placeholder="Select a source" />
@@ -233,9 +227,6 @@ export function SettingsPage() {
                   <SelectItem value="auto">Auto</SelectItem>
                   <SelectItem value="tidal">
                     <span className="flex items-center"><TidalIcon />Tidal</span>
-                  </SelectItem>
-                  <SelectItem value="deezer">
-                    <span className="flex items-center"><DeezerIcon />Deezer</span>
                   </SelectItem>
                   <SelectItem value="qobuz">
                     <span className="flex items-center"><QobuzIcon />Qobuz</span>

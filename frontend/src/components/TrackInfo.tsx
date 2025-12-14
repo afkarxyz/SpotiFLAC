@@ -9,7 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
-import { TidalIcon, DeezerIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
+import { TidalIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 
 interface TrackInfoProps {
   track: TrackMetadata & { album_name: string; release_date: string };
@@ -25,7 +25,7 @@ interface TrackInfoProps {
   checkingAvailability?: boolean;
   availability?: TrackAvailability;
   downloadingCover?: boolean;
-  onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string) => void;
+  onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string) => void;
   onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
   onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string) => void;
@@ -120,7 +120,7 @@ export function TrackInfo({
             {track.isrc && (
               <div className="flex gap-2 flex-wrap">
                 <Button
-                  onClick={() => onDownload(track.isrc, track.name, track.artists, track.album_name, track.spotify_id)}
+                  onClick={() => onDownload(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, undefined, track.duration_ms, undefined, track.album_artist, track.release_date)}
                   disabled={isDownloading || downloadingTrack === track.isrc}
                 >
                   {downloadingTrack === track.isrc ? (
@@ -179,7 +179,6 @@ export function TrackInfo({
                       {availability ? (
                         <div className="flex items-center gap-2">
                           <TidalIcon className={`w-4 h-4 ${availability.tidal ? "text-green-500" : "text-red-500"}`} />
-                          <DeezerIcon className={`w-4 h-4 ${availability.deezer ? "text-green-500" : "text-red-500"}`} />
                           <QobuzIcon className={`w-4 h-4 ${availability.qobuz ? "text-green-500" : "text-red-500"}`} />
                           <AmazonIcon className={`w-4 h-4 ${availability.amazon ? "text-green-500" : "text-red-500"}`} />
                         </div>

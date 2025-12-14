@@ -57,16 +57,18 @@ func NewSpotifyMetadataClient() *SpotifyMetadataClient {
 
 // TrackMetadata mirrors the filtered track payload returned by the Python script.
 type TrackMetadata struct {
+	SpotifyID   string `json:"spotify_id,omitempty"`
 	Artists     string `json:"artists"`
 	Name        string `json:"name"`
 	AlbumName   string `json:"album_name"`
+	AlbumArtist string `json:"album_artist,omitempty"`
 	DurationMS  int    `json:"duration_ms"`
 	Images      string `json:"images"`
 	ReleaseDate string `json:"release_date"`
 	TrackNumber int    `json:"track_number"`
+	DiscNumber  int    `json:"disc_number,omitempty"`
 	ExternalURL string `json:"external_urls"`
 	ISRC        string `json:"isrc"`
-	SpotifyID   string `json:"spotify_id,omitempty"`
 }
 
 // ArtistSimple holds basic artist info for clickable artists
@@ -78,17 +80,19 @@ type ArtistSimple struct {
 
 // AlbumTrackMetadata holds per-track info for album / playlist formatting.
 type AlbumTrackMetadata struct {
+	SpotifyID   string         `json:"spotify_id,omitempty"`
 	Artists     string         `json:"artists"`
 	Name        string         `json:"name"`
 	AlbumName   string         `json:"album_name"`
+	AlbumArtist string         `json:"album_artist,omitempty"`
 	DurationMS  int            `json:"duration_ms"`
 	Images      string         `json:"images"`
 	ReleaseDate string         `json:"release_date"`
 	TrackNumber int            `json:"track_number"`
+	DiscNumber  int            `json:"disc_number,omitempty"`
 	ExternalURL string         `json:"external_urls"`
 	ISRC        string         `json:"isrc"`
 	AlbumType   string         `json:"album_type,omitempty"`
-	SpotifyID   string         `json:"spotify_id,omitempty"`
 	AlbumID     string         `json:"album_id,omitempty"`
 	AlbumURL    string         `json:"album_url,omitempty"`
 	ArtistID    string         `json:"artist_id,omitempty"`
@@ -227,6 +231,7 @@ type trackSimplified struct {
 	Name        string      `json:"name"`
 	DurationMS  int         `json:"duration_ms"`
 	TrackNumber int         `json:"track_number"`
+	DiscNumber  int         `json:"disc_number"`
 	ExternalURL externalURL `json:"external_urls"`
 	Artists     []artist    `json:"artists"`
 }
@@ -236,6 +241,7 @@ type trackFull struct {
 	Name        string          `json:"name"`
 	DurationMS  int             `json:"duration_ms"`
 	TrackNumber int             `json:"track_number"`
+	DiscNumber  int             `json:"disc_number"`
 	ExternalURL externalURL     `json:"external_urls"`
 	ExternalID  externalID      `json:"external_ids"`
 	Album       albumSimplified `json:"album"`
@@ -502,16 +508,18 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *playlistRaw) PlaylistRes
 			})
 		}
 		tracks = append(tracks, AlbumTrackMetadata{
+			SpotifyID:   item.Track.ID,
 			Artists:     joinArtists(item.Track.Artists),
 			Name:        item.Track.Name,
 			AlbumName:   item.Track.Album.Name,
+			AlbumArtist: joinArtists(item.Track.Album.Artists),
 			DurationMS:  item.Track.DurationMS,
 			Images:      firstNonEmpty(firstImageURL(item.Track.Album.Images), info.Owner.Images),
 			ReleaseDate: item.Track.Album.ReleaseDate,
 			TrackNumber: item.Track.TrackNumber,
+			DiscNumber:  item.Track.DiscNumber,
 			ExternalURL: item.Track.ExternalURL.Spotify,
 			ISRC:        item.Track.ExternalID.ISRC,
-			SpotifyID:   item.Track.ID,
 			AlbumID:     item.Track.Album.ID,
 			AlbumURL:    item.Track.Album.ExternalURL.Spotify,
 			ArtistID:    artistID,
@@ -551,16 +559,18 @@ func (c *SpotifyMetadataClient) formatAlbumData(ctx context.Context, raw *albumR
 	for _, item := range raw.Data.Tracks.Items {
 		isrc := c.fetchTrackISRC(ctx, item.ID, raw.Token, cache)
 		tracks = append(tracks, AlbumTrackMetadata{
+			SpotifyID:   item.ID,
 			Artists:     joinArtists(item.Artists),
 			Name:        item.Name,
 			AlbumName:   raw.Data.Name,
+			AlbumArtist: joinArtists(raw.Data.Artists),
 			DurationMS:  item.DurationMS,
 			Images:      albumImage,
 			ReleaseDate: raw.Data.ReleaseDate,
 			TrackNumber: item.TrackNumber,
+			DiscNumber:  item.DiscNumber,
 			ExternalURL: item.ExternalURL.Spotify,
 			ISRC:        isrc,
-			SpotifyID:   item.ID,
 		})
 	}
 
@@ -629,17 +639,19 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 				})
 			}
 			allTracks = append(allTracks, AlbumTrackMetadata{
+				SpotifyID:   tr.ID,
 				Artists:     joinArtists(tr.Artists),
 				Name:        tr.Name,
 				AlbumName:   alb.Name,
+				AlbumArtist: joinArtists(alb.Artists),
 				AlbumType:   alb.AlbumType,
 				DurationMS:  tr.DurationMS,
 				Images:      albumImage,
 				ReleaseDate: alb.ReleaseDate,
 				TrackNumber: tr.TrackNumber,
+				DiscNumber:  tr.DiscNumber,
 				ExternalURL: tr.ExternalURL.Spotify,
 				ISRC:        isrc,
-				SpotifyID:   tr.ID,
 				AlbumID:     alb.ID,
 				AlbumURL:    alb.ExternalURL.Spotify,
 				ArtistID:    artistID,
@@ -676,16 +688,18 @@ func formatTrackData(raw *trackFull) TrackResponse {
 	}
 	return TrackResponse{
 		Track: TrackMetadata{
+			SpotifyID:   raw.ID,
 			Artists:     joinArtists(raw.Artists),
 			Name:        raw.Name,
 			AlbumName:   raw.Album.Name,
+			AlbumArtist: joinArtists(raw.Album.Artists),
 			DurationMS:  raw.DurationMS,
 			Images:      firstImageURL(raw.Album.Images),
 			ReleaseDate: raw.Album.ReleaseDate,
 			TrackNumber: raw.TrackNumber,
+			DiscNumber:  raw.DiscNumber,
 			ExternalURL: raw.ExternalURL.Spotify,
 			ISRC:        raw.ExternalID.ISRC,
-			SpotifyID:   raw.ID,
 		},
 	}
 }

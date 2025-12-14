@@ -18,11 +18,14 @@ type Metadata struct {
 	Title       string
 	Artist      string
 	Album       string
-	Date        string
+	AlbumArtist string
+	Date        string // Recorded date (year only)
+	ReleaseDate string // Release date (full date)
 	TrackNumber int
 	DiscNumber  int
 	ISRC        string
 	Lyrics      string
+	Description string
 }
 
 func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
@@ -50,6 +53,9 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	if metadata.Album != "" {
 		_ = cmt.Add(flacvorbis.FIELD_ALBUM, metadata.Album)
 	}
+	if metadata.AlbumArtist != "" {
+		_ = cmt.Add("ALBUMARTIST", metadata.AlbumArtist)
+	}
 	if metadata.Date != "" {
 		_ = cmt.Add(flacvorbis.FIELD_DATE, metadata.Date)
 	}
@@ -62,6 +68,10 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	if metadata.ISRC != "" {
 		_ = cmt.Add(flacvorbis.FIELD_ISRC, metadata.ISRC)
 	}
+	if metadata.Description != "" {
+		_ = cmt.Add("DESCRIPTION", metadata.Description)
+	}
+	// Lyrics is added last to keep it at the bottom
 	if metadata.Lyrics != "" {
 		_ = cmt.Add("LYRICS", metadata.Lyrics) // Or "UNSYNCEDLYRICS" for unsynced
 	}
@@ -118,6 +128,19 @@ func embedCoverArt(f *flac.File, coverPath string) error {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// extractYear extracts the year from a release date string
+// Handles formats: "YYYY-MM-DD", "YYYY-MM", "YYYY"
+func extractYear(releaseDate string) string {
+	if releaseDate == "" {
+		return ""
+	}
+	// Try to extract year (first 4 digits)
+	if len(releaseDate) >= 4 {
+		return releaseDate[:4]
+	}
+	return releaseDate
 }
 
 // EmbedLyricsOnly adds lyrics to a FLAC file while preserving existing metadata

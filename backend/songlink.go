@@ -19,7 +19,6 @@ type SongLinkClient struct {
 
 type SongLinkURLs struct {
 	TidalURL  string `json:"tidal_url"`
-	DeezerURL string `json:"deezer_url"`
 	AmazonURL string `json:"amazon_url"`
 }
 
@@ -27,11 +26,9 @@ type SongLinkURLs struct {
 type TrackAvailability struct {
 	SpotifyID string `json:"spotify_id"`
 	Tidal     bool   `json:"tidal"`
-	Deezer    bool   `json:"deezer"`
 	Amazon    bool   `json:"amazon"`
 	Qobuz     bool   `json:"qobuz"`
 	TidalURL  string `json:"tidal_url,omitempty"`
-	DeezerURL string `json:"deezer_url,omitempty"`
 	AmazonURL string `json:"amazon_url,omitempty"`
 	QobuzURL  string `json:"qobuz_url,omitempty"`
 }
@@ -154,12 +151,6 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLink
 		fmt.Printf("✓ Tidal URL found\n")
 	}
 
-	// Extract Deezer URL
-	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
-		urls.DeezerURL = deezerLink.URL
-		fmt.Printf("✓ Deezer URL found\n")
-	}
-
 	// Extract Amazon URL
 	if amazonLink, ok := songLinkResp.LinksByPlatform["amazonMusic"]; ok && amazonLink.URL != "" {
 		amazonURL := amazonLink.URL
@@ -171,7 +162,7 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLink
 	}
 
 	// Check if at least one URL was found
-	if urls.TidalURL == "" && urls.DeezerURL == "" && urls.AmazonURL == "" {
+	if urls.TidalURL == "" && urls.AmazonURL == "" {
 		return nil, fmt.Errorf("no streaming URLs found")
 	}
 
@@ -288,12 +279,6 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string, isrc stri
 	if tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]; ok && tidalLink.URL != "" {
 		availability.Tidal = true
 		availability.TidalURL = tidalLink.URL
-	}
-
-	// Check Deezer
-	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
-		availability.Deezer = true
-		availability.DeezerURL = deezerLink.URL
 	}
 
 	// Check Amazon

@@ -16,7 +16,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
-import { TidalIcon, DeezerIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
+import { TidalIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 
 interface TrackListProps {
   tracks: TrackMetadata[];
@@ -49,7 +49,7 @@ interface TrackListProps {
   downloadingCoverTrack?: string | null;
   onToggleTrack: (isrc: string) => void;
   onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, durationMs?: number, position?: number) => void;
+  onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string) => void;
   onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number) => void;
   onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
   onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string) => void;
@@ -301,7 +301,7 @@ export function TrackList({
                           <TooltipTrigger asChild>
                             <Button
                               onClick={() =>
-                                onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, track.duration_ms, startIndex + index + 1)
+                                onDownloadTrack(track.isrc, track.name, track.artists, track.album_name, track.spotify_id, folderName, track.duration_ms, startIndex + index + 1, track.album_artist, track.release_date)
                               }
                               size="sm"
                               disabled={isDownloading || downloadingTrack === track.isrc}
@@ -415,7 +415,6 @@ export function TrackList({
                             {availabilityMap?.has(track.spotify_id) ? (
                               <div className="flex items-center gap-2">
                                 <TidalIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`} />
-                                <DeezerIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.deezer ? "text-green-500" : "text-red-500"}`} />
                                 <QobuzIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`} />
                                 <AmazonIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`} />
                               </div>

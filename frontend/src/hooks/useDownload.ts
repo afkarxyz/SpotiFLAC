@@ -31,7 +31,9 @@ export function useDownload() {
     position?: number,
     spotifyId?: string,
     durationMs?: number,
-    releaseYear?: string
+    releaseYear?: string,
+    albumArtist?: string,
+    releaseDate?: string
   ) => {
     const service = settings.downloader;
 
@@ -109,6 +111,8 @@ export function useDownload() {
             track_name: trackName,
             artist_name: artistName,
             album_name: albumName,
+            album_artist: albumArtist,
+            release_date: releaseDate,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -127,46 +131,13 @@ export function useDownload() {
             logger.success(`tidal: ${trackName} - ${artistName}`);
             return tidalResponse;
           }
-          logger.warning(`tidal failed, trying deezer...`);
+          logger.warning(`tidal failed, trying amazon...`);
         } catch (tidalErr) {
           logger.error(`tidal error: ${tidalErr}`);
         }
       }
 
-      // Try Deezer second
-      if (streamingURLs?.deezer_url) {
-        try {
-          logger.debug(`trying deezer for: ${trackName} - ${artistName}`);
-          const deezerResponse = await downloadTrack({
-            isrc,
-            service: "deezer",
-            query,
-            track_name: trackName,
-            artist_name: artistName,
-            album_name: albumName,
-            output_dir: outputDir,
-            filename_format: settings.filenameTemplate,
-            track_number: settings.trackNumber,
-            position,
-            use_album_track_number: useAlbumTrackNumber,
-            spotify_id: spotifyId,
-            embed_lyrics: settings.embedLyrics,
-            embed_max_quality_cover: settings.embedMaxQualityCover,
-            service_url: streamingURLs.deezer_url,
-            item_id: itemID,
-          });
-
-          if (deezerResponse.success) {
-            logger.success(`deezer: ${trackName} - ${artistName}`);
-            return deezerResponse;
-          }
-          logger.warning(`deezer failed, trying amazon...`);
-        } catch (deezerErr) {
-          logger.error(`deezer error: ${deezerErr}`);
-        }
-      }
-
-      // Try Amazon third
+      // Try Amazon second
       if (streamingURLs?.amazon_url) {
         try {
           logger.debug(`trying amazon for: ${trackName} - ${artistName}`);
@@ -177,6 +148,8 @@ export function useDownload() {
             track_name: trackName,
             artist_name: artistName,
             album_name: albumName,
+            album_artist: albumArtist,
+            release_date: releaseDate,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -208,6 +181,8 @@ export function useDownload() {
         track_name: trackName,
         artist_name: artistName,
         album_name: albumName,
+        album_artist: albumArtist,
+        release_date: releaseDate,
         output_dir: outputDir,
         filename_format: settings.filenameTemplate,
         track_number: settings.trackNumber,
@@ -244,11 +219,13 @@ export function useDownload() {
 
     const singleServiceResponse = await downloadTrack({
       isrc,
-      service: service as "deezer" | "tidal" | "qobuz" | "amazon",
+      service: service as "tidal" | "qobuz" | "amazon",
       query,
       track_name: trackName,
       artist_name: artistName,
       album_name: albumName,
+      album_artist: albumArtist,
+      release_date: releaseDate,
       output_dir: outputDir,
       filename_format: settings.filenameTemplate,
       track_number: settings.trackNumber,
@@ -283,7 +260,9 @@ export function useDownload() {
     spotifyId?: string,
     durationMs?: number,
     isAlbum?: boolean,
-    releaseYear?: string
+    releaseYear?: string,
+    albumArtist?: string,
+    releaseDate?: string
   ) => {
     const service = settings.downloader;
 
@@ -356,6 +335,8 @@ export function useDownload() {
             track_name: trackName,
             artist_name: artistName,
             album_name: albumName,
+            album_artist: albumArtist,
+            release_date: releaseDate,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -378,37 +359,7 @@ export function useDownload() {
         }
       }
 
-      // Try Deezer second
-      if (streamingURLs?.deezer_url) {
-        try {
-          const deezerResponse = await downloadTrack({
-            isrc,
-            service: "deezer",
-            query,
-            track_name: trackName,
-            artist_name: artistName,
-            album_name: albumName,
-            output_dir: outputDir,
-            filename_format: settings.filenameTemplate,
-            track_number: settings.trackNumber,
-            position,
-            use_album_track_number: useAlbumTrackNumber,
-            spotify_id: spotifyId,
-            embed_lyrics: settings.embedLyrics,
-            embed_max_quality_cover: settings.embedMaxQualityCover,
-            service_url: streamingURLs.deezer_url,
-            item_id: itemID,
-          });
-
-          if (deezerResponse.success) {
-            return deezerResponse;
-          }
-        } catch (deezerErr) {
-          console.error("Deezer error:", deezerErr);
-        }
-      }
-
-      // Try Amazon third
+      // Try Amazon second
       if (streamingURLs?.amazon_url) {
         try {
           const amazonResponse = await downloadTrack({
@@ -418,6 +369,8 @@ export function useDownload() {
             track_name: trackName,
             artist_name: artistName,
             album_name: albumName,
+            album_artist: albumArtist,
+            release_date: releaseDate,
             output_dir: outputDir,
             filename_format: settings.filenameTemplate,
             track_number: settings.trackNumber,
@@ -446,6 +399,8 @@ export function useDownload() {
         track_name: trackName,
         artist_name: artistName,
         album_name: albumName,
+        album_artist: albumArtist,
+        release_date: releaseDate,
         output_dir: outputDir,
         filename_format: settings.filenameTemplate,
         track_number: settings.trackNumber,
@@ -481,11 +436,13 @@ export function useDownload() {
 
     const singleServiceResponse = await downloadTrack({
       isrc,
-      service: service as "deezer" | "tidal" | "qobuz" | "amazon",
+      service: service as "tidal" | "qobuz" | "amazon",
       query,
       track_name: trackName,
       artist_name: artistName,
       album_name: albumName,
+      album_artist: albumArtist,
+      release_date: releaseDate,
       output_dir: outputDir,
       filename_format: settings.filenameTemplate,
       track_number: settings.trackNumber,
@@ -515,7 +472,9 @@ export function useDownload() {
     spotifyId?: string,
     playlistName?: string,
     durationMs?: number,
-    position?: number
+    position?: number,
+    albumArtist?: string,
+    releaseDate?: string
   ) => {
     if (!isrc) {
       toast.error("No ISRC found for this track");
@@ -528,6 +487,9 @@ export function useDownload() {
 
     try {
       // Single track download - use playlistName if provided for folder structure
+      // Extract year from release_date (format: YYYY-MM-DD or YYYY)
+      const releaseYear = releaseDate?.substring(0, 4);
+      
       const response = await downloadWithAutoFallback(
         isrc,
         settings,
@@ -537,7 +499,10 @@ export function useDownload() {
         playlistName,
         position, // Pass position for track numbering
         spotifyId,
-        durationMs
+        durationMs,
+        releaseYear,
+        albumArtist || "",
+        releaseDate
       );
 
       if (response.success) {
@@ -636,7 +601,9 @@ export function useDownload() {
           track?.spotify_id,
           track?.duration_ms,
           isAlbum,
-          releaseYear
+          releaseYear,
+          track?.album_artist || "", // Use album_artist from Spotify metadata
+          track?.release_date
         );
 
         if (response.success) {
@@ -767,7 +734,9 @@ export function useDownload() {
           track.spotify_id,
           track.duration_ms,
           isAlbum,
-          releaseYear
+          releaseYear,
+          track.album_artist || "", // Use album_artist from Spotify metadata
+          track.release_date
         );
 
         if (response.success) {

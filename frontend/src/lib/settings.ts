@@ -10,7 +10,7 @@ export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-
 
 export interface Settings {
   downloadPath: string;
-  downloader: "auto" | "deezer" | "tidal" | "qobuz" | "amazon";
+  downloader: "auto" | "tidal" | "qobuz" | "amazon";
   theme: string;
   themeMode: "auto" | "light" | "dark";
   fontFamily: FontFamily;
