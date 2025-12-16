@@ -35,3 +35,5 @@ A simple utility for verifying the authenticity of FLAC files.
 ### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader) 
 
 Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
+
+[![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
