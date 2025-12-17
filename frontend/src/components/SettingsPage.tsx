@@ -339,7 +339,14 @@ export function SettingsPage() {
               </p>
             )}
           </div>
-
+            <div className="flex items-center gap-3">
+                <Label htmlFor="use-album-artist" className="cursor-pointer text-sm">Use Album Artist</Label>
+                <Switch
+                    id="use-album-artist"
+                    checked={tempSettings.useAlbumArtist}
+                    onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, useAlbumArtist: checked }))}
+                />
+            </div>
           <div className="border-t" />
 
           {/* Filename Format */}

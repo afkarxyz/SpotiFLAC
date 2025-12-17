@@ -21,6 +21,7 @@ export interface Settings {
   filenameTemplate: string;
   // Legacy settings (kept for migration)
   filenameFormat?: "title-artist" | "artist-title" | "title";
+  useAlbumArtist?: boolean;
   artistSubfolder?: boolean;
   albumSubfolder?: boolean;
   trackNumber: boolean;

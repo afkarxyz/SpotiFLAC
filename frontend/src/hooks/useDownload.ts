@@ -50,8 +50,13 @@ export function useDownload() {
     // Replace forward slashes in template data values to prevent them from being interpreted as path separators
     const placeholder = "__SLASH_PLACEHOLDER__";
     // Build template data for folder path
+    let artistFolderName = artistName;
+    if(settings.useAlbumArtist) {
+        artistFolderName = albumArtist || artistName;
+    }
+    logger.info("Using artist folder name: " + artistFolderName);
     const templateData: TemplateData = {
-      artist: artistName?.replace(/\//g, placeholder),
+      artist: artistFolderName?.replace(/\//g, placeholder),
       album: albumName?.replace(/\//g, placeholder),
       title: trackName?.replace(/\//g, placeholder),
       track: position,
@@ -296,11 +301,15 @@ export function useDownload() {
 
     let outputDir = settings.downloadPath;
     let useAlbumTrackNumber = false;
-
+      let artistFolderName = artistName;
+      if(settings.useAlbumArtist) {
+          artistFolderName = albumArtist || artistName;
+      }
+      logger.info("Using artist folder name: " + artistFolderName);
     // Replace forward slashes in template data values to prevent them from being interpreted as path separators
     const placeholder = "__SLASH_PLACEHOLDER__";
     const templateData: TemplateData = {
-      artist: artistName?.replace(/\//g, placeholder),
+      artist: artistFolderName?.replace(/\//g, placeholder),
       album: albumName?.replace(/\//g, placeholder),
       title: trackName?.replace(/\//g, placeholder),
       track: position,
