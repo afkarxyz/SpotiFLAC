@@ -148,7 +148,9 @@ export function AlbumInfo({
                   <span>•</span>
                   <span>{albumInfo.release_date}</span>
                   <span>•</span>
-                  <span>{albumInfo.total_tracks} songs</span>
+                  <span>
+                    {albumInfo.total_tracks} {albumInfo.total_tracks === 1 ? "song" : "songs"}
+                  </span>
                 </div>
               </div>
               <div className="flex gap-2 flex-wrap">
