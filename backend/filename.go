@@ -56,11 +56,11 @@ func BuildExpectedFilename(trackName, artistName, filenameFormat string, include
 func sanitizeFilename(name string) string {
 	// Replace forward slash with space (more natural than underscore)
 	sanitized := strings.ReplaceAll(name, "/", " ")
-	
+
 	// Remove other invalid filesystem characters (replace with space)
 	re := regexp.MustCompile(`[<>:"\\|?*]`)
 	sanitized = re.ReplaceAllString(sanitized, " ")
-	
+
 	// Remove control characters (0x00-0x1F, 0x7F)
 	var result strings.Builder
 	for _, r := range sanitized {
@@ -79,49 +79,57 @@ func sanitizeFilename(name string) string {
 		}
 		// Remove emoji ranges (most emoji are in these ranges)
 		if (r >= 0x1F300 && r <= 0x1F9FF) || // Miscellaneous Symbols and Pictographs, Emoticons
-			(r >= 0x2600 && r <= 0x26FF) ||   // Miscellaneous Symbols
-			(r >= 0x2700 && r <= 0x27BF) ||   // Dingbats
-			(r >= 0xFE00 && r <= 0xFE0F) ||   // Variation Selectors
+			(r >= 0x2600 && r <= 0x26FF) || // Miscellaneous Symbols
+			(r >= 0x2700 && r <= 0x27BF) || // Dingbats
+			(r >= 0xFE00 && r <= 0xFE0F) || // Variation Selectors
 			(r >= 0x1F900 && r <= 0x1F9FF) || // Supplemental Symbols and Pictographs
 			(r >= 0x1F600 && r <= 0x1F64F) || // Emoticons
 			(r >= 0x1F680 && r <= 0x1F6FF) || // Transport and Map Symbols
-			(r >= 0x1F1E0 && r <= 0x1F1FF) {  // Regional Indicator Symbols (flags)
+			(r >= 0x1F1E0 && r <= 0x1F1FF) { // Regional Indicator Symbols (flags)
 			continue
 		}
 		result.WriteRune(r)
 	}
-	
+
 	sanitized = result.String()
 	sanitized = strings.TrimSpace(sanitized)
-	
+
 	// Remove leading/trailing dots and spaces (Windows doesn't allow these)
 	sanitized = strings.Trim(sanitized, ". ")
-	
+
 	// Normalize consecutive spaces to single space
 	re = regexp.MustCompile(`\s+`)
 	sanitized = re.ReplaceAllString(sanitized, " ")
-	
+
 	// Normalize consecutive underscores to single underscore
 	re = regexp.MustCompile(`_+`)
 	sanitized = re.ReplaceAllString(sanitized, "_")
-	
+
 	// Remove leading/trailing underscores and spaces
 	sanitized = strings.Trim(sanitized, "_ ")
-	
+
 	if sanitized == "" {
 		return "Unknown"
 	}
-	
+
 	// Ensure the result is valid UTF-8
 	if !utf8.ValidString(sanitized) {
 		// If invalid UTF-8, try to fix it
 		sanitized = strings.ToValidUTF8(sanitized, "_")
 	}
-	
+
 	return sanitized
 }
 
+// NormalizePath only normalizes path separators without modifying folder names
+// Use this for user-provided paths that already exist on the filesystem
+func NormalizePath(folderPath string) string {
+	// Normalize all forward slashes to backslashes on Windows
+	return strings.ReplaceAll(folderPath, "/", string(filepath.Separator))
+}
+
 // SanitizeFolderPath sanitizes each component of a folder path and normalizes separators
+// Use this only for NEW folders being created (artist names, album names, etc.)
 func SanitizeFolderPath(folderPath string) string {
 	// Normalize all forward slashes to backslashes on Windows
 	normalizedPath := strings.ReplaceAll(folderPath, "/", string(filepath.Separator))

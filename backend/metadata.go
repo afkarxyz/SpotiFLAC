@@ -7,6 +7,7 @@ import (
 	pathfilepath "path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	id3v2 "github.com/bogem/id3v2/v2"
 	"github.com/go-flac/flacpicture"
@@ -599,4 +600,87 @@ func EmbedLyricsOnlyUniversal(filepath string, lyrics string) error {
 	default:
 		return fmt.Errorf("unsupported file format for lyrics embedding: %s", ext)
 	}
+}
+
+// FileExistenceResult represents the result of checking if a file exists
+type FileExistenceResult struct {
+	ISRC       string `json:"isrc"`
+	Exists     bool   `json:"exists"`
+	FilePath   string `json:"file_path,omitempty"`
+	TrackName  string `json:"track_name,omitempty"`
+	ArtistName string `json:"artist_name,omitempty"`
+}
+
+// CheckFilesExistParallel checks if multiple files exist in parallel
+// It builds an ISRC index from the output directory once, then checks all tracks against it
+func CheckFilesExistParallel(outputDir string, tracks []struct {
+	ISRC       string
+	TrackName  string
+	ArtistName string
+}) []FileExistenceResult {
+	results := make([]FileExistenceResult, len(tracks))
+
+	// Build ISRC index from output directory (scan once)
+	isrcIndex := buildISRCIndex(outputDir)
+
+	// Check each track against the index (parallel)
+	var wg sync.WaitGroup
+	for i, track := range tracks {
+		wg.Add(1)
+		go func(idx int, t struct {
+			ISRC       string
+			TrackName  string
+			ArtistName string
+		}) {
+			defer wg.Done()
+
+			result := FileExistenceResult{
+				ISRC:       t.ISRC,
+				TrackName:  t.TrackName,
+				ArtistName: t.ArtistName,
+				Exists:     false,
+			}
+
+			if t.ISRC != "" {
+				if filePath, exists := isrcIndex[strings.ToUpper(t.ISRC)]; exists {
+					result.Exists = true
+					result.FilePath = filePath
+				}
+			}
+
+			results[idx] = result
+		}(i, track)
+	}
+
+	wg.Wait()
+	return results
+}
+
+// buildISRCIndex scans a directory and builds a map of ISRC -> file path
+func buildISRCIndex(outputDir string) map[string]string {
+	index := make(map[string]string)
+
+	// Walk directory recursively - only check .flac files for SpotiFLAC
+	pathfilepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+
+		ext := strings.ToLower(pathfilepath.Ext(path))
+		if ext != ".flac" {
+			return nil
+		}
+
+		// Read ISRC from file
+		isrc, err := ReadISRCFromFile(path)
+		if err != nil || isrc == "" {
+			return nil
+		}
+
+		// Store in index (uppercase for case-insensitive matching)
+		index[strings.ToUpper(isrc)] = path
+		return nil
+	})
+
+	return index
 }

@@ -120,7 +120,7 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[1200px] w-[95vw] max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
         <DialogHeader className="px-6 pt-6 pb-4 border-b space-y-0">
-          <div className="flex items-center justify-between mb-4 pr-8">
+          <div className="flex items-center justify-between mb-4">
             <DialogTitle className="text-lg font-semibold">Download Queue</DialogTitle>
             <div className="flex items-center gap-2">
               {(queueInfo.completed_count > 0 || queueInfo.failed_count > 0 || queueInfo.skipped_count > 0) && (

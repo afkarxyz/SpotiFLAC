@@ -29,6 +29,7 @@ import { DownloadQueue } from "@/components/DownloadQueue";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
 import { AudioConverterPage } from "@/components/AudioConverterPage";
+import { FileManagerPage } from "@/components/FileManagerPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { DebugLoggerPage } from "@/components/DebugLoggerPage";
 import type { HistoryItem } from "@/components/FetchHistory";
@@ -56,7 +57,7 @@ function App() {
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
 
   const ITEMS_PER_PAGE = 50;
-  const CURRENT_VERSION = "6.8";
+  const CURRENT_VERSION = "6.9";
 
   const download = useDownload();
   const metadata = useMetadata();
@@ -515,6 +516,8 @@ function App() {
         return <AudioAnalysisPage />;
       case "audio-converter":
         return <AudioConverterPage />;
+      case "file-manager":
+        return <FileManagerPage />;
       default:
         return (
           <>

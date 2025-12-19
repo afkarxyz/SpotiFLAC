@@ -273,7 +273,8 @@ func extractTarXz(tarXzPath, destDir string) error {
 type ConvertAudioRequest struct {
 	InputFiles   []string `json:"input_files"`
 	OutputFormat string   `json:"output_format"` // mp3, m4a
-	Bitrate      string   `json:"bitrate"`       // e.g., "320k", "256k", "192k", "128k"
+	Bitrate      string   `json:"bitrate"`       // e.g., "320k", "256k", "192k", "128k" (ignored for ALAC)
+	Codec        string   `json:"codec"`         // For m4a: "aac" (lossy) or "alac" (lossless). Default: "aac"
 }
 
 // ConvertAudioResult represents the result of a single file conversion
@@ -348,7 +349,7 @@ func ConvertAudio(req ConvertAudioRequest) ([]ConvertAudioResult, error) {
 			// Extract cover art and lyrics from input file before conversion
 			var coverArtPath string
 			var lyrics string
-			
+
 			coverArtPath, _ = ExtractCoverArt(inputFile)
 			lyrics, err = ExtractLyrics(inputFile)
 			if err != nil {
@@ -378,12 +379,28 @@ func ConvertAudio(req ConvertAudioRequest) ([]ConvertAudioResult, error) {
 				// Map video stream if exists (for cover art)
 				args = append(args, "-map", "0:v?", "-c:v", "copy")
 			case "m4a":
-				args = append(args,
-					"-codec:a", "aac",
-					"-b:a", req.Bitrate,
-					"-map", "0:a", // Map audio stream
-					"-map_metadata", "0", // Copy all metadata
-				)
+				// Determine codec: ALAC (lossless) or AAC (lossy)
+				codec := req.Codec
+				if codec == "" {
+					codec = "aac" // Default to AAC for backward compatibility
+				}
+
+				if codec == "alac" {
+					// ALAC - Apple Lossless (no bitrate needed)
+					args = append(args,
+						"-codec:a", "alac",
+						"-map", "0:a", // Map audio stream
+						"-map_metadata", "0", // Copy all metadata
+					)
+				} else {
+					// AAC - lossy with bitrate
+					args = append(args,
+						"-codec:a", "aac",
+						"-b:a", req.Bitrate,
+						"-map", "0:a", // Map audio stream
+						"-map_metadata", "0", // Copy all metadata
+					)
+				}
 				// Map video stream for cover art in M4A
 				args = append(args, "-map", "0:v?", "-c:v", "copy", "-disposition:v:0", "attached_pic")
 			}
@@ -495,7 +512,7 @@ func InstallFFmpegFromFile(filePath string) error {
 	}
 
 	ffmpegDir := filepath.Dir(ffmpegPath)
-	
+
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(ffmpegDir, 0755); err != nil {
 		return fmt.Errorf("failed to create ffmpeg directory: %w", err)
@@ -519,7 +536,7 @@ func InstallFFmpegFromFile(filePath string) error {
 		destFile.Close()
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
-	
+
 	// Ensure all data is written to disk
 	if err := destFile.Sync(); err != nil {
 		destFile.Close()
@@ -531,13 +548,13 @@ func InstallFFmpegFromFile(filePath string) error {
 	// Wait a bit and retry verification
 	maxRetries := 3
 	retryDelay := 500 * time.Millisecond
-	
+
 	var verifyErr error
 	for i := 0; i < maxRetries; i++ {
 		if i > 0 {
 			time.Sleep(retryDelay)
 		}
-		
+
 		cmd := exec.Command(ffmpegPath, "-version")
 		// Hide console window on Windows
 		setHideWindow(cmd)
@@ -546,7 +563,7 @@ func InstallFFmpegFromFile(filePath string) error {
 			break
 		}
 	}
-	
+
 	if verifyErr != nil {
 		return fmt.Errorf("file copied but ffmpeg verification failed after %d attempts: %w", maxRetries, verifyErr)
 	}
@@ -554,4 +571,3 @@ func InstallFFmpegFromFile(filePath string) error {
 	fmt.Printf("[FFmpeg] Successfully installed from: %s\n", filePath)
 	return nil
 }
-

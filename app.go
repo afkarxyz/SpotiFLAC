@@ -140,8 +140,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	if req.OutputDir == "" {
 		req.OutputDir = "."
 	} else {
-		// Sanitize output directory path to remove invalid characters
-		req.OutputDir = backend.SanitizeFolderPath(req.OutputDir)
+		// Only normalize path separators, don't sanitize user's existing folder names
+		req.OutputDir = backend.NormalizePath(req.OutputDir)
 	}
 
 	if req.AudioFormat == "" {
@@ -661,6 +661,7 @@ type ConvertAudioRequest struct {
 	InputFiles   []string `json:"input_files"`
 	OutputFormat string   `json:"output_format"`
 	Bitrate      string   `json:"bitrate"`
+	Codec        string   `json:"codec"` // For m4a: "aac" (lossy) or "alac" (lossless)
 }
 
 // ConvertAudio converts audio files using ffmpeg
@@ -669,6 +670,7 @@ func (a *App) ConvertAudio(req ConvertAudioRequest) ([]backend.ConvertAudioResul
 		InputFiles:   req.InputFiles,
 		OutputFormat: req.OutputFormat,
 		Bitrate:      req.Bitrate,
+		Codec:        req.Codec,
 	}
 	return backend.ConvertAudio(backendReq)
 }
@@ -680,4 +682,75 @@ func (a *App) SelectAudioFiles() ([]string, error) {
 		return nil, err
 	}
 	return files, nil
+}
+
+// ListDirectoryFiles lists files and folders in a directory
+func (a *App) ListDirectoryFiles(dirPath string) ([]backend.FileInfo, error) {
+	if dirPath == "" {
+		return nil, fmt.Errorf("directory path is required")
+	}
+	return backend.ListDirectory(dirPath)
+}
+
+// ListAudioFilesInDir lists only audio files in a directory recursively
+func (a *App) ListAudioFilesInDir(dirPath string) ([]backend.FileInfo, error) {
+	if dirPath == "" {
+		return nil, fmt.Errorf("directory path is required")
+	}
+	return backend.ListAudioFiles(dirPath)
+}
+
+// ReadFileMetadata reads metadata from an audio file
+func (a *App) ReadFileMetadata(filePath string) (*backend.AudioMetadata, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("file path is required")
+	}
+	return backend.ReadAudioMetadata(filePath)
+}
+
+// PreviewRenameFiles generates a preview of rename operations
+func (a *App) PreviewRenameFiles(files []string, format string) []backend.RenamePreview {
+	return backend.PreviewRename(files, format)
+}
+
+// RenameFilesByMetadata renames files based on their metadata
+func (a *App) RenameFilesByMetadata(files []string, format string) []backend.RenameResult {
+	return backend.RenameFiles(files, format)
+}
+
+// CheckFileExistenceRequest represents a track to check for existence
+type CheckFileExistenceRequest struct {
+	ISRC       string `json:"isrc"`
+	TrackName  string `json:"track_name"`
+	ArtistName string `json:"artist_name"`
+}
+
+// CheckFilesExistence checks if multiple files already exist in the output directory
+// This is done in parallel for better performance
+func (a *App) CheckFilesExistence(outputDir string, tracks []CheckFileExistenceRequest) []backend.FileExistenceResult {
+	// Convert to backend struct format
+	backendTracks := make([]struct {
+		ISRC       string
+		TrackName  string
+		ArtistName string
+	}, len(tracks))
+
+	for i, t := range tracks {
+		backendTracks[i] = struct {
+			ISRC       string
+			TrackName  string
+			ArtistName string
+		}{
+			ISRC:       t.ISRC,
+			TrackName:  t.TrackName,
+			ArtistName: t.ArtistName,
+		}
+	}
+
+	return backend.CheckFilesExistParallel(outputDir, backendTracks)
+}
+
+// SkipDownloadItem marks a download item as skipped (file already exists)
+func (a *App) SkipDownloadItem(itemID, filePath string) {
+	backend.SkipDownloadItem(itemID, filePath)
 }

@@ -16,15 +16,15 @@ import (
 
 // LRCLibResponse represents the LRCLIB API response
 type LRCLibResponse struct {
-	ID            int     `json:"id"`
-	Name          string  `json:"name"`
-	TrackName     string  `json:"trackName"`
-	ArtistName    string  `json:"artistName"`
-	AlbumName     string  `json:"albumName"`
-	Duration      float64 `json:"duration"`
-	Instrumental  bool    `json:"instrumental"`
-	PlainLyrics   string  `json:"plainLyrics"`
-	SyncedLyrics  string  `json:"syncedLyrics"`
+	ID           int     `json:"id"`
+	Name         string  `json:"name"`
+	TrackName    string  `json:"trackName"`
+	ArtistName   string  `json:"artistName"`
+	AlbumName    string  `json:"albumName"`
+	Duration     float64 `json:"duration"`
+	Instrumental bool    `json:"instrumental"`
+	PlainLyrics  string  `json:"plainLyrics"`
+	SyncedLyrics string  `json:"syncedLyrics"`
 }
 
 // LyricsLine represents a single line of lyrics
@@ -255,7 +255,7 @@ func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName st
 	simplifiedTrack := simplifyTrackName(trackName)
 	if simplifiedTrack != trackName {
 		fmt.Printf("   Trying simplified name: %s\n", simplifiedTrack)
-		
+
 		resp, err = c.FetchLyricsWithMetadata(simplifiedTrack, artistName)
 		if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
 			return resp, "LRCLIB (simplified)", nil
@@ -269,7 +269,6 @@ func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName st
 
 	return nil, "", fmt.Errorf("lyrics not found in any source")
 }
-
 
 // ConvertToLRC converts lyrics response to LRC format
 func (c *LyricsClient) ConvertToLRC(lyrics *LyricsResponse, trackName, artistName string) string {
@@ -364,7 +363,7 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 	if outputDir == "" {
 		outputDir = GetDefaultMusicPath()
 	} else {
-		outputDir = SanitizeFolderPath(outputDir)
+		outputDir = NormalizePath(outputDir)
 	}
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {

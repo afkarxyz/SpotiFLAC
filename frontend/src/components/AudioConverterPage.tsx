@@ -42,6 +42,11 @@ const BITRATE_OPTIONS = [
   { value: "128k", label: "128k" },
 ];
 
+const M4A_CODEC_OPTIONS = [
+  { value: "aac", label: "AAC" },
+  { value: "alac", label: "ALAC" },
+];
+
 const STORAGE_KEY = "spotiflac_audio_converter_state";
 
 export function AudioConverterPage() {
@@ -90,13 +95,27 @@ export function AudioConverterPage() {
     }
     return "320k";
   });
+  const [m4aCodec, setM4aCodec] = useState<"aac" | "alac">(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.m4aCodec === "aac" || parsed.m4aCodec === "alac") {
+          return parsed.m4aCodec;
+        }
+      }
+    } catch (err) {
+      // Ignore
+    }
+    return "aac";
+  });
   const [converting, setConverting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingFFmpeg, setIsDraggingFFmpeg] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Helper function to save state to sessionStorage
-  const saveState = useCallback((stateToSave: { files: AudioFile[]; outputFormat: "mp3" | "m4a"; bitrate: string }) => {
+  const saveState = useCallback((stateToSave: { files: AudioFile[]; outputFormat: "mp3" | "m4a"; bitrate: string; m4aCodec: "aac" | "alac" }) => {
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     } catch (err) {
@@ -109,10 +128,10 @@ export function AudioConverterPage() {
     checkFfmpegInstallation();
   }, []);
 
-  // Save state to sessionStorage whenever files, outputFormat, or bitrate changes
+  // Save state to sessionStorage whenever files, outputFormat, bitrate, or m4aCodec changes
   useEffect(() => {
-    saveState({ files, outputFormat, bitrate });
-  }, [files, outputFormat, bitrate, saveState]);
+    saveState({ files, outputFormat, bitrate, m4aCodec });
+  }, [files, outputFormat, bitrate, m4aCodec, saveState]);
 
   // Auto-set output format to M4A if all files are MP3
   useEffect(() => {
@@ -364,6 +383,7 @@ export function AudioConverterPage() {
         input_files: inputPaths,
         output_format: outputFormat,
         bitrate: bitrate,
+        codec: outputFormat === "m4a" ? m4aCodec : "",
       });
 
       // Update file statuses based on results
@@ -578,27 +598,54 @@ export function AudioConverterPage() {
                       </ToggleGroupItem>
                     </ToggleGroup>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="whitespace-nowrap">Bitrate:</Label>
-                    <ToggleGroup
-                      type="single"
-                      variant="outline"
-                      value={bitrate}
-                      onValueChange={(value) => {
-                        if (value) setBitrate(value);
-                      }}
-                    >
-                      {BITRATE_OPTIONS.map((option) => (
-                        <ToggleGroupItem
-                          key={option.value}
-                          value={option.value}
-                          aria-label={option.label}
-                        >
-                          {option.label}
-                        </ToggleGroupItem>
-                      ))}
-                    </ToggleGroup>
-                  </div>
+                  {/* Codec selection for M4A */}
+                  {outputFormat === "m4a" && (
+                    <div className="flex items-center gap-2">
+                      <Label className="whitespace-nowrap">Codec:</Label>
+                      <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        value={m4aCodec}
+                        onValueChange={(value) => {
+                          if (value) setM4aCodec(value as "aac" | "alac");
+                        }}
+                      >
+                        {M4A_CODEC_OPTIONS.map((option) => (
+                          <ToggleGroupItem
+                            key={option.value}
+                            value={option.value}
+                            aria-label={option.label}
+                          >
+                            {option.label}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    </div>
+                  )}
+                  {/* Bitrate selection - hide for ALAC (lossless) */}
+                  {!(outputFormat === "m4a" && m4aCodec === "alac") && (
+                    <div className="flex items-center gap-2">
+                      <Label className="whitespace-nowrap">Bitrate:</Label>
+                      <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        value={bitrate}
+                        onValueChange={(value) => {
+                          if (value) setBitrate(value);
+                        }}
+                      >
+                        {BITRATE_OPTIONS.map((option) => (
+                          <ToggleGroupItem
+                            key={option.value}
+                            value={option.value}
+                            aria-label={option.label}
+                          >
+                            {option.label}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    </div>
+                  )}
                 </div>
               </div>
 

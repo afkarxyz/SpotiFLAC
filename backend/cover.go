@@ -161,7 +161,7 @@ func (c *CoverClient) DownloadCover(req CoverDownloadRequest) (*CoverDownloadRes
 	if outputDir == "" {
 		outputDir = GetDefaultMusicPath()
 	} else {
-		outputDir = SanitizeFolderPath(outputDir)
+		outputDir = NormalizePath(outputDir)
 	}
 
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
