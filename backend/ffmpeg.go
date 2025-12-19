@@ -30,7 +30,8 @@ func decodeBase64(encoded string) (string, error) {
 const (
 	ffmpegWindowsURL = "aHR0cHM6Ly9naXRodWIuY29tL0J0Yk4vRkZtcGVnLUJ1aWxkcy9yZWxlYXNlcy9kb3dubG9hZC9sYXRlc3QvZmZtcGVnLW1hc3Rlci1sYXRlc3Qtd2luNjQtZ3BsLnppcA=="
 	ffmpegLinuxURL   = "aHR0cHM6Ly9naXRodWIuY29tL0J0Yk4vRkZtcGVnLUJ1aWxkcy9yZWxlYXNlcy9kb3dubG9hZC9sYXRlc3QvZmZtcGVnLW1hc3Rlci1sYXRlc3QtbGludXg2NC1ncGwudGFyLnh6"
-	ffmpegMacOSURL   = "aHR0cHM6Ly9ldmVybWVldC5jeC9mZm1wZWcvZ2V0cmVsZWFzZS9mZm1wZWcvemlw"
+	ffmpegMacOSURL   = "aHR0cHM6Ly9ldmVybWVldC5jeC9mZm1wZWcvZ2V0cmVsZWFzZS96aXA="
+	ffprobeMacOSURL  = "aHR0cHM6Ly9ldmVybWVldC5jeC9mZm1wZWcvZ2V0cmVsZWFzZS9mZnByb2JlL3ppcA=="
 )
 
 // GetFFmpegDir returns the directory where ffmpeg should be stored
@@ -126,15 +127,49 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 		return fmt.Errorf("failed to create ffmpeg directory: %w", err)
 	}
 
-	// Get the appropriate URL for the current OS
+	// For macOS, download ffmpeg and ffprobe separately (only if not already installed)
+	if runtime.GOOS == "darwin" {
+		ffmpegInstalled, _ := IsFFmpegInstalled()
+		ffprobeInstalled, _ := IsFFprobeInstalled()
+
+		if !ffmpegInstalled && !ffprobeInstalled {
+			// Download both
+			ffmpegURL, _ := decodeBase64(ffmpegMacOSURL)
+			fmt.Printf("[FFmpeg] Downloading ffmpeg from: %s\n", ffmpegURL)
+			if err := downloadAndExtract(ffmpegURL, ffmpegDir, progressCallback, 0, 50); err != nil {
+				return err
+			}
+
+			ffprobeURL, _ := decodeBase64(ffprobeMacOSURL)
+			fmt.Printf("[FFmpeg] Downloading ffprobe from: %s\n", ffprobeURL)
+			if err := downloadAndExtract(ffprobeURL, ffmpegDir, progressCallback, 50, 100); err != nil {
+				return fmt.Errorf("failed to download ffprobe: %w", err)
+			}
+		} else if !ffmpegInstalled {
+			// Only download ffmpeg
+			ffmpegURL, _ := decodeBase64(ffmpegMacOSURL)
+			fmt.Printf("[FFmpeg] Downloading ffmpeg from: %s\n", ffmpegURL)
+			if err := downloadAndExtract(ffmpegURL, ffmpegDir, progressCallback, 0, 100); err != nil {
+				return err
+			}
+		} else if !ffprobeInstalled {
+			// Only download ffprobe
+			ffprobeURL, _ := decodeBase64(ffprobeMacOSURL)
+			fmt.Printf("[FFmpeg] Downloading ffprobe from: %s\n", ffprobeURL)
+			if err := downloadAndExtract(ffprobeURL, ffmpegDir, progressCallback, 0, 100); err != nil {
+				return fmt.Errorf("failed to download ffprobe: %w", err)
+			}
+		}
+		return nil
+	}
+
+	// For Windows/Linux: single archive contains both ffmpeg and ffprobe
 	var encodedURL string
 	switch runtime.GOOS {
 	case "windows":
 		encodedURL = ffmpegWindowsURL
 	case "linux":
 		encodedURL = ffmpegLinuxURL
-	case "darwin":
-		encodedURL = ffmpegMacOSURL
 	default:
 		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
@@ -147,6 +182,15 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 
 	fmt.Printf("[FFmpeg] Downloading from: %s\n", url)
 
+	if err := downloadAndExtract(url, ffmpegDir, progressCallback, 0, 100); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// downloadAndExtract downloads a file and extracts it
+func downloadAndExtract(url, destDir string, progressCallback func(int), progressStart, progressEnd int) error {
 	// Create temporary file for download
 	tmpFile, err := os.CreateTemp("", "ffmpeg-*")
 	if err != nil {
@@ -158,12 +202,12 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 	// Download the file
 	resp, err := http.Get(url)
 	if err != nil {
-		return fmt.Errorf("failed to download ffmpeg: %w", err)
+		return fmt.Errorf("failed to download: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download ffmpeg: HTTP %d", resp.StatusCode)
+		return fmt.Errorf("failed to download: HTTP %d", resp.StatusCode)
 	}
 
 	totalSize := resp.ContentLength
@@ -180,8 +224,10 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 			}
 			downloaded += int64(n)
 			if totalSize > 0 && progressCallback != nil {
-				progress := int(float64(downloaded) / float64(totalSize) * 100)
-				progressCallback(progress)
+				// Scale progress between progressStart and progressEnd
+				rawProgress := float64(downloaded) / float64(totalSize)
+				scaledProgress := progressStart + int(rawProgress*float64(progressEnd-progressStart))
+				progressCallback(scaledProgress)
 			}
 		}
 		if err == io.EOF {
@@ -196,18 +242,14 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 
 	fmt.Printf("[FFmpeg] Download complete, extracting...\n")
 
-	// Extract the archive
-	switch runtime.GOOS {
-	case "windows", "darwin":
-		return extractZip(tmpFile.Name(), ffmpegDir)
-	case "linux":
-		return extractTarXz(tmpFile.Name(), ffmpegDir)
-	default:
-		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+	// Extract the archive based on file type
+	if strings.HasSuffix(url, ".tar.xz") || runtime.GOOS == "linux" {
+		return extractTarXz(tmpFile.Name(), destDir)
 	}
+	return extractZip(tmpFile.Name(), destDir)
 }
 
-// extractZip extracts ffmpeg and ffprobe from a zip archive
+// extractZip extracts ffmpeg and ffprobe from a zip archive (skips ffplay)
 func extractZip(zipPath, destDir string) error {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -239,6 +281,7 @@ func extractZip(zipPath, destDir string) error {
 			destPath = filepath.Join(destDir, ffprobeName)
 			foundFFprobe = true
 		} else {
+			// Skip ffplay and other files
 			continue
 		}
 
@@ -266,18 +309,22 @@ func extractZip(zipPath, destDir string) error {
 		fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
 	}
 
-	if !foundFFmpeg {
-		return fmt.Errorf("ffmpeg executable not found in archive")
+	// At least one of ffmpeg or ffprobe should be found
+	if !foundFFmpeg && !foundFFprobe {
+		return fmt.Errorf("neither ffmpeg nor ffprobe found in archive")
 	}
 
-	if !foundFFprobe {
-		fmt.Printf("[FFmpeg] Warning: ffprobe not found in archive\n")
+	if foundFFmpeg {
+		fmt.Printf("[FFmpeg] ffmpeg extracted successfully\n")
+	}
+	if foundFFprobe {
+		fmt.Printf("[FFmpeg] ffprobe extracted successfully\n")
 	}
 
 	return nil
 }
 
-// extractTarXz extracts ffmpeg and ffprobe from a tar.xz archive
+// extractTarXz extracts ffmpeg and ffprobe from a tar.xz archive (skips ffplay)
 func extractTarXz(tarXzPath, destDir string) error {
 	file, err := os.Open(tarXzPath)
 	if err != nil {
@@ -320,6 +367,7 @@ func extractTarXz(tarXzPath, destDir string) error {
 			destPath = filepath.Join(destDir, ffprobeName)
 			foundFFprobe = true
 		} else {
+			// Skip ffplay and other files
 			continue
 		}
 
@@ -340,12 +388,16 @@ func extractTarXz(tarXzPath, destDir string) error {
 		fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
 	}
 
-	if !foundFFmpeg {
-		return fmt.Errorf("ffmpeg executable not found in archive")
+	// At least one of ffmpeg or ffprobe should be found
+	if !foundFFmpeg && !foundFFprobe {
+		return fmt.Errorf("neither ffmpeg nor ffprobe found in archive")
 	}
 
-	if !foundFFprobe {
-		fmt.Printf("[FFmpeg] Warning: ffprobe not found in archive\n")
+	if foundFFmpeg {
+		fmt.Printf("[FFmpeg] ffmpeg extracted successfully\n")
+	}
+	if foundFFprobe {
+		fmt.Printf("[FFmpeg] ffprobe extracted successfully\n")
 	}
 
 	return nil

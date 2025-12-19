@@ -194,18 +194,26 @@ export function FileManagerPage() {
     setLoading(true);
     try {
       const result = await ListDirectoryFiles(rootPath);
+      // Handle null/undefined result (can happen on Linux)
+      if (!result || !Array.isArray(result)) {
+        setFiles([]);
+        setSelectedFiles(new Set());
+        return;
+      }
       // Filter to only show audio files and folders containing audio files
       const filtered = filterAudioFiles(result as FileNode[]);
       setFiles(filtered);
       setSelectedFiles(new Set());
     } catch (err) {
       // Don't show error toast for empty directory or no files found
-      const errorMsg = err instanceof Error ? err.message : "";
+      const errorMsg = err instanceof Error ? err.message : String(err || "");
       if (!errorMsg.toLowerCase().includes("empty") && !errorMsg.toLowerCase().includes("no file")) {
         toast.error("Failed to load files", {
           description: errorMsg || "Unknown error",
         });
       }
+      setFiles([]);
+      setSelectedFiles(new Set());
     } finally {
       setLoading(false);
     }
