@@ -137,7 +137,9 @@ export function PlaylistInfo({
                 <div className="flex items-center gap-2 text-sm">
                   <span className="font-medium">{playlistInfo.owner.display_name}</span>
                   <span>•</span>
-                  <span>{playlistInfo.tracks.total} songs</span>
+                  <span>
+                    {playlistInfo.tracks.total} {playlistInfo.tracks.total === 1 ? "song" : "songs"}
+                  </span>
                   <span>•</span>
                   <span>{playlistInfo.followers.total.toLocaleString()} followers</span>
                 </div>
