@@ -757,7 +757,8 @@ export function useDownload() {
         await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
       }
 
-      setDownloadProgress(Math.round(((skippedCount + successCount + errorCount) / total) * 100));
+      const completedCount = skippedCount + successCount + errorCount;
+      setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
     }
 
     setDownloadingTrack(null);
@@ -938,7 +939,8 @@ export function useDownload() {
         await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
       }
 
-      setDownloadProgress(Math.round(((skippedCount + successCount + errorCount) / total) * 100));
+      const completedCount = skippedCount + successCount + errorCount;
+      setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
     }
 
     setDownloadingTrack(null);

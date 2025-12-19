@@ -57,6 +57,40 @@ func GetFFmpegPath() (string, error) {
 	return filepath.Join(ffmpegDir, ffmpegName), nil
 }
 
+// GetFFprobePath returns the full path to the ffprobe executable in app directory
+func GetFFprobePath() (string, error) {
+	ffmpegDir, err := GetFFmpegDir()
+	if err != nil {
+		return "", err
+	}
+
+	ffprobeName := "ffprobe"
+	if runtime.GOOS == "windows" {
+		ffprobeName = "ffprobe.exe"
+	}
+
+	ffprobePath := filepath.Join(ffmpegDir, ffprobeName)
+	if _, err := os.Stat(ffprobePath); err == nil {
+		return ffprobePath, nil
+	}
+
+	return "", fmt.Errorf("ffprobe not found in app directory")
+}
+
+// IsFFprobeInstalled checks if ffprobe is installed in the app directory
+func IsFFprobeInstalled() (bool, error) {
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return false, nil
+	}
+
+	// Verify it's executable
+	cmd := exec.Command(ffprobePath, "-version")
+	setHideWindow(cmd)
+	err = cmd.Run()
+	return err == nil, nil
+}
+
 // IsFFmpegInstalled checks if ffmpeg is installed in the app directory
 func IsFFmpegInstalled() (bool, error) {
 	ffmpegPath, err := GetFFmpegPath()
@@ -173,7 +207,7 @@ func DownloadFFmpeg(progressCallback func(int)) error {
 	}
 }
 
-// extractZip extracts ffmpeg from a zip archive
+// extractZip extracts ffmpeg and ffprobe from a zip archive
 func extractZip(zipPath, destDir string) error {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -182,44 +216,68 @@ func extractZip(zipPath, destDir string) error {
 	defer r.Close()
 
 	ffmpegName := "ffmpeg"
+	ffprobeName := "ffprobe"
 	if runtime.GOOS == "windows" {
 		ffmpegName = "ffmpeg.exe"
+		ffprobeName = "ffprobe.exe"
 	}
 
-	destPath := filepath.Join(destDir, ffmpegName)
+	foundFFmpeg := false
+	foundFFprobe := false
 
 	for _, f := range r.File {
-		// Look for ffmpeg executable in any subdirectory
 		baseName := filepath.Base(f.Name)
-		if baseName == ffmpegName && !f.FileInfo().IsDir() {
-			fmt.Printf("[FFmpeg] Found: %s\n", f.Name)
-
-			rc, err := f.Open()
-			if err != nil {
-				return fmt.Errorf("failed to open file in zip: %w", err)
-			}
-			defer rc.Close()
-
-			outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-			if err != nil {
-				return fmt.Errorf("failed to create output file: %w", err)
-			}
-			defer outFile.Close()
-
-			_, err = io.Copy(outFile, rc)
-			if err != nil {
-				return fmt.Errorf("failed to extract file: %w", err)
-			}
-
-			fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
-			return nil
+		if f.FileInfo().IsDir() {
+			continue
 		}
+
+		var destPath string
+		if baseName == ffmpegName {
+			destPath = filepath.Join(destDir, ffmpegName)
+			foundFFmpeg = true
+		} else if baseName == ffprobeName {
+			destPath = filepath.Join(destDir, ffprobeName)
+			foundFFprobe = true
+		} else {
+			continue
+		}
+
+		fmt.Printf("[FFmpeg] Found: %s\n", f.Name)
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("failed to open file in zip: %w", err)
+		}
+
+		outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+		if err != nil {
+			rc.Close()
+			return fmt.Errorf("failed to create output file: %w", err)
+		}
+
+		_, err = io.Copy(outFile, rc)
+		rc.Close()
+		outFile.Close()
+
+		if err != nil {
+			return fmt.Errorf("failed to extract file: %w", err)
+		}
+
+		fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
 	}
 
-	return fmt.Errorf("ffmpeg executable not found in archive")
+	if !foundFFmpeg {
+		return fmt.Errorf("ffmpeg executable not found in archive")
+	}
+
+	if !foundFFprobe {
+		fmt.Printf("[FFmpeg] Warning: ffprobe not found in archive\n")
+	}
+
+	return nil
 }
 
-// extractTarXz extracts ffmpeg from a tar.xz archive
+// extractTarXz extracts ffmpeg and ffprobe from a tar.xz archive
 func extractTarXz(tarXzPath, destDir string) error {
 	file, err := os.Open(tarXzPath)
 	if err != nil {
@@ -235,7 +293,9 @@ func extractTarXz(tarXzPath, destDir string) error {
 	tarReader := tar.NewReader(xzReader)
 
 	ffmpegName := "ffmpeg"
-	destPath := filepath.Join(destDir, ffmpegName)
+	ffprobeName := "ffprobe"
+	foundFFmpeg := false
+	foundFFprobe := false
 
 	for {
 		header, err := tarReader.Next()
@@ -246,27 +306,49 @@ func extractTarXz(tarXzPath, destDir string) error {
 			return fmt.Errorf("failed to read tar: %w", err)
 		}
 
-		baseName := filepath.Base(header.Name)
-		if baseName == ffmpegName && header.Typeflag == tar.TypeReg {
-			fmt.Printf("[FFmpeg] Found: %s\n", header.Name)
-
-			outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-			if err != nil {
-				return fmt.Errorf("failed to create output file: %w", err)
-			}
-			defer outFile.Close()
-
-			_, err = io.Copy(outFile, tarReader)
-			if err != nil {
-				return fmt.Errorf("failed to extract file: %w", err)
-			}
-
-			fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
-			return nil
+		if header.Typeflag != tar.TypeReg {
+			continue
 		}
+
+		baseName := filepath.Base(header.Name)
+		var destPath string
+
+		if baseName == ffmpegName {
+			destPath = filepath.Join(destDir, ffmpegName)
+			foundFFmpeg = true
+		} else if baseName == ffprobeName {
+			destPath = filepath.Join(destDir, ffprobeName)
+			foundFFprobe = true
+		} else {
+			continue
+		}
+
+		fmt.Printf("[FFmpeg] Found: %s\n", header.Name)
+
+		outFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create output file: %w", err)
+		}
+
+		_, err = io.Copy(outFile, tarReader)
+		outFile.Close()
+
+		if err != nil {
+			return fmt.Errorf("failed to extract file: %w", err)
+		}
+
+		fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
 	}
 
-	return fmt.Errorf("ffmpeg executable not found in archive")
+	if !foundFFmpeg {
+		return fmt.Errorf("ffmpeg executable not found in archive")
+	}
+
+	if !foundFFprobe {
+		fmt.Printf("[FFmpeg] Warning: ffprobe not found in archive\n")
+	}
+
+	return nil
 }
 
 // ConvertAudioRequest represents a request to convert audio files

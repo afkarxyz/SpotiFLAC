@@ -584,18 +584,18 @@ export function AudioConverterPage() {
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
               <Upload className="h-8 w-8 text-primary" />
             </div>
-            <p className="text-sm text-muted-foreground mb-2 text-center">
+            <p className="text-sm text-muted-foreground mb-4 text-center">
               {isDragging
                 ? "Drop your audio files here"
                 : "Drag and drop audio files here, or click the button below to select"}
-            </p>
-            <p className="text-xs text-muted-foreground mb-4 text-center">
-              Supported formats: FLAC, MP3
             </p>
             <Button onClick={handleSelectFiles} size="lg">
               <Upload className="h-5 w-5" />
               Select Files
             </Button>
+            <p className="text-xs text-muted-foreground mt-4 text-center">
+              Supported formats: FLAC, MP3
+            </p>
           </>
         ) : (
           <div className="w-full h-full p-6 space-y-4 flex flex-col">

@@ -1,8 +1,10 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,7 +32,6 @@ type AudioMetadata struct {
 	TrackNumber int    `json:"track_number"`
 	DiscNumber  int    `json:"disc_number"`
 	Year        string `json:"year"`
-	ISRC        string `json:"isrc"`
 }
 
 // RenamePreview represents a preview of file rename operation
@@ -183,8 +184,6 @@ func readFlacMetadata(filePath string) (*AudioMetadata, error) {
 					}
 				case "DATE", "YEAR":
 					metadata.Year = value
-				case "ISRC":
-					metadata.ISRC = value
 				}
 			}
 		}
@@ -218,7 +217,6 @@ func readMp3Metadata(filePath string) (*AudioMetadata, error) {
 	// Get Track Number
 	if frames := tag.GetFrames(tag.CommonID("Track number/Position in set")); len(frames) > 0 {
 		if textFrame, ok := frames[0].(id3v2.TextFrame); ok {
-			// Format might be "4" or "4/12"
 			trackStr := strings.Split(textFrame.Text, "/")[0]
 			if num, err := strconv.Atoi(trackStr); err == nil {
 				metadata.TrackNumber = num
@@ -236,21 +234,103 @@ func readMp3Metadata(filePath string) (*AudioMetadata, error) {
 		}
 	}
 
-	// Get ISRC (TSRC)
-	if frames := tag.GetFrames("TSRC"); len(frames) > 0 {
-		if textFrame, ok := frames[0].(id3v2.TextFrame); ok {
-			metadata.ISRC = textFrame.Text
+	return metadata, nil
+}
+
+// readMetadataWithFFprobe reads metadata from any audio file using ffprobe
+func readMetadataWithFFprobe(filePath string) (*AudioMetadata, error) {
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return nil, err
+	}
+
+	// Use ffprobe to get metadata in JSON format (both format and stream tags)
+	cmd := exec.Command(ffprobePath,
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_format",
+		"-show_streams",
+		filePath,
+	)
+
+	// Hide console window on Windows
+	setHideWindow(cmd)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse JSON output
+	var result struct {
+		Format struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"format"`
+		Streams []struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"streams"`
+	}
+
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, err
+	}
+
+	metadata := &AudioMetadata{}
+
+	// Merge tags from format and streams (format tags take priority)
+	allTags := make(map[string]string)
+
+	// First add stream tags
+	for _, stream := range result.Streams {
+		for key, value := range stream.Tags {
+			allTags[strings.ToLower(key)] = value
+		}
+	}
+
+	// Then add format tags (overwrite stream tags)
+	for key, value := range result.Format.Tags {
+		allTags[strings.ToLower(key)] = value
+	}
+
+	// Parse tags
+	for key, value := range allTags {
+		switch key {
+		case "title":
+			metadata.Title = value
+		case "artist":
+			metadata.Artist = value
+		case "album":
+			metadata.Album = value
+		case "album_artist", "albumartist":
+			metadata.AlbumArtist = value
+		case "track":
+			// Format might be "4" or "4/12"
+			trackStr := strings.Split(value, "/")[0]
+			if num, err := strconv.Atoi(trackStr); err == nil {
+				metadata.TrackNumber = num
+			}
+		case "disc":
+			discStr := strings.Split(value, "/")[0]
+			if num, err := strconv.Atoi(discStr); err == nil {
+				metadata.DiscNumber = num
+			}
+		case "date", "year":
+			if metadata.Year == "" || len(value) > len(metadata.Year) {
+				metadata.Year = value
+			}
 		}
 	}
 
 	return metadata, nil
 }
 
-// readM4aMetadata reads metadata from an M4A file
-func readM4aMetadata(_ string) (*AudioMetadata, error) {
-	// For M4A, we'll use a simpler approach - just return empty metadata
-	// Full M4A metadata reading would require additional libraries
-	return &AudioMetadata{}, nil
+// readM4aMetadata reads metadata from an M4A file using ffprobe
+func readM4aMetadata(filePath string) (*AudioMetadata, error) {
+	metadata, err := readMetadataWithFFprobe(filePath)
+	if err != nil {
+		return &AudioMetadata{}, nil
+	}
+	return metadata, nil
 }
 
 // GenerateFilename generates a new filename based on metadata and format template
