@@ -76,7 +76,11 @@ const FORMAT_PRESETS: Record<string, { label: string; template: string }> = {
   "track-artist-title": { label: "Track. Artist - Title", template: "{track}. {artist} - {title}" },
   "title-album-artist": { label: "Title - Album Artist", template: "{title} - {album_artist}" },
   "track-title-album-artist": { label: "Track. Title - Album Artist", template: "{track}. {title} - {album_artist}" },
-  "custom": { label: "Custom...", template: "" },
+  "artist-album-title": { label: "Artist - Album - Title", template: "{artist} - {album} - {title}" },
+  "track-dash-title": { label: "Track - Title", template: "{track} - {title}" },
+  "disc-track-title": { label: "Disc-Track. Title", template: "{disc}-{track}. {title}" },
+  "disc-track-title-artist": { label: "Disc-Track. Title - Artist", template: "{disc}-{track}. {title} - {artist}" },
+  "custom": { label: "Custom...", template: "{title} - {artist}" },
 };
 
 const STORAGE_KEY = "spotiflac_file_manager_state";
@@ -128,7 +132,7 @@ export function FileManagerPage() {
     return DEFAULT_CUSTOM_FORMAT;
   });
   
-  const renameFormat = formatPreset === "custom" ? customFormat : FORMAT_PRESETS[formatPreset].template;
+  const renameFormat = formatPreset === "custom" ? (customFormat || FORMAT_PRESETS["custom"].template) : FORMAT_PRESETS[formatPreset].template;
   const [showPreview, setShowPreview] = useState(false);
   const [previewData, setPreviewData] = useState<backend.RenamePreview[]>([]);
   const [renaming, setRenaming] = useState(false);

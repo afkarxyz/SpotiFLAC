@@ -325,7 +325,7 @@ export function SettingsPage() {
                   setTempSettings(prev => ({
                     ...prev,
                     folderPreset: value,
-                    folderTemplate: value === "custom" ? prev.folderTemplate : preset.template
+                    folderTemplate: value === "custom" ? (prev.folderTemplate || preset.template) : preset.template
                   }));
                 }}
               >
@@ -377,7 +377,7 @@ export function SettingsPage() {
                   setTempSettings(prev => ({
                     ...prev,
                     filenamePreset: value,
-                    filenameTemplate: value === "custom" ? prev.filenameTemplate : preset.template
+                    filenameTemplate: value === "custom" ? (prev.filenameTemplate || preset.template) : preset.template
                   }));
                 }}
               >

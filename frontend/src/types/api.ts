@@ -168,6 +168,7 @@ export interface SpectrumData {
 
 export interface AnalysisResult {
   file_path: string;
+  file_size: number;
   sample_rate: number;
   channels: number;
   bits_per_sample: number;

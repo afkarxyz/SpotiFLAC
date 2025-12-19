@@ -30,9 +30,18 @@ interface AudioFile {
   path: string;
   name: string;
   format: string;
+  size: number;
   status: "pending" | "converting" | "success" | "error";
   error?: string;
   outputPath?: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
 
 const BITRATE_OPTIONS = [
@@ -141,10 +150,19 @@ export function AudioConverterPage() {
     if (allMP3 && outputFormat !== "m4a") {
       setOutputFormat("m4a");
     }
-  }, [files, outputFormat]);
+    
+    // Reset to AAC if no FLAC files (ALAC doesn't make sense for lossy input)
+    const hasFlac = files.some((f) => f.format === "flac");
+    if (!hasFlac && m4aCodec === "alac") {
+      setM4aCodec("aac");
+    }
+  }, [files, outputFormat, m4aCodec]);
 
   // Check if format selection should be disabled (all files are MP3)
   const isFormatDisabled = files.length > 0 && files.every((f) => f.format === "mp3");
+  
+  // Check if any file is FLAC (ALAC only makes sense for lossless input)
+  const hasFlacFiles = files.some((f) => f.format === "flac");
 
   // Detect fullscreen/maximized window
   useEffect(() => {
@@ -268,7 +286,7 @@ export function AudioConverterPage() {
     }
   };
 
-  const addFiles = useCallback((paths: string[]) => {
+  const addFiles = useCallback(async (paths: string[]) => {
     const validExtensions = [".mp3", ".flac"];
     
     // Check for M4A files specifically
@@ -283,12 +301,19 @@ export function AudioConverterPage() {
       });
     }
 
+    // Get file sizes from backend
+    const GetFileSizes = (files: string[]): Promise<Record<string, number>> =>
+      (window as any)["go"]["main"]["App"]["GetFileSizes"](files);
+    
+    const validPaths = paths.filter((path) => {
+      const ext = path.toLowerCase().slice(path.lastIndexOf("."));
+      return validExtensions.includes(ext);
+    });
+
+    const fileSizes = validPaths.length > 0 ? await GetFileSizes(validPaths) : {};
+
     setFiles((prev) => {
-      const newFiles: AudioFile[] = paths
-        .filter((path) => {
-          const ext = path.toLowerCase().slice(path.lastIndexOf("."));
-          return validExtensions.includes(ext);
-        })
+      const newFiles: AudioFile[] = validPaths
         .filter((path) => !prev.some((f) => f.path === path))
         .map((path) => {
           const name = path.split(/[/\\]/).pop() || path;
@@ -297,6 +322,7 @@ export function AudioConverterPage() {
             path,
             name,
             format: ext,
+            size: fileSizes[path] || 0,
             status: "pending" as const,
           };
         });
@@ -598,8 +624,8 @@ export function AudioConverterPage() {
                       </ToggleGroupItem>
                     </ToggleGroup>
                   </div>
-                  {/* Codec selection for M4A */}
-                  {outputFormat === "m4a" && (
+                  {/* Codec selection for M4A - only show ALAC option when input has FLAC files */}
+                  {outputFormat === "m4a" && hasFlacFiles && (
                     <div className="flex items-center gap-2">
                       <Label className="whitespace-nowrap">Codec:</Label>
                       <ToggleGroup
@@ -672,6 +698,9 @@ export function AudioConverterPage() {
                       </p>
                     )}
                   </div>
+                  <span className="text-xs text-muted-foreground">
+                    {formatFileSize(file.size)}
+                  </span>
                   <span className="text-xs uppercase text-muted-foreground">
                     {file.format}
                   </span>

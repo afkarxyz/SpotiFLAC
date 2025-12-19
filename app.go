@@ -684,6 +684,11 @@ func (a *App) SelectAudioFiles() ([]string, error) {
 	return files, nil
 }
 
+// GetFileSizes returns file sizes for a list of file paths
+func (a *App) GetFileSizes(files []string) map[string]int64 {
+	return backend.GetFileSizes(files)
+}
+
 // ListDirectoryFiles lists files and folders in a directory
 func (a *App) ListDirectoryFiles(dirPath string) ([]backend.FileInfo, error) {
 	if dirPath == "" {

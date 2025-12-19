@@ -3,10 +3,10 @@ import { GetDefaults } from "../../wailsjs/go/main/App";
 export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans";
 
 // Folder structure presets
-export type FolderPreset = "none" | "artist" | "album" | "artist-album" | "artist-year-album" | "album-artist" | "album-artist-album" | "album-artist-year-album" | "custom";
+export type FolderPreset = "none" | "artist" | "album" | "year-album" | "year-artist-album" | "artist-album" | "artist-year-album" | "artist-year-nested-album" | "album-artist" | "album-artist-album" | "album-artist-year-album" | "album-artist-year-nested-album" | "year" | "year-artist" | "custom";
 
 // Filename format presets
-export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "custom";
+export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "artist-album-title" | "track-dash-title" | "disc-track-title" | "disc-track-title-artist" | "custom";
 
 export interface Settings {
   downloadPath: string;
@@ -38,12 +38,18 @@ export const FOLDER_PRESETS: Record<FolderPreset, { label: string; template: str
   "none": { label: "No Subfolder", template: "" },
   "artist": { label: "Artist", template: "{artist}" },
   "album": { label: "Album", template: "{album}" },
+  "year-album": { label: "[Year] Album", template: "[{year}] {album}" },
+  "year-artist-album": { label: "[Year] Artist - Album", template: "[{year}] {artist} - {album}" },
   "artist-album": { label: "Artist / Album", template: "{artist}/{album}" },
   "artist-year-album": { label: "Artist / [Year] Album", template: "{artist}/[{year}] {album}" },
+  "artist-year-nested-album": { label: "Artist / Year / Album", template: "{artist}/{year}/{album}" },
   "album-artist": { label: "Album Artist", template: "{album_artist}" },
   "album-artist-album": { label: "Album Artist / Album", template: "{album_artist}/{album}" },
   "album-artist-year-album": { label: "Album Artist / [Year] Album", template: "{album_artist}/[{year}] {album}" },
-  "custom": { label: "Custom...", template: "" },
+  "album-artist-year-nested-album": { label: "Album Artist / Year / Album", template: "{album_artist}/{year}/{album}" },
+  "year": { label: "Year", template: "{year}" },
+  "year-artist": { label: "Year / Artist", template: "{year}/{artist}" },
+  "custom": { label: "Custom...", template: "{artist}/{album}" },
 };
 
 // Filename preset templates
@@ -56,7 +62,11 @@ export const FILENAME_PRESETS: Record<FilenamePreset, { label: string; template:
   "track-artist-title": { label: "Track. Artist - Title", template: "{track}. {artist} - {title}" },
   "title-album-artist": { label: "Title - Album Artist", template: "{title} - {album_artist}" },
   "track-title-album-artist": { label: "Track. Title - Album Artist", template: "{track}. {title} - {album_artist}" },
-  "custom": { label: "Custom...", template: "" },
+  "artist-album-title": { label: "Artist - Album - Title", template: "{artist} - {album} - {title}" },
+  "track-dash-title": { label: "Track - Title", template: "{track} - {title}" },
+  "disc-track-title": { label: "Disc-Track. Title", template: "{disc}-{track}. {title}" },
+  "disc-track-title-artist": { label: "Disc-Track. Title - Artist", template: "{disc}-{track}. {title} - {artist}" },
+  "custom": { label: "Custom...", template: "{title} - {artist}" },
 };
 
 // Available template variables

@@ -12,6 +12,7 @@ import (
 // AnalysisResult contains the audio analysis data
 type AnalysisResult struct {
 	FilePath      string        `json:"file_path"`
+	FileSize      int64         `json:"file_size"`
 	SampleRate    uint32        `json:"sample_rate"`
 	Channels      uint8         `json:"channels"`
 	BitsPerSample uint8         `json:"bits_per_sample"`
@@ -30,6 +31,12 @@ func AnalyzeTrack(filepath string) (*AnalysisResult, error) {
 		return nil, fmt.Errorf("file does not exist: %s", filepath)
 	}
 
+	// Get file size
+	fileInfo, err := os.Stat(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+
 	// Parse FLAC file
 	f, err := flac.ParseFile(filepath)
 	if err != nil {
@@ -38,6 +45,7 @@ func AnalyzeTrack(filepath string) (*AnalysisResult, error) {
 
 	result := &AnalysisResult{
 		FilePath: filepath,
+		FileSize: fileInfo.Size(),
 	}
 
 	// Extract basic audio properties from STREAMINFO block

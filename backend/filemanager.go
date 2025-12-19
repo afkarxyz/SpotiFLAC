@@ -344,6 +344,18 @@ func PreviewRename(files []string, format string) []RenamePreview {
 	return previews
 }
 
+// GetFileSizes returns file sizes for a list of file paths
+func GetFileSizes(files []string) map[string]int64 {
+	result := make(map[string]int64)
+	for _, filePath := range files {
+		info, err := os.Stat(filePath)
+		if err == nil {
+			result[filePath] = info.Size()
+		}
+	}
+	return result
+}
+
 // RenameFiles renames files based on their metadata
 func RenameFiles(files []string, format string) []RenameResult {
 	var results []RenameResult
