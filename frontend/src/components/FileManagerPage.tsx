@@ -20,7 +20,6 @@ import {
   Eye,
   Folder,
   Info,
-  X,
   RotateCcw,
 } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
