@@ -646,21 +646,6 @@ func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
 	}
 }
 
-// InstallFFmpegFromFile installs ffmpeg from a local file path
-func (a *App) InstallFFmpegFromFile(filePath string) DownloadFFmpegResponse {
-	err := backend.InstallFFmpegFromFile(filePath)
-	if err != nil {
-		return DownloadFFmpegResponse{
-			Success: false,
-			Error:   err.Error(),
-		}
-	}
-	return DownloadFFmpegResponse{
-		Success: true,
-		Message: "FFmpeg installed successfully from file",
-	}
-}
-
 // ConvertAudioRequest represents a request to convert audio files
 type ConvertAudioRequest struct {
 	InputFiles   []string `json:"input_files"`

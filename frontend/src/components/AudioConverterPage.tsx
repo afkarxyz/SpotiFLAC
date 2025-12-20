@@ -19,7 +19,6 @@ import { Spinner } from "@/components/ui/spinner";
 import {
   IsFFmpegInstalled,
   DownloadFFmpeg,
-  InstallFFmpegFromFile,
   ConvertAudio,
   SelectAudioFiles,
 } from "../../wailsjs/go/main/App";
@@ -120,7 +119,6 @@ export function AudioConverterPage() {
   });
   const [converting, setConverting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [isDraggingFFmpeg, setIsDraggingFFmpeg] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Helper function to save state to sessionStorage
@@ -217,61 +215,6 @@ export function AudioConverterPage() {
       setInstallingFfmpeg(false);
     }
   };
-
-  const handleFFmpegFileDrop = useCallback(
-    async (_x: number, _y: number, paths: string[]) => {
-      setIsDraggingFFmpeg(false);
-
-      if (paths.length === 0) return;
-
-      // Only process the first file
-      const filePath = paths[0];
-      const fileName = filePath.split(/[/\\]/).pop()?.toLowerCase() || "";
-
-      // Check if it's likely an ffmpeg executable
-      if (!fileName.includes("ffmpeg")) {
-        toast.error("Invalid File", {
-          description: "Please drop an FFmpeg executable file",
-        });
-        return;
-      }
-
-      setInstallingFfmpeg(true);
-      try {
-        const result = await InstallFFmpegFromFile(filePath);
-        if (result.success) {
-          toast.success("FFmpeg Installed", {
-            description: "FFmpeg has been installed successfully from file",
-          });
-          setFfmpegInstalled(true);
-        } else {
-          toast.error("Installation Failed", {
-            description: result.error || "Failed to install FFmpeg",
-          });
-        }
-      } catch (err) {
-        toast.error("Installation Failed", {
-          description: err instanceof Error ? err.message : "Unknown error",
-        });
-      } finally {
-        setInstallingFfmpeg(false);
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (ffmpegInstalled === false) {
-      // Set up drag and drop for FFmpeg installation
-      OnFileDrop((x, y, paths) => {
-        handleFFmpegFileDrop(x, y, paths);
-      }, true);
-
-      return () => {
-        OnFileDropOff();
-      };
-    }
-  }, [ffmpegInstalled, handleFFmpegFileDrop]);
 
   const handleSelectFiles = async () => {
     try {
@@ -480,35 +423,13 @@ export function AudioConverterPage() {
         <div
           className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all ${
             isFullscreen ? "flex-1 min-h-[400px]" : "h-[400px]"
-          } ${
-            isDraggingFFmpeg
-              ? "border-primary bg-primary/10"
-              : "border-muted-foreground/30"
-          }`}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setIsDraggingFFmpeg(true);
-          }}
-          onDragLeave={(e) => {
-            e.preventDefault();
-            setIsDraggingFFmpeg(false);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            setIsDraggingFFmpeg(false);
-          }}
-          style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
+          } border-muted-foreground/30`}
         >
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <Download className="h-8 w-8 text-muted-foreground" />
+            <Download className="h-8 w-8 text-primary" />
           </div>
-          <p className="text-sm text-muted-foreground mb-2 text-center">
-            FFmpeg is required to convert audio files.
-          </p>
           <p className="text-sm text-muted-foreground mb-4 text-center">
-            {isDraggingFFmpeg
-              ? "Drop your FFmpeg executable here"
-              : "Drag and drop your FFmpeg executable here, or click the button below to download automatically."}
+            FFmpeg is required to convert audio files
           </p>
           <Button
             onClick={handleInstallFfmpeg}

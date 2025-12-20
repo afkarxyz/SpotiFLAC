@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/ulikunitz/xz"
 )
@@ -613,95 +612,4 @@ func GetAudioFileInfo(filePath string) (*AudioFileInfo, error) {
 		Format:   ext,
 		Size:     info.Size(),
 	}, nil
-}
-
-// InstallFFmpegFromFile installs ffmpeg from a local file path
-func InstallFFmpegFromFile(filePath string) error {
-	// Check if file exists
-	info, err := os.Stat(filePath)
-	if err != nil {
-		return fmt.Errorf("file does not exist: %w", err)
-	}
-
-	// Check if it's a regular file (not a directory)
-	if info.IsDir() {
-		return fmt.Errorf("path is a directory, not a file")
-	}
-
-	// Verify it's likely an ffmpeg executable by checking the filename
-	fileName := strings.ToLower(filepath.Base(filePath))
-	expectedName := "ffmpeg"
-	if runtime.GOOS == "windows" {
-		expectedName = "ffmpeg.exe"
-	}
-
-	if fileName != expectedName && !strings.Contains(fileName, "ffmpeg") {
-		return fmt.Errorf("file does not appear to be an ffmpeg executable (expected name containing 'ffmpeg')")
-	}
-
-	// Get destination path
-	ffmpegPath, err := GetFFmpegPath()
-	if err != nil {
-		return fmt.Errorf("failed to get ffmpeg path: %w", err)
-	}
-
-	ffmpegDir := filepath.Dir(ffmpegPath)
-
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(ffmpegDir, 0755); err != nil {
-		return fmt.Errorf("failed to create ffmpeg directory: %w", err)
-	}
-
-	// Copy file to destination
-	sourceFile, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to open source file: %w", err)
-	}
-
-	destFile, err := os.OpenFile(ffmpegPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
-	if err != nil {
-		sourceFile.Close()
-		return fmt.Errorf("failed to create destination file: %w", err)
-	}
-
-	_, err = io.Copy(destFile, sourceFile)
-	sourceFile.Close()
-	if err != nil {
-		destFile.Close()
-		return fmt.Errorf("failed to copy file: %w", err)
-	}
-
-	// Ensure all data is written to disk
-	if err := destFile.Sync(); err != nil {
-		destFile.Close()
-		return fmt.Errorf("failed to sync file: %w", err)
-	}
-	destFile.Close()
-
-	// On Windows, file may still be locked by antivirus or system
-	// Wait a bit and retry verification
-	maxRetries := 3
-	retryDelay := 500 * time.Millisecond
-
-	var verifyErr error
-	for i := 0; i < maxRetries; i++ {
-		if i > 0 {
-			time.Sleep(retryDelay)
-		}
-
-		cmd := exec.Command(ffmpegPath, "-version")
-		// Hide console window on Windows
-		setHideWindow(cmd)
-		verifyErr = cmd.Run()
-		if verifyErr == nil {
-			break
-		}
-	}
-
-	if verifyErr != nil {
-		return fmt.Errorf("file copied but ffmpeg verification failed after %d attempts: %w", maxRetries, verifyErr)
-	}
-
-	fmt.Printf("[FFmpeg] Successfully installed from: %s\n", filePath)
-	return nil
 }

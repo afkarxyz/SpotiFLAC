@@ -52,16 +52,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 
 interface FileNode {
   name: string;
@@ -641,20 +631,20 @@ export function FileManagerPage() {
       </div>
 
       {/* Reset Confirmation Dialog */}
-      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset to Default?</AlertDialogTitle>
-            <AlertDialogDescription>
+      <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <DialogContent className="max-w-md [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle>Reset to Default?</DialogTitle>
+            <DialogDescription>
               This will reset the rename format to "Title - Artist". Your custom format will be lost.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={resetToDefault}>Reset</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowResetConfirm(false)}>Cancel</Button>
+            <Button onClick={resetToDefault}>Reset</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
@@ -712,7 +702,6 @@ export function FileManagerPage() {
                     </>
                   ) : (
                     <>
-                      <Pencil className="h-4 w-4" />
                       Rename {previewData.filter((p) => !p.error).length} File(s)
                     </>
                   )}
@@ -792,7 +781,7 @@ export function FileManagerPage() {
 
       {/* FFprobe Install Dialog */}
       <Dialog open={showFFprobeDialog} onOpenChange={setShowFFprobeDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md [&>button]:hidden">
           <DialogHeader>
             <DialogTitle>FFprobe Required</DialogTitle>
             <DialogDescription>

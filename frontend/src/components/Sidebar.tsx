@@ -1,4 +1,11 @@
-import { Home, Settings, Bug, Activity, FileMusic, FilePen, LayoutGrid, Coffee, Github } from "lucide-react";
+import { FileMusic, FilePen } from "lucide-react";
+import { HomeIcon } from "@/components/ui/home";
+import { SettingsIcon } from "@/components/ui/settings";
+import { ActivityIcon } from "@/components/ui/activity";
+import { TerminalIcon } from "@/components/ui/terminal";
+import { GithubIcon } from "@/components/ui/github";
+import { BlocksIcon } from "@/components/ui/blocks";
+import { CoffeeIcon } from "@/components/ui/coffee";
 import {
   Tooltip,
   TooltipContent,
@@ -15,35 +22,110 @@ interface SidebarProps {
 }
 
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
-  const navItems = [
-    { id: "main" as PageType, icon: Home, label: "Home" },
-    { id: "settings" as PageType, icon: Settings, label: "Settings" },
-    { id: "audio-analysis" as PageType, icon: Activity, label: "Audio Quality Analyzer" },
-    { id: "audio-converter" as PageType, icon: FileMusic, label: "Audio Converter" },
-    { id: "file-manager" as PageType, icon: FilePen, label: "File Manager" },
-    { id: "debug" as PageType, icon: Bug, label: "Debug Logs" },
-  ];
-
   return (
     <div className="fixed left-0 top-0 h-full w-14 bg-card border-r border-border flex flex-col items-center py-14 z-30">
       <div className="flex flex-col gap-2 flex-1">
-        {navItems.map((item) => (
-          <Tooltip key={item.id} delayDuration={0}>
-            <TooltipTrigger asChild>
-              <Button
-                variant={currentPage === item.id ? "secondary" : "ghost"}
-                size="icon"
-                className="h-10 w-10"
-                onClick={() => onPageChange(item.id)}
-              >
-                <item.icon className="h-5 w-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              <p>{item.label}</p>
-            </TooltipContent>
-          </Tooltip>
-        ))}
+        {/* Home */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPage === "main" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => onPageChange("main")}
+            >
+              <HomeIcon size={20} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>Home</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Settings */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPage === "settings" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => onPageChange("settings")}
+            >
+              <SettingsIcon size={20} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>Settings</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Audio Analysis */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPage === "audio-analysis" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => onPageChange("audio-analysis")}
+            >
+              <ActivityIcon size={20} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>Audio Quality Analyzer</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Audio Converter - using lucide icon (no animated version) */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPage === "audio-converter" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => onPageChange("audio-converter")}
+            >
+              <FileMusic className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>Audio Converter</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* File Manager - using lucide icon (no animated version) */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPage === "file-manager" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => onPageChange("file-manager")}
+            >
+              <FilePen className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>File Manager</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Debug */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPage === "debug" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => onPageChange("debug")}
+            >
+              <TerminalIcon size={20} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>Debug Logs</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
       
       {/* Bottom icons */}
@@ -56,7 +138,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
               className="h-10 w-10"
               onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC/issues")}
             >
-              <Github className="h-5 w-5" />
+              <GithubIcon size={20} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
@@ -71,7 +153,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
               className="h-10 w-10"
               onClick={() => openExternal("https://exyezed.cc/")}
             >
-              <LayoutGrid className="h-5 w-5" />
+              <BlocksIcon size={20} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
@@ -86,7 +168,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
               className="h-10 w-10"
               onClick={() => openExternal("https://ko-fi.com/afkarxyz")}
             >
-              <Coffee className="h-5 w-5" />
+              <CoffeeIcon size={20} />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
