@@ -91,10 +91,10 @@ export function AudioAnalysis({
   const nyquistFreq = result.sample_rate / 2;
 
   return (
-    <Card>
+    <Card className="gap-2">
       <CardHeader>
         {filePath && (
-          <p className="text-sm font-mono truncate">{filePath}</p>
+          <p className="text-sm font-mono break-all">{filePath}</p>
         )}
       </CardHeader>
 

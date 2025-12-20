@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { InputWithContext } from "@/components/ui/input-with-context";
 import { Label } from "@/components/ui/label";
-import { Search, Info, XCircle } from "lucide-react";
+import { CloudDownload, Info, XCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Tooltip,
@@ -75,7 +75,7 @@ export function SearchBar({
               </>
             ) : (
               <>
-                <Search className="h-4 w-4" />
+                <CloudDownload className="h-4 w-4" />
                 Fetch
               </>
             )}

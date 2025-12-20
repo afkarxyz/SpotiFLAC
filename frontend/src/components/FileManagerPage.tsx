@@ -650,17 +650,7 @@ export function FileManagerPage() {
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
           <DialogHeader>
-            <div className="flex items-center justify-between pr-2">
-              <DialogTitle>Rename Preview</DialogTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-full hover:bg-muted"
-                onClick={() => setShowPreview(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <DialogTitle>Rename Preview</DialogTitle>
             <DialogDescription>
               Review the changes before renaming. Files with errors will be skipped.
             </DialogDescription>
@@ -716,17 +706,7 @@ export function FileManagerPage() {
       <Dialog open={showMetadata} onOpenChange={setShowMetadata}>
         <DialogContent className="max-w-md [&>button]:hidden">
           <DialogHeader>
-            <div className="flex items-center justify-between pr-2">
-              <DialogTitle>File Metadata</DialogTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 rounded-full hover:bg-muted"
-                onClick={() => setShowMetadata(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <DialogTitle>File Metadata</DialogTitle>
             <DialogDescription className="break-all">
               {metadataFile.split(/[/\\]/).pop()}
             </DialogDescription>
