@@ -489,7 +489,7 @@ export function FileManagerPage() {
         <div
           className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer"
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => node.is_dir && toggleExpand(node.path)}
+          onClick={(e) => node.is_dir ? toggleExpand(node.path) : handleShowLyrics(node.path, e)}
         >
           {node.is_dir ? (
             <>
@@ -506,14 +506,6 @@ export function FileManagerPage() {
           {!node.is_dir && (
             <>
               <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleShowLyrics(node.path, e)}>
-                    <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Preview</TooltipContent>
-              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleManualRename(node.path, e)}>
@@ -536,7 +528,7 @@ export function FileManagerPage() {
         <div
           className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer"
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
-          onClick={() => node.is_dir && toggleExpand(node.path)}
+          onClick={(e) => node.is_dir ? toggleExpand(node.path) : handleShowCover(node.path, e)}
         >
           {node.is_dir ? (
             <>
@@ -553,14 +545,6 @@ export function FileManagerPage() {
           {!node.is_dir && (
             <>
               <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleShowCover(node.path, e)}>
-                    <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Preview</TooltipContent>
-              </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleManualRename(node.path, e)}>
