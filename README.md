@@ -16,7 +16,7 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 
 ## Screenshot
 
-![Image](https://github.com/user-attachments/assets/83a5e0f7-a225-4ead-a058-4979722b45f0)
+![Image](https://github.com/user-attachments/assets/afe01529-bcf0-4486-8792-62af26adafee)
 
 ## Other project
 
