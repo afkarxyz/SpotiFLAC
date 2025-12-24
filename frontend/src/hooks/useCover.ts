@@ -23,7 +23,10 @@ export function useCover() {
     albumName?: string,
     playlistName?: string,
     position?: number,
-    trackId?: string
+    trackId?: string,
+    albumArtist?: string,
+    releaseDate?: string,
+    discNumber?: number
   ) => {
     if (!coverUrl) {
       toast.error("No cover URL found for this track");
@@ -72,10 +75,14 @@ export function useCover() {
         cover_url: coverUrl,
         track_name: trackName,
         artist_name: artistName,
+        album_name: albumName || "",
+        album_artist: albumArtist || "",
+        release_date: releaseDate || "",
         output_dir: outputDir,
         filename_format: settings.filenameTemplate || "{title}",
         track_number: settings.trackNumber,
         position: position || 0,
+        disc_number: discNumber || 0,
       });
 
       if (response.success) {
@@ -145,12 +152,16 @@ export function useCover() {
 
         // Replace forward slashes in template data values to prevent them from being interpreted as path separators
         const placeholder = "__SLASH_PLACEHOLDER__";
+        // Determine if we should use album track number or sequential position
+        const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
+        // Use track.track_number for album context, otherwise use sequential position (consistent with track download)
+        const trackPosition = useAlbumTrackNumber ? (track.track_number || i + 1) : (i + 1);
         // Build output path using template system
         const templateData: TemplateData = {
           artist: track.artists?.replace(/\//g, placeholder),
           album: track.album_name?.replace(/\//g, placeholder),
           title: track.name?.replace(/\//g, placeholder),
-          track: i + 1,
+          track: trackPosition,
           playlist: playlistName?.replace(/\//g, placeholder),
         };
 
@@ -176,10 +187,14 @@ export function useCover() {
           cover_url: track.images,
           track_name: track.name,
           artist_name: track.artists,
+          album_name: track.album_name,
+          album_artist: track.album_artist,
+          release_date: track.release_date,
           output_dir: outputDir,
           filename_format: settings.filenameTemplate || "{title}",
           track_number: settings.trackNumber,
-          position: i + 1,
+          position: trackPosition,
+          disc_number: track.disc_number,
         });
 
         if (response.success) {

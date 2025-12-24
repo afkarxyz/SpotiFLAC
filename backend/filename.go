@@ -10,10 +10,18 @@ import (
 )
 
 // BuildExpectedFilename builds the expected filename based on track metadata and settings
-func BuildExpectedFilename(trackName, artistName, filenameFormat string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
+func BuildExpectedFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat string, includeTrackNumber bool, position, discNumber int, useAlbumTrackNumber bool) string {
 	// Sanitize track name and artist name
 	safeTitle := sanitizeFilename(trackName)
 	safeArtist := sanitizeFilename(artistName)
+	safeAlbum := sanitizeFilename(albumName)
+	safeAlbumArtist := sanitizeFilename(albumArtist)
+
+	// Extract year from release date (format: YYYY-MM-DD or YYYY)
+	year := ""
+	if len(releaseDate) >= 4 {
+		year = releaseDate[:4]
+	}
 
 	var filename string
 
@@ -22,6 +30,16 @@ func BuildExpectedFilename(trackName, artistName, filenameFormat string, include
 		filename = filenameFormat
 		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
 		filename = strings.ReplaceAll(filename, "{artist}", safeArtist)
+		filename = strings.ReplaceAll(filename, "{album}", safeAlbum)
+		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
+		filename = strings.ReplaceAll(filename, "{year}", year)
+
+		// Handle disc number
+		if discNumber > 0 {
+			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
+		} else {
+			filename = strings.ReplaceAll(filename, "{disc}", "")
+		}
 
 		// Handle track number - if position is 0, remove {track} and surrounding separators
 		if position > 0 {

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck, Globe, ImageDown } from "lucide-react";
@@ -25,10 +24,13 @@ interface TrackInfoProps {
   checkingAvailability?: boolean;
   availability?: TrackAvailability;
   downloadingCover?: boolean;
+  downloadedCover?: boolean;
+  failedCover?: boolean;
+  skippedCover?: boolean;
   onDownload: (isrc: string, name: string, artists: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number) => void;
-  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string) => void;
+  onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
   onCheckAvailability?: (spotifyId: string, isrc?: string) => void;
-  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string) => void;
+  onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string, playlistName?: string, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
   onOpenFolder: () => void;
 }
 
@@ -46,51 +48,26 @@ export function TrackInfo({
   checkingAvailability,
   availability,
   downloadingCover,
+  downloadedCover,
+  failedCover,
+  skippedCover,
   onDownload,
   onDownloadLyrics,
   onCheckAvailability,
   onDownloadCover,
   onOpenFolder,
 }: TrackInfoProps) {
-  const [isHoveringCover, setIsHoveringCover] = useState(false);
-
   return (
     <Card>
       <CardContent className="px-6">
         <div className="flex gap-6 items-start">
-          <div 
-            className="shrink-0 relative"
-            onMouseEnter={() => setIsHoveringCover(true)}
-            onMouseLeave={() => setIsHoveringCover(false)}
-          >
+          <div className="shrink-0">
             {track.images && (
-              <>
-                <img
-                  src={track.images}
-                  alt={track.name}
-                  className="w-48 h-48 rounded-md shadow-lg object-cover"
-                />
-                {isHoveringCover && onDownloadCover && (
-                  <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="secondary"
-                          className="cursor-pointer"
-                          onClick={() => onDownloadCover(track.images, track.name, track.artists, track.album_name)}
-                          disabled={downloadingCover}
-                        >
-                          {downloadingCover ? <Spinner /> : <ImageDown className="h-5 w-5" />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Download Cover</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                )}
-              </>
+              <img
+                src={track.images}
+                alt={track.name}
+                className="w-48 h-48 rounded-md shadow-lg object-cover"
+              />
             )}
           </div>
           <div className="flex-1 space-y-4 min-w-0">
@@ -136,7 +113,7 @@ export function TrackInfo({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name)}
+                        onClick={() => onDownloadLyrics(track.spotify_id!, track.name, track.artists, track.album_name, track.album_artist, track.release_date, track.disc_number)}
                         variant="outline"
                         disabled={downloadingLyricsTrack === track.spotify_id}
                       >
@@ -155,6 +132,32 @@ export function TrackInfo({
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Download Lyric</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {track.images && onDownloadCover && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        onClick={() => onDownloadCover(track.images, track.name, track.artists, track.album_name, undefined, undefined, track.spotify_id, track.album_artist, track.release_date, track.disc_number)}
+                        variant="outline"
+                        disabled={downloadingCover}
+                      >
+                        {downloadingCover ? (
+                          <Spinner />
+                        ) : skippedCover ? (
+                          <FileCheck className="h-4 w-4 text-yellow-500" />
+                        ) : downloadedCover ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : failedCover ? (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        ) : (
+                          <ImageDown className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Download Cover</p>
                     </TooltipContent>
                   </Tooltip>
                 )}

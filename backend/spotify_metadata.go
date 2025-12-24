@@ -2,11 +2,7 @@ package backend
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/base32"
-	"encoding/binary"
-	"encoding/hex"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,8 +10,6 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,13 +17,12 @@ import (
 )
 
 const (
-	spotifyTokenURL       = "https://open.spotify.com/api/token"
-	playlistBaseURL       = "https://api.spotify.com/v1/playlists/%s"
-	albumBaseURL          = "https://api.spotify.com/v1/albums/%s"
-	trackBaseURL          = "https://api.spotify.com/v1/tracks/%s"
-	artistBaseURL         = "https://api.spotify.com/v1/artists/%s"
-	artistAlbumsBaseURL   = "https://api.spotify.com/v1/artists/%s/albums"
-	secretBytesRemotePath = "https://cdn.jsdelivr.net/gh/afkarxyz/secretBytes@refs/heads/main/secrets/secretBytes.json"
+	spotifyTokenURL     = "https://accounts.spotify.com/api/token"
+	playlistBaseURL     = "https://api.spotify.com/v1/playlists/%s"
+	albumBaseURL        = "https://api.spotify.com/v1/albums/%s"
+	trackBaseURL        = "https://api.spotify.com/v1/tracks/%s"
+	artistBaseURL       = "https://api.spotify.com/v1/artists/%s"
+	artistAlbumsBaseURL = "https://api.spotify.com/v1/artists/%s/albums"
 )
 
 var (
@@ -38,18 +31,37 @@ var (
 
 // SpotifyMetadataClient mirrors the behaviour of Doc/getMetadata.py and interacts with Spotify's web API.
 type SpotifyMetadataClient struct {
-	httpClient *http.Client
-	rng        *rand.Rand
-	rngMu      sync.Mutex
-	userAgent  string
+	httpClient     *http.Client
+	clientID       string
+	clientSecret   string
+	cachedToken    string
+	tokenExpiresAt time.Time
+	rng            *rand.Rand
+	rngMu          sync.Mutex
+	userAgent      string
 }
 
-// NewSpotifyMetadataClient creates a ready-to-use client with sane defaults.
+// NewSpotifyMetadataClient creates a ready-to-use client with Official Spotify API credentials.
 func NewSpotifyMetadataClient() *SpotifyMetadataClient {
 	src := rand.NewSource(time.Now().UnixNano())
+
+	// Decode client ID from base64
+	clientID := ""
+	if decoded, err := base64.StdEncoding.DecodeString("NWY1NzNjOTYyMDQ5NGJhZTg3ODkwYzBmMDhhNjAyOTM="); err == nil {
+		clientID = string(decoded)
+	}
+
+	// Decode client secret from base64
+	clientSecret := ""
+	if decoded, err := base64.StdEncoding.DecodeString("MjEyNDc2ZDliMGYzNDcyZWFhNzYyZDkwYjE5YjBiYTg="); err == nil {
+		clientSecret = string(decoded)
+	}
+
 	c := &SpotifyMetadataClient{
-		httpClient: &http.Client{Timeout: 15 * time.Second},
-		rng:        rand.New(src),
+		httpClient:   &http.Client{Timeout: 15 * time.Second},
+		clientID:     clientID,
+		clientSecret: clientSecret,
+		rng:          rand.New(src),
 	}
 	c.userAgent = c.randomUserAgent()
 	return c
@@ -187,17 +199,10 @@ type spotifyURI struct {
 	DiscographyGroup string
 }
 
-type secretEntry struct {
-	Version int   `json:"version"`
-	Secret  []int `json:"secret"`
-}
-
-type serverTimeResponse struct {
-	ServerTime int64 `json:"serverTime"`
-}
-
 type accessTokenResponse struct {
-	AccessToken string `json:"accessToken"`
+	AccessToken string      `json:"access_token"`
+	ExpiresIn   interface{} `json:"expires_in"` // Can be number or string
+	TokenType   string      `json:"token_type"`
 }
 
 type image struct {
@@ -352,7 +357,9 @@ func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed sp
 	case "artist_discography":
 		return c.fetchArtistDiscography(ctx, parsed, token, batch, delay)
 	case "artist":
-		return c.fetchArtist(ctx, parsed.ID, token)
+		// Automatically fetch discography for artist URLs to get full data (albums + tracks)
+		discographyParsed := spotifyURI{Type: "artist_discography", ID: parsed.ID, DiscographyGroup: "all"}
+		return c.fetchArtistDiscography(ctx, discographyParsed, token, batch, delay)
 	default:
 		return nil, fmt.Errorf("unsupported Spotify type: %s", parsed.Type)
 	}
@@ -859,209 +866,56 @@ func (c *SpotifyMetadataClient) randRange(min, max int) int {
 }
 
 func (c *SpotifyMetadataClient) getAccessToken(ctx context.Context) (string, error) {
-	code, serverTime, version, err := c.generateTOTP(ctx)
+	// Return cached token if still valid
+	if c.cachedToken != "" && time.Now().Before(c.tokenExpiresAt) {
+		return c.cachedToken, nil
+	}
+
+	// Prepare request body for Client Credentials Flow
+	data := url.Values{}
+	data.Set("grant_type", "client_credentials")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, spotifyTokenURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return "", err
 	}
 
-	timestampMS := time.Now().UnixMilli()
-	params := url.Values{}
-	params.Set("reason", "init")
-	params.Set("productType", "web-player")
-	params.Set("totp", code)
-	params.Set("totpServerTime", strconv.FormatInt(serverTime, 10))
-	params.Set("totpVer", strconv.Itoa(version))
-	params.Set("sTime", strconv.FormatInt(serverTime, 10))
-	params.Set("cTime", strconv.FormatInt(timestampMS, 10))
-	params.Set("buildVer", "web-player_2025-07-02_1720000000000_12345678")
-	params.Set("buildDate", "2025-07-02")
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, spotifyTokenURL, nil)
-	if err != nil {
-		return "", err
-	}
-	req.URL.RawQuery = params.Encode()
-	req.Header = c.baseHeaders()
+	// Set Basic Auth header
+	req.SetBasicAuth(c.clientID, c.clientSecret)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return "", err
 	}
+	defer resp.Body.Close()
+
 	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
 	if err != nil {
 		return "", err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to get access token. Status code: %d", resp.StatusCode)
+		return "", fmt.Errorf("failed to get access token. Status code: %d, Response: %s", resp.StatusCode, string(body))
 	}
 
 	var token accessTokenResponse
 	if err := json.Unmarshal(body, &token); err != nil {
 		return "", err
 	}
+
 	if token.AccessToken == "" {
 		return "", errors.New("failed to get access token: empty token received")
 	}
+
+	// Cache the token
+	c.cachedToken = token.AccessToken
+	// Official API returns expires_in in seconds
+	if expiresIn, ok := token.ExpiresIn.(float64); ok {
+		c.tokenExpiresAt = time.Now().Add(time.Duration(expiresIn-60) * time.Second) // Refresh 60 seconds before expiry
+	}
+
 	return token.AccessToken, nil
-}
-
-func (c *SpotifyMetadataClient) generateTOTP(ctx context.Context) (string, int64, int, error) {
-	secrets, _, err := c.fetchSecretBytes(ctx)
-	if err != nil {
-		return "", 0, 0, err
-	}
-	if len(secrets) == 0 {
-		return "", 0, 0, errors.New("no secrets available")
-	}
-
-	latest := secrets[0]
-	for _, entry := range secrets[1:] {
-		if entry.Version > latest.Version {
-			latest = entry
-		}
-	}
-
-	builder := strings.Builder{}
-	for idx, val := range latest.Secret {
-		processed := val ^ ((idx % 33) + 9)
-		builder.WriteString(strconv.Itoa(processed))
-	}
-
-	utfBytes := []byte(builder.String())
-	hexStr := hex.EncodeToString(utfBytes)
-	secretBytes, err := hex.DecodeString(hexStr)
-	if err != nil {
-		return "", 0, 0, err
-	}
-	b32Secret := base32.StdEncoding.EncodeToString(secretBytes)
-
-	serverTime, err := c.fetchServerTime(ctx)
-	if err != nil {
-		return "", 0, 0, err
-	}
-
-	code, err := computeTOTP(b32Secret, serverTime)
-	if err != nil {
-		return "", 0, 0, err
-	}
-
-	return code, serverTime, latest.Version, nil
-}
-
-func (c *SpotifyMetadataClient) fetchSecretBytes(ctx context.Context) ([]secretEntry, bool, error) {
-	// Add cache busting parameter with current timestamp
-	urlWithCacheBust := fmt.Sprintf("%s?t=%d", secretBytesRemotePath, time.Now().Unix())
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlWithCacheBust, nil)
-	if err == nil {
-		// Add headers to bypass cache
-		req.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		req.Header.Set("Pragma", "no-cache")
-		req.Header.Set("Expires", "0")
-
-		resp, err := c.httpClient.Do(req)
-		if err == nil {
-			body, readErr := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if readErr == nil && resp.StatusCode == http.StatusOK {
-				var secrets []secretEntry
-				if jsonErr := json.Unmarshal(body, &secrets); jsonErr == nil {
-					return secrets, false, nil
-				}
-			}
-		}
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, false, fmt.Errorf("GitHub fetch failed and could not resolve home directory: %w", err)
-	}
-	localPath := filepath.Join(home, ".spotify-secret", "secretBytes.json")
-	data, err := os.ReadFile(localPath)
-	if err != nil {
-		return nil, false, fmt.Errorf("failed to fetch secrets from both GitHub and local: %w", err)
-	}
-
-	var secrets []secretEntry
-	if err := json.Unmarshal(data, &secrets); err != nil {
-		return nil, false, fmt.Errorf("failed to process local secrets: %w", err)
-	}
-	return secrets, true, nil
-}
-
-func (c *SpotifyMetadataClient) fetchServerTime(ctx context.Context) (int64, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://open.spotify.com/api/server-time", nil)
-	if err != nil {
-		return 0, err
-	}
-	req.Header = c.serverTimeHeaders()
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return 0, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("failed to get server time. Status code: %d", resp.StatusCode)
-	}
-
-	var payload serverTimeResponse
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return 0, err
-	}
-	if payload.ServerTime == 0 {
-		return 0, errors.New("failed to fetch server time from Spotify")
-	}
-	return payload.ServerTime, nil
-}
-
-func (c *SpotifyMetadataClient) serverTimeHeaders() http.Header {
-	h := http.Header{}
-	h.Set("Host", "open.spotify.com")
-	h.Set("User-Agent", c.randomUserAgent())
-	h.Set("Accept", "*/*")
-	return h
-}
-
-func computeTOTP(b32Secret string, timestamp int64) (string, error) {
-	normalized := strings.ToUpper(strings.ReplaceAll(b32Secret, " ", ""))
-	key, err := base32.StdEncoding.DecodeString(normalized)
-	if err != nil {
-		return "", err
-	}
-
-	// Normalise milliseconds if necessary.
-	if timestamp > 1_000_000_000_000 {
-		timestamp /= 1000
-	}
-
-	counter := uint64(timestamp / 30)
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], counter)
-
-	mac := hmac.New(sha1.New, key)
-	if _, err := mac.Write(buf[:]); err != nil {
-		return "", err
-	}
-	sum := mac.Sum(nil)
-	if len(sum) < 20 {
-		return "", errors.New("unexpected hmac length for TOTP")
-	}
-
-	offset := sum[len(sum)-1] & 0x0f
-	binaryCode := (int(sum[offset])&0x7f)<<24 |
-		(int(sum[offset+1])&0xff)<<16 |
-		(int(sum[offset+2])&0xff)<<8 |
-		(int(sum[offset+3]) & 0xff)
-	otp := binaryCode % 1_000_000
-	return fmt.Sprintf("%06d", otp), nil
 }
 
 func parseSpotifyURI(input string) (spotifyURI, error) {
@@ -1238,4 +1092,299 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+
+// SearchResult represents a single search result item
+type SearchResult struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"` // track, album, artist, playlist
+	Artists     string `json:"artists,omitempty"`
+	AlbumName   string `json:"album_name,omitempty"`
+	Images      string `json:"images"`
+	ReleaseDate string `json:"release_date,omitempty"`
+	ExternalURL string `json:"external_urls"`
+	Duration    int    `json:"duration_ms,omitempty"`
+	TotalTracks int    `json:"total_tracks,omitempty"`
+	Owner       string `json:"owner,omitempty"` // for playlists
+}
+
+// SearchResponse contains search results grouped by type
+type SearchResponse struct {
+	Tracks    []SearchResult `json:"tracks"`
+	Albums    []SearchResult `json:"albums"`
+	Artists   []SearchResult `json:"artists"`
+	Playlists []SearchResult `json:"playlists"`
+}
+
+// Spotify API search response structures
+type searchTracksResponse struct {
+	Tracks struct {
+		Items []struct {
+			ID          string      `json:"id"`
+			Name        string      `json:"name"`
+			DurationMS  int         `json:"duration_ms"`
+			ExternalURL externalURL `json:"external_urls"`
+			Artists     []artist    `json:"artists"`
+			Album       struct {
+				ID          string      `json:"id"`
+				Name        string      `json:"name"`
+				Images      []image     `json:"images"`
+				ReleaseDate string      `json:"release_date"`
+				ExternalURL externalURL `json:"external_urls"`
+			} `json:"album"`
+		} `json:"items"`
+	} `json:"tracks"`
+}
+
+type searchAlbumsResponse struct {
+	Albums struct {
+		Items []struct {
+			ID          string      `json:"id"`
+			Name        string      `json:"name"`
+			AlbumType   string      `json:"album_type"`
+			TotalTracks int         `json:"total_tracks"`
+			ReleaseDate string      `json:"release_date"`
+			Images      []image     `json:"images"`
+			ExternalURL externalURL `json:"external_urls"`
+			Artists     []artist    `json:"artists"`
+		} `json:"items"`
+	} `json:"albums"`
+}
+
+type searchArtistsResponse struct {
+	Artists struct {
+		Items []struct {
+			ID          string      `json:"id"`
+			Name        string      `json:"name"`
+			Images      []image     `json:"images"`
+			ExternalURL externalURL `json:"external_urls"`
+			Followers   struct {
+				Total int `json:"total"`
+			} `json:"followers"`
+		} `json:"items"`
+	} `json:"artists"`
+}
+
+type searchPlaylistsResponse struct {
+	Playlists struct {
+		Items []struct {
+			ID          string      `json:"id"`
+			Name        string      `json:"name"`
+			Images      []image     `json:"images"`
+			ExternalURL externalURL `json:"external_urls"`
+			Owner       struct {
+				DisplayName string `json:"display_name"`
+			} `json:"owner"`
+			Tracks struct {
+				Total int `json:"total"`
+			} `json:"tracks"`
+		} `json:"items"`
+	} `json:"playlists"`
+}
+
+// Search performs a search on Spotify and returns results for tracks, albums, artists, and playlists
+func (c *SpotifyMetadataClient) Search(ctx context.Context, query string, limit int) (*SearchResponse, error) {
+	if query == "" {
+		return nil, errors.New("search query cannot be empty")
+	}
+
+	if limit <= 0 || limit > 50 {
+		limit = 50
+	}
+
+	token, err := c.getAccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token: %w", err)
+	}
+
+	// URL encode the query
+	encodedQuery := url.QueryEscape(query)
+	searchURL := fmt.Sprintf("https://api.spotify.com/v1/search?q=%s&type=track,album,artist,playlist&limit=%d", encodedQuery, limit)
+
+	response := &SearchResponse{
+		Tracks:    make([]SearchResult, 0),
+		Albums:    make([]SearchResult, 0),
+		Artists:   make([]SearchResult, 0),
+		Playlists: make([]SearchResult, 0),
+	}
+
+	// Fetch tracks
+	var tracksResp searchTracksResponse
+	if err := c.getJSON(ctx, searchURL, token, &tracksResp); err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
+	}
+
+	for _, item := range tracksResp.Tracks.Items {
+		response.Tracks = append(response.Tracks, SearchResult{
+			ID:          item.ID,
+			Name:        item.Name,
+			Type:        "track",
+			Artists:     joinArtists(item.Artists),
+			AlbumName:   item.Album.Name,
+			Images:      firstImageURL(item.Album.Images),
+			ReleaseDate: item.Album.ReleaseDate,
+			ExternalURL: item.ExternalURL.Spotify,
+			Duration:    item.DurationMS,
+		})
+	}
+
+	// Fetch albums
+	var albumsResp searchAlbumsResponse
+	if err := c.getJSON(ctx, searchURL, token, &albumsResp); err == nil {
+		for _, item := range albumsResp.Albums.Items {
+			response.Albums = append(response.Albums, SearchResult{
+				ID:          item.ID,
+				Name:        item.Name,
+				Type:        "album",
+				Artists:     joinArtists(item.Artists),
+				Images:      firstImageURL(item.Images),
+				ReleaseDate: item.ReleaseDate,
+				ExternalURL: item.ExternalURL.Spotify,
+				TotalTracks: item.TotalTracks,
+			})
+		}
+	}
+
+	// Fetch artists
+	var artistsResp searchArtistsResponse
+	if err := c.getJSON(ctx, searchURL, token, &artistsResp); err == nil {
+		for _, item := range artistsResp.Artists.Items {
+			response.Artists = append(response.Artists, SearchResult{
+				ID:          item.ID,
+				Name:        item.Name,
+				Type:        "artist",
+				Images:      firstImageURL(item.Images),
+				ExternalURL: item.ExternalURL.Spotify,
+			})
+		}
+	}
+
+	// Fetch playlists
+	var playlistsResp searchPlaylistsResponse
+	if err := c.getJSON(ctx, searchURL, token, &playlistsResp); err == nil {
+		for _, item := range playlistsResp.Playlists.Items {
+			response.Playlists = append(response.Playlists, SearchResult{
+				ID:          item.ID,
+				Name:        item.Name,
+				Type:        "playlist",
+				Images:      firstImageURL(item.Images),
+				ExternalURL: item.ExternalURL.Spotify,
+				Owner:       item.Owner.DisplayName,
+				TotalTracks: item.Tracks.Total,
+			})
+		}
+	}
+
+	return response, nil
+}
+
+// SearchSpotify is a convenience wrapper for the Search method
+func SearchSpotify(ctx context.Context, query string, limit int) (*SearchResponse, error) {
+	client := NewSpotifyMetadataClient()
+	return client.Search(ctx, query, limit)
+}
+
+// SearchByType searches for a specific type (track, album, artist, playlist) with offset support
+func (c *SpotifyMetadataClient) SearchByType(ctx context.Context, query string, searchType string, limit int, offset int) ([]SearchResult, error) {
+	if query == "" {
+		return nil, errors.New("search query cannot be empty")
+	}
+
+	if limit <= 0 || limit > 50 {
+		limit = 50
+	}
+
+	if offset < 0 || offset > 1000 {
+		offset = 0
+	}
+
+	token, err := c.getAccessToken(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get access token: %w", err)
+	}
+
+	encodedQuery := url.QueryEscape(query)
+	searchURL := fmt.Sprintf("https://api.spotify.com/v1/search?q=%s&type=%s&limit=%d&offset=%d", encodedQuery, searchType, limit, offset)
+
+	results := make([]SearchResult, 0)
+
+	switch searchType {
+	case "track":
+		var resp searchTracksResponse
+		if err := c.getJSON(ctx, searchURL, token, &resp); err != nil {
+			return nil, fmt.Errorf("search failed: %w", err)
+		}
+		for _, item := range resp.Tracks.Items {
+			results = append(results, SearchResult{
+				ID:          item.ID,
+				Name:        item.Name,
+				Type:        "track",
+				Artists:     joinArtists(item.Artists),
+				AlbumName:   item.Album.Name,
+				Images:      firstImageURL(item.Album.Images),
+				ReleaseDate: item.Album.ReleaseDate,
+				ExternalURL: item.ExternalURL.Spotify,
+				Duration:    item.DurationMS,
+			})
+		}
+	case "album":
+		var resp searchAlbumsResponse
+		if err := c.getJSON(ctx, searchURL, token, &resp); err != nil {
+			return nil, fmt.Errorf("search failed: %w", err)
+		}
+		for _, item := range resp.Albums.Items {
+			results = append(results, SearchResult{
+				ID:          item.ID,
+				Name:        item.Name,
+				Type:        "album",
+				Artists:     joinArtists(item.Artists),
+				Images:      firstImageURL(item.Images),
+				ReleaseDate: item.ReleaseDate,
+				ExternalURL: item.ExternalURL.Spotify,
+				TotalTracks: item.TotalTracks,
+			})
+		}
+	case "artist":
+		var resp searchArtistsResponse
+		if err := c.getJSON(ctx, searchURL, token, &resp); err != nil {
+			return nil, fmt.Errorf("search failed: %w", err)
+		}
+		for _, item := range resp.Artists.Items {
+			results = append(results, SearchResult{
+				ID:          item.ID,
+				Name:        item.Name,
+				Type:        "artist",
+				Images:      firstImageURL(item.Images),
+				ExternalURL: item.ExternalURL.Spotify,
+			})
+		}
+	case "playlist":
+		var resp searchPlaylistsResponse
+		if err := c.getJSON(ctx, searchURL, token, &resp); err != nil {
+			return nil, fmt.Errorf("search failed: %w", err)
+		}
+		for _, item := range resp.Playlists.Items {
+			results = append(results, SearchResult{
+				ID:          item.ID,
+				Name:        item.Name,
+				Type:        "playlist",
+				Images:      firstImageURL(item.Images),
+				ExternalURL: item.ExternalURL.Spotify,
+				Owner:       item.Owner.DisplayName,
+				TotalTracks: item.Tracks.Total,
+			})
+		}
+	default:
+		return nil, fmt.Errorf("invalid search type: %s", searchType)
+	}
+
+	return results, nil
+}
+
+// SearchSpotifyByType is a convenience wrapper for SearchByType
+func SearchSpotifyByType(ctx context.Context, query string, searchType string, limit int, offset int) ([]SearchResult, error) {
+	client := NewSpotifyMetadataClient()
+	return client.SearchByType(ctx, query, searchType, limit, offset)
 }

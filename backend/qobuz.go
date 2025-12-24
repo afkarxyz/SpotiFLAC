@@ -263,7 +263,7 @@ func (q *QobuzDownloader) DownloadCoverArt(coverURL, filepath string) error {
 	return err
 }
 
-func buildQobuzFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
+func buildQobuzFilename(title, artist, album, albumArtist, releaseDate string, trackNumber, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
 	var filename string
 
 	// Determine track number to use
@@ -272,11 +272,27 @@ func buildQobuzFilename(title, artist string, trackNumber int, format string, in
 		numberToUse = trackNumber
 	}
 
+	// Extract year from release date (format: YYYY-MM-DD or YYYY)
+	year := ""
+	if len(releaseDate) >= 4 {
+		year = releaseDate[:4]
+	}
+
 	// Check if format is a template (contains {})
 	if strings.Contains(format, "{") {
 		filename = format
 		filename = strings.ReplaceAll(filename, "{title}", title)
 		filename = strings.ReplaceAll(filename, "{artist}", artist)
+		filename = strings.ReplaceAll(filename, "{album}", album)
+		filename = strings.ReplaceAll(filename, "{album_artist}", albumArtist)
+		filename = strings.ReplaceAll(filename, "{year}", year)
+
+		// Handle disc number
+		if discNumber > 0 {
+			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
+		} else {
+			filename = strings.ReplaceAll(filename, "{disc}", "")
+		}
 
 		// Handle track number - if numberToUse is 0, remove {track} and surrounding separators
 		if numberToUse > 0 {
@@ -355,6 +371,8 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 
 	safeArtist := sanitizeFilename(artists)
 	safeTitle := sanitizeFilename(trackTitle)
+	safeAlbum := sanitizeFilename(albumTitle)
+	safeAlbumArtist := sanitizeFilename(spotifyAlbumArtist)
 
 	// Check if file with same ISRC already exists (use Spotify ISRC)
 	if existingFile, exists := CheckISRCExists(outputDir, isrc); exists {
@@ -363,7 +381,7 @@ func (q *QobuzDownloader) DownloadByISRC(isrc, outputDir, quality, filenameForma
 	}
 
 	// Build filename based on format settings (use Spotify track number)
-	filename := buildQobuzFilename(safeTitle, safeArtist, spotifyTrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	filename := buildQobuzFilename(safeTitle, safeArtist, safeAlbum, safeAlbumArtist, spotifyReleaseDate, spotifyTrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filepath := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(filepath); err == nil && fileInfo.Size() > 0 {

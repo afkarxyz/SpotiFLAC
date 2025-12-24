@@ -46,11 +46,15 @@ type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
 	ArtistName          string `json:"artist_name"`
+	AlbumName           string `json:"album_name"`
+	AlbumArtist         string `json:"album_artist"`
+	ReleaseDate         string `json:"release_date"`
 	OutputDir           string `json:"output_dir"`
 	FilenameFormat      string `json:"filename_format"`
 	TrackNumber         bool   `json:"track_number"`
 	Position            int    `json:"position"`
 	UseAlbumTrackNumber bool   `json:"use_album_track_number"`
+	DiscNumber          int    `json:"disc_number"`
 }
 
 // LyricsDownloadResponse represents the response from lyrics download
@@ -308,9 +312,17 @@ func msToLRCTimestamp(msStr string) string {
 }
 
 // buildLyricsFilename builds the lyrics filename based on settings (same as track filename)
-func buildLyricsFilename(trackName, artistName, filenameFormat string, includeTrackNumber bool, position int) string {
+func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat string, includeTrackNumber bool, position, discNumber int) string {
 	safeTitle := sanitizeFilename(trackName)
 	safeArtist := sanitizeFilename(artistName)
+	safeAlbum := sanitizeFilename(albumName)
+	safeAlbumArtist := sanitizeFilename(albumArtist)
+
+	// Extract year from release date (format: YYYY-MM-DD or YYYY)
+	year := ""
+	if len(releaseDate) >= 4 {
+		year = releaseDate[:4]
+	}
 
 	var filename string
 
@@ -319,6 +331,16 @@ func buildLyricsFilename(trackName, artistName, filenameFormat string, includeTr
 		filename = filenameFormat
 		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
 		filename = strings.ReplaceAll(filename, "{artist}", safeArtist)
+		filename = strings.ReplaceAll(filename, "{album}", safeAlbum)
+		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
+		filename = strings.ReplaceAll(filename, "{year}", year)
+
+		// Handle disc number
+		if discNumber > 0 {
+			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
+		} else {
+			filename = strings.ReplaceAll(filename, "{disc}", "")
+		}
 
 		// Handle track number - if position is 0, remove {track} and surrounding separators
 		if position > 0 {
@@ -378,7 +400,7 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 	if filenameFormat == "" {
 		filenameFormat = "title-artist" // default
 	}
-	filename := buildLyricsFilename(req.TrackName, req.ArtistName, filenameFormat, req.TrackNumber, req.Position)
+	filename := buildLyricsFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, filenameFormat, req.TrackNumber, req.Position, req.DiscNumber)
 	filePath := filepath.Join(outputDir, filename)
 
 	// Check if file already exists

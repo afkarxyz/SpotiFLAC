@@ -128,41 +128,25 @@ func NewTidalDownloader(apiURL string) *TidalDownloader {
 }
 
 func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
-	// Decode base64 API URL
-	apiURL, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2Fma2FyeHl6L1Nwb3RpRkxBQy9yZWZzL2hlYWRzL21haW4vdGlkYWwuanNvbg==")
-
-	// Add cache-busting parameter with current timestamp
-	urlWithCacheBust := fmt.Sprintf("%s?t=%d", string(apiURL), time.Now().Unix())
-
-	// Create request with cache bypass headers
-	req, err := http.NewRequest("GET", urlWithCacheBust, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add headers to bypass cache
-	req.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	req.Header.Set("Pragma", "no-cache")
-	req.Header.Set("Expires", "0")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch API list: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("failed to fetch API list: HTTP %d", resp.StatusCode)
-	}
-
-	var apiList []string
-	if err := json.NewDecoder(resp.Body).Decode(&apiList); err != nil {
-		return nil, fmt.Errorf("failed to decode API list: %w", err)
+	// Hardcoded API URLs (base64 encoded for obfuscation)
+	encodedAPIs := []string{
+		"dm9nZWwucXFkbC5zaXRl",         // API 1
+		"bWF1cy5xcWRsLnNpdGU=",         // API 2
+		"aHVuZC5xcWRsLnNpdGU=",         // API 3
+		"a2F0emUucXFkbC5zaXRl",         // API 4
+		"d29sZi5xcWRsLnNpdGU=",         // API 5
+		"dGlkYWwua2lub3BsdXMub25saW5l", // API 6
+		"dGlkYWwtYXBpLmJpbmltdW0ub3Jn", // API 7
+		"dHJpdG9uLnNxdWlkLnd0Zg==",     // API 8
 	}
 
 	var apis []string
-	for _, api := range apiList {
-		apis = append(apis, "https://"+api)
+	for _, encoded := range encodedAPIs {
+		decoded, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil {
+			continue
+		}
+		apis = append(apis, "https://"+string(decoded))
 	}
 
 	return apis, nil
@@ -834,6 +818,8 @@ func (t *TidalDownloader) DownloadByURL(tidalURL, outputDir, quality, filenameFo
 	// Sanitize for filename only (not for metadata)
 	artistNameForFile := sanitizeFilename(artistName)
 	trackTitleForFile := sanitizeFilename(trackTitle)
+	albumTitleForFile := sanitizeFilename(albumTitle)
+	albumArtistForFile := sanitizeFilename(spotifyAlbumArtist)
 
 	// Check if file with same ISRC already exists
 	if existingFile, exists := CheckISRCExists(outputDir, trackInfo.ISRC); exists {
@@ -842,7 +828,7 @@ func (t *TidalDownloader) DownloadByURL(tidalURL, outputDir, quality, filenameFo
 	}
 
 	// Build filename based on format settings (use sanitized versions for filename)
-	filename := buildTidalFilename(trackTitleForFile, artistNameForFile, trackInfo.TrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	filename := buildTidalFilename(trackTitleForFile, artistNameForFile, albumTitleForFile, albumArtistForFile, spotifyReleaseDate, trackInfo.TrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	outputFilename := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
@@ -947,6 +933,8 @@ func (t *TidalDownloader) DownloadByURLWithFallback(tidalURL, outputDir, quality
 	// Sanitize for filename only (not for metadata)
 	artistNameForFile := sanitizeFilename(artistName)
 	trackTitleForFile := sanitizeFilename(trackTitle)
+	albumTitleForFile := sanitizeFilename(albumTitle)
+	albumArtistForFile := sanitizeFilename(spotifyAlbumArtist)
 
 	// Check if file with same ISRC already exists
 	if existingFile, exists := CheckISRCExists(outputDir, trackInfo.ISRC); exists {
@@ -954,7 +942,7 @@ func (t *TidalDownloader) DownloadByURLWithFallback(tidalURL, outputDir, quality
 		return "EXISTS:" + existingFile, nil
 	}
 
-	filename := buildTidalFilename(trackTitleForFile, artistNameForFile, trackInfo.TrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	filename := buildTidalFilename(trackTitleForFile, artistNameForFile, albumTitleForFile, albumArtistForFile, spotifyReleaseDate, trackInfo.TrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	outputFilename := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
@@ -1081,6 +1069,8 @@ func (t *TidalDownloader) DownloadBySearchWithISRC(trackName, artistName, albumN
 	// Sanitize for filename only (not for metadata)
 	finalArtistNameForFile := sanitizeFilename(finalArtistName)
 	finalTrackTitleForFile := sanitizeFilename(finalTrackTitle)
+	finalAlbumTitleForFile := sanitizeFilename(finalAlbumTitle)
+	finalAlbumArtistForFile := sanitizeFilename(albumArtist)
 
 	// Check if file with same ISRC already exists (use Spotify ISRC)
 	if existingFile, exists := CheckISRCExists(outputDir, spotifyISRC); exists {
@@ -1089,7 +1079,7 @@ func (t *TidalDownloader) DownloadBySearchWithISRC(trackName, artistName, albumN
 	}
 
 	// Build filename
-	filename := buildTidalFilename(finalTrackTitleForFile, finalArtistNameForFile, spotifyTrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	filename := buildTidalFilename(finalTrackTitleForFile, finalArtistNameForFile, finalAlbumTitleForFile, finalAlbumArtistForFile, releaseDate, spotifyTrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	outputFilename := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
@@ -1405,6 +1395,8 @@ func (t *TidalDownloader) DownloadBySearchWithFallback(trackName, artistName, al
 	// Sanitize for filename only (not for metadata)
 	finalArtistNameForFile := sanitizeFilename(finalArtistName)
 	finalTrackTitleForFile := sanitizeFilename(finalTrackTitle)
+	finalAlbumTitleForFile := sanitizeFilename(finalAlbumTitle)
+	finalAlbumArtistForFile := sanitizeFilename(albumArtist)
 
 	// Check if file already exists (use Spotify ISRC)
 	if existingFile, exists := CheckISRCExists(outputDir, spotifyISRC); exists {
@@ -1412,7 +1404,7 @@ func (t *TidalDownloader) DownloadBySearchWithFallback(trackName, artistName, al
 		return "EXISTS:" + existingFile, nil
 	}
 
-	filename := buildTidalFilename(finalTrackTitleForFile, finalArtistNameForFile, spotifyTrackNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
+	filename := buildTidalFilename(finalTrackTitleForFile, finalArtistNameForFile, finalAlbumTitleForFile, finalAlbumArtistForFile, releaseDate, spotifyTrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	outputFilename := filepath.Join(outputDir, filename)
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
@@ -1511,7 +1503,7 @@ func (t *TidalDownloader) DownloadWithFallbackAndISRC(spotifyTrackID, spotifyISR
 	return t.DownloadByURLWithFallback(tidalURL, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyISRC)
 }
 
-func buildTidalFilename(title, artist string, trackNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
+func buildTidalFilename(title, artist, album, albumArtist, releaseDate string, trackNumber, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
 	var filename string
 
 	// Determine track number to use
@@ -1520,11 +1512,27 @@ func buildTidalFilename(title, artist string, trackNumber int, format string, in
 		numberToUse = trackNumber
 	}
 
+	// Extract year from release date (format: YYYY-MM-DD or YYYY)
+	year := ""
+	if len(releaseDate) >= 4 {
+		year = releaseDate[:4]
+	}
+
 	// Check if format is a template (contains {})
 	if strings.Contains(format, "{") {
 		filename = format
 		filename = strings.ReplaceAll(filename, "{title}", title)
 		filename = strings.ReplaceAll(filename, "{artist}", artist)
+		filename = strings.ReplaceAll(filename, "{album}", album)
+		filename = strings.ReplaceAll(filename, "{album_artist}", albumArtist)
+		filename = strings.ReplaceAll(filename, "{year}", year)
+
+		// Handle disc number
+		if discNumber > 0 {
+			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
+		} else {
+			filename = strings.ReplaceAll(filename, "{disc}", "")
+		}
 
 		// Handle track number - if numberToUse is 0, remove {track} and surrounding separators
 		if numberToUse > 0 {

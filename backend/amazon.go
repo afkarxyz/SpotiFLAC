@@ -382,7 +382,7 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat st
 
 	// Check if file with expected name already exists (Amazon doesn't provide ISRC before download)
 	if spotifyTrackName != "" && spotifyArtistName != "" {
-		expectedFilename := BuildExpectedFilename(spotifyTrackName, spotifyArtistName, filenameFormat, includeTrackNumber, position, false)
+		expectedFilename := BuildExpectedFilename(spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, filenameFormat, includeTrackNumber, position, spotifyDiscNumber, false)
 		expectedPath := filepath.Join(outputDir, expectedFilename)
 
 		if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
@@ -403,6 +403,14 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat st
 	if spotifyTrackName != "" && spotifyArtistName != "" {
 		safeArtist := sanitizeFilename(spotifyArtistName)
 		safeTitle := sanitizeFilename(spotifyTrackName)
+		safeAlbum := sanitizeFilename(spotifyAlbumName)
+		safeAlbumArtist := sanitizeFilename(spotifyAlbumArtist)
+
+		// Extract year from release date
+		year := ""
+		if len(spotifyReleaseDate) >= 4 {
+			year = spotifyReleaseDate[:4]
+		}
 
 		// Build filename based on format settings
 		var newFilename string
@@ -412,6 +420,16 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, filenameFormat st
 			newFilename = filenameFormat
 			newFilename = strings.ReplaceAll(newFilename, "{title}", safeTitle)
 			newFilename = strings.ReplaceAll(newFilename, "{artist}", safeArtist)
+			newFilename = strings.ReplaceAll(newFilename, "{album}", safeAlbum)
+			newFilename = strings.ReplaceAll(newFilename, "{album_artist}", safeAlbumArtist)
+			newFilename = strings.ReplaceAll(newFilename, "{year}", year)
+
+			// Handle disc number
+			if spotifyDiscNumber > 0 {
+				newFilename = strings.ReplaceAll(newFilename, "{disc}", fmt.Sprintf("%d", spotifyDiscNumber))
+			} else {
+				newFilename = strings.ReplaceAll(newFilename, "{disc}", "")
+			}
 
 			// Handle track number - if position is 0, remove {track} and surrounding separators
 			if position > 0 {

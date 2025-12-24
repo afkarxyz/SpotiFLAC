@@ -185,11 +185,15 @@ export interface LyricsDownloadRequest {
   spotify_id: string;
   track_name: string;
   artist_name: string;
+  album_name?: string;
+  album_artist?: string;
+  release_date?: string;
   output_dir?: string;
   filename_format?: string;
   track_number?: boolean;
   position?: number;
   use_album_track_number?: boolean;
+  disc_number?: number;
 }
 
 export interface LyricsDownloadResponse {
@@ -214,10 +218,14 @@ export interface CoverDownloadRequest {
   cover_url: string;
   track_name: string;
   artist_name: string;
+  album_name?: string;
+  album_artist?: string;
+  release_date?: string;
   output_dir?: string;
   filename_format?: string;
   track_number?: boolean;
   position?: number;
+  disc_number?: number;
 }
 
 export interface CoverDownloadResponse {
