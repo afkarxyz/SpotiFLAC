@@ -803,7 +803,7 @@ func (a *App) ReadImageAsBase64(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	ext := strings.ToLower(filepath.Ext(filePath))
 	var mimeType string
 	switch ext {
@@ -818,7 +818,7 @@ func (a *App) ReadImageAsBase64(filePath string) (string, error) {
 	default:
 		mimeType = "image/jpeg"
 	}
-	
+
 	encoded := base64.StdEncoding.EncodeToString(content)
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
 }
@@ -858,4 +858,58 @@ func (a *App) CheckFilesExistence(outputDir string, tracks []CheckFileExistenceR
 // SkipDownloadItem marks a download item as skipped (file already exists)
 func (a *App) SkipDownloadItem(itemID, filePath string) {
 	backend.SkipDownloadItem(itemID, filePath)
+}
+
+// SelectCSVFile opens a file dialog to select a CSV file
+func (a *App) SelectCSVFile() (string, error) {
+	return backend.SelectCSVFileDialog(a.ctx)
+}
+
+// ParseCSVPlaylist parses a CSV playlist file and returns tracks
+func (a *App) ParseCSVPlaylist(filePath string) (backend.CSVParseResult, error) {
+	if filePath == "" {
+		return backend.CSVParseResult{
+			Success: false,
+			Error:   "File path is required",
+		}, fmt.Errorf("file path is required")
+	}
+
+	fmt.Printf("\n========== CSV PARSE START ==========\n")
+	fmt.Printf("File path: %s\n", filePath)
+
+	tracks, err := backend.ParseCSVPlaylist(filePath)
+	if err != nil {
+		fmt.Printf("Parse error: %v\n", err)
+		fmt.Printf("========== CSV PARSE END (FAILED) ==========\n\n")
+		return backend.CSVParseResult{
+			Success:    false,
+			TrackCount: 0,
+			Error:      err.Error(),
+		}, err
+	}
+
+	fmt.Printf("Parse success: %d tracks\n", len(tracks))
+	fmt.Printf("========== CSV PARSE END (SUCCESS) ==========\n\n")
+
+	return backend.CSVParseResult{
+		Success:    true,
+		TrackCount: len(tracks),
+		Tracks:     tracks,
+	}, nil
+}
+
+// CSVBatchDownloadRequest represents a request to download tracks from a CSV file
+type CSVBatchDownloadRequest struct {
+	CSVFilePath string `json:"csv_file_path"`
+	OutputDir   string `json:"output_dir"`
+}
+
+// CSVBatchDownloadResponse represents the response from CSV batch download
+type CSVBatchDownloadResponse struct {
+	Success       bool   `json:"success"`
+	Message       string `json:"message"`
+	TotalTracks   int    `json:"total_tracks"`
+	QueuedTracks  int    `json:"queued_tracks"`
+	SkippedTracks int    `json:"skipped_tracks"`
+	Error         string `json:"error,omitempty"`
 }
