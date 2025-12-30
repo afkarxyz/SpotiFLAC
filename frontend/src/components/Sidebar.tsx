@@ -1,4 +1,4 @@
-import { FileMusic, FilePen } from "lucide-react";
+import { FileMusic, FilePen, FileSpreadsheet } from "lucide-react";
 import { HomeIcon } from "@/components/ui/home";
 import { SettingsIcon } from "@/components/ui/settings";
 import { ActivityIcon } from "@/components/ui/activity";
@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { openExternal } from "@/lib/utils";
 
-export type PageType = "main" | "settings" | "debug" | "audio-analysis" | "audio-converter" | "file-manager";
+export type PageType = "main" | "settings" | "debug" | "audio-analysis" | "audio-converter" | "file-manager" | "csv-import";
 
 interface SidebarProps {
   currentPage: PageType;
@@ -107,6 +107,23 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           </TooltipTrigger>
           <TooltipContent side="right">
             <p>File Manager</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* CSV Import */}
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <Button
+              variant={currentPage === "csv-import" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-10 w-10"
+              onClick={() => onPageChange("csv-import")}
+            >
+              <FileSpreadsheet className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>CSV Playlist Import</p>
           </TooltipContent>
         </Tooltip>
 

@@ -50,3 +50,24 @@ func SelectOutputDirectory(ctx context.Context) (string, error) {
 	return dir, nil
 }
 
+// SelectCSVFileDialog opens a file dialog to select a CSV file
+func SelectCSVFileDialog(ctx context.Context) (string, error) {
+	file, err := runtime.OpenFileDialog(ctx, runtime.OpenDialogOptions{
+		Title: "Select CSV Playlist File",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "CSV Files (*.csv)",
+				Pattern:     "*.csv",
+			},
+			{
+				DisplayName: "All Files (*.*)",
+				Pattern:     "*.*",
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return file, nil
+}
+
