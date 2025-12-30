@@ -31,6 +31,9 @@ export interface Settings {
   // Quality settings for specific sources
   tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
   qobuzQuality: "6" | "7" | "27";
+  // Parallel download settings
+  enableParallelDownloads: boolean;
+  concurrentDownloads: number; // 1-10, default 3
 }
 
 // Folder preset templates
@@ -105,7 +108,9 @@ export const DEFAULT_SETTINGS: Settings = {
   embedMaxQualityCover: false,
   operatingSystem: detectOS(),
   tidalQuality: "LOSSLESS", // Default: 16-bit lossless
-  qobuzQuality: "6" // Default: FLAC 16-bit
+  qobuzQuality: "6", // Default: FLAC 16-bit
+  enableParallelDownloads: false, // Disabled by default
+  concurrentDownloads: 3 // Default to 3 when enabled
 };
 
 export const FONT_OPTIONS: { value: FontFamily; label: string; fontFamily: string }[] = [
@@ -196,6 +201,13 @@ export function getSettings(): Settings {
       }
       if (!('qobuzQuality' in parsed)) {
         parsed.qobuzQuality = "6";
+      }
+      // Set default parallel download settings if not present
+      if (!('enableParallelDownloads' in parsed)) {
+        parsed.enableParallelDownloads = false;
+      }
+      if (!('concurrentDownloads' in parsed)) {
+        parsed.concurrentDownloads = 3;
       }
       return { ...DEFAULT_SETTINGS, ...parsed };
     }

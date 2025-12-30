@@ -39,6 +39,7 @@ export function useDownload() {
     name: string;
     artists: string;
   } | null>(null);
+  const [currentlyDownloadingTracks, setCurrentlyDownloadingTracks] = useState<Set<string>>(new Set());
   const shouldStopDownloadRef = useRef(false);
 
   const downloadWithAutoFallback = async (
@@ -677,29 +678,32 @@ export function useDownload() {
     // Filter out existing tracks
     const tracksToDownload = selectedTrackObjects.filter((track) => !existingISRCs.has(track.isrc));
 
-    let successCount = 0;
-    let errorCount = 0;
-    let skippedCount = existingISRCs.size;
+    // Use an object for counters to avoid race conditions in parallel downloads
+    const counters = {
+      successCount: 0,
+      errorCount: 0,
+      skippedCount: existingISRCs.size
+    };
     const total = selectedTracks.length;
 
     // Update progress to reflect already-skipped tracks
-    setDownloadProgress(Math.round((skippedCount / total) * 100));
+    setDownloadProgress(Math.round((counters.skippedCount / total) * 100));
 
-    for (let i = 0; i < tracksToDownload.length; i++) {
+    // Determine concurrency based on settings
+    const concurrency = settings.enableParallelDownloads ? settings.concurrentDownloads : 1;
+    logger.info(`downloading with concurrency: ${concurrency}`);
+
+    // Process downloads with concurrency control
+    let currentIndex = 0;
+    const activeDownloads = new Set<Promise<void>>();
+
+    const processTrack = async (track: TrackMetadata, originalIndex: number, itemID: string) => {
       if (shouldStopDownloadRef.current) {
-        toast.info(
-          `Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`
-        );
-        break;
+        return;
       }
 
-      const track = tracksToDownload[i];
-      const isrc = track.isrc;
-      // Find original index and itemID
-      const originalIndex = selectedTracks.indexOf(isrc);
-      const itemID = itemIDs[originalIndex];
-
-      setDownloadingTrack(isrc);
+      setCurrentlyDownloadingTracks((prev) => new Set(prev).add(track.isrc));
+      setDownloadingTrack(track.isrc);
       setCurrentDownloadInfo({ name: track.name, artists: track.artists });
 
       try {
@@ -708,7 +712,7 @@ export function useDownload() {
         
         // Download with pre-created itemID
         const response = await downloadWithItemID(
-          isrc,
+          track.isrc,
           settings,
           itemID,
           track.name,
@@ -730,39 +734,77 @@ export function useDownload() {
 
         if (response.success) {
           if (response.already_exists) {
-            skippedCount++;
+            counters.skippedCount++;
             logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
-            setSkippedTracks((prev) => new Set(prev).add(isrc));
+            setSkippedTracks((prev) => new Set(prev).add(track.isrc));
           } else {
-            successCount++;
+            counters.successCount++;
             logger.success(`downloaded: ${track.name} - ${track.artists}`);
           }
-          setDownloadedTracks((prev) => new Set(prev).add(isrc));
+          setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
           setFailedTracks((prev) => {
             const newSet = new Set(prev);
-            newSet.delete(isrc); // Remove from failed if it was there
+            newSet.delete(track.isrc); // Remove from failed if it was there
             return newSet;
           });
         } else {
-          errorCount++;
+          counters.errorCount++;
           logger.error(`failed: ${track.name} - ${track.artists}`);
-          setFailedTracks((prev) => new Set(prev).add(isrc));
+          setFailedTracks((prev) => new Set(prev).add(track.isrc));
         }
       } catch (err) {
-        errorCount++;
+        counters.errorCount++;
         logger.error(`error: ${track.name} - ${err}`);
-        setFailedTracks((prev) => new Set(prev).add(isrc));
+        setFailedTracks((prev) => new Set(prev).add(track.isrc));
         // Mark item as failed in queue
         const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
         await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
+      } finally {
+        setCurrentlyDownloadingTracks((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(track.isrc);
+          return newSet;
+        });
+
+        const completedCount = counters.skippedCount + counters.successCount + counters.errorCount;
+        setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+      }
+    };
+
+    // Main download loop with concurrency control
+    while (currentIndex < tracksToDownload.length || activeDownloads.size > 0) {
+      if (shouldStopDownloadRef.current) {
+        // Wait for active downloads to finish
+        await Promise.all(Array.from(activeDownloads));
+        toast.info(
+          `Download stopped. ${counters.successCount} tracks downloaded, ${tracksToDownload.length - currentIndex} remaining.`
+        );
+        break;
       }
 
-      const completedCount = skippedCount + successCount + errorCount;
-      setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+      // Start new downloads up to concurrency limit
+      while (activeDownloads.size < concurrency && currentIndex < tracksToDownload.length) {
+        const track = tracksToDownload[currentIndex];
+        const originalIndex = selectedTracks.indexOf(track.isrc);
+        const itemID = itemIDs[originalIndex];
+
+        const downloadPromise = processTrack(track, originalIndex, itemID).then(() => {
+          activeDownloads.delete(downloadPromise);
+        });
+
+        activeDownloads.add(downloadPromise);
+        currentIndex++;
+      }
+
+      // Wait for at least one download to complete
+      if (activeDownloads.size > 0) {
+        await Promise.race(Array.from(activeDownloads));
+      }
     }
 
     setDownloadingTrack(null);
     setCurrentDownloadInfo(null);
+    setCurrentlyDownloadingTracks(new Set());
     setIsDownloading(false);
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
@@ -772,21 +814,21 @@ export function useDownload() {
     await CancelAllQueuedItems();
 
     // Build summary message
-    logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
-    if (errorCount === 0 && skippedCount === 0) {
-      toast.success(`Downloaded ${successCount} tracks successfully`);
-    } else if (errorCount === 0 && successCount === 0) {
+    logger.info(`batch complete: ${counters.successCount} downloaded, ${counters.skippedCount} skipped, ${counters.errorCount} failed`);
+    if (counters.errorCount === 0 && counters.skippedCount === 0) {
+      toast.success(`Downloaded ${counters.successCount} tracks successfully`);
+    } else if (counters.errorCount === 0 && counters.successCount === 0) {
       // All skipped
-      toast.info(`${skippedCount} tracks already exist`);
-    } else if (errorCount === 0) {
+      toast.info(`${counters.skippedCount} tracks already exist`);
+    } else if (counters.errorCount === 0) {
       // Mix of downloaded and skipped
-      toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
+      toast.info(`${counters.successCount} downloaded, ${counters.skippedCount} skipped`);
     } else {
       // Has errors
       const parts = [];
-      if (successCount > 0) parts.push(`${successCount} downloaded`);
-      if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
-      parts.push(`${errorCount} failed`);
+      if (counters.successCount > 0) parts.push(`${counters.successCount} downloaded`);
+      if (counters.skippedCount > 0) parts.push(`${counters.skippedCount} skipped`);
+      parts.push(`${counters.errorCount} failed`);
       toast.warning(parts.join(", "));
     }
   };
@@ -861,27 +903,31 @@ export function useDownload() {
     // Filter out existing tracks
     const tracksToDownload = tracksWithIsrc.filter((track) => !existingISRCs.has(track.isrc));
 
-    let successCount = 0;
-    let errorCount = 0;
-    let skippedCount = existingISRCs.size;
+    // Use refs for counters to avoid race conditions in parallel downloads
+    const counters = {
+      successCount: 0,
+      errorCount: 0,
+      skippedCount: existingISRCs.size
+    };
     const total = tracksWithIsrc.length;
 
     // Update progress to reflect already-skipped tracks
-    setDownloadProgress(Math.round((skippedCount / total) * 100));
+    setDownloadProgress(Math.round((counters.skippedCount / total) * 100));
 
-    for (let i = 0; i < tracksToDownload.length; i++) {
+    // Determine concurrency based on settings
+    const concurrency = settings.enableParallelDownloads ? settings.concurrentDownloads : 1;
+    logger.info(`downloading with concurrency: ${concurrency}`);
+
+    // Process downloads with concurrency control
+    let currentIndex = 0;
+    const activeDownloads = new Set<Promise<void>>();
+
+    const processTrack = async (track: TrackMetadata, originalIndex: number, itemID: string) => {
       if (shouldStopDownloadRef.current) {
-        toast.info(
-          `Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`
-        );
-        break;
+        return;
       }
 
-      const track = tracksToDownload[i];
-      // Find original index and itemID
-      const originalIndex = tracksWithIsrc.findIndex((t) => t.isrc === track.isrc);
-      const itemID = itemIDs[originalIndex];
-
+      setCurrentlyDownloadingTracks((prev) => new Set(prev).add(track.isrc));
       setDownloadingTrack(track.isrc);
       setCurrentDownloadInfo({ name: track.name, artists: track.artists });
 
@@ -912,11 +958,11 @@ export function useDownload() {
 
         if (response.success) {
           if (response.already_exists) {
-            skippedCount++;
+            counters.skippedCount++;
             logger.info(`skipped: ${track.name} - ${track.artists} (already exists)`);
             setSkippedTracks((prev) => new Set(prev).add(track.isrc));
           } else {
-            successCount++;
+            counters.successCount++;
             logger.success(`downloaded: ${track.name} - ${track.artists}`);
           }
           setDownloadedTracks((prev) => new Set(prev).add(track.isrc));
@@ -926,25 +972,63 @@ export function useDownload() {
             return newSet;
           });
         } else {
-          errorCount++;
+          counters.errorCount++;
           logger.error(`failed: ${track.name} - ${track.artists}`);
           setFailedTracks((prev) => new Set(prev).add(track.isrc));
         }
       } catch (err) {
-        errorCount++;
+        counters.errorCount++;
         logger.error(`error: ${track.name} - ${err}`);
         setFailedTracks((prev) => new Set(prev).add(track.isrc));
         // Mark item as failed in queue
         const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
         await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
+      } finally {
+        setCurrentlyDownloadingTracks((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(track.isrc);
+          return newSet;
+        });
+
+        const completedCount = counters.skippedCount + counters.successCount + counters.errorCount;
+        setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+      }
+    };
+
+    // Main download loop with concurrency control
+    while (currentIndex < tracksToDownload.length || activeDownloads.size > 0) {
+      if (shouldStopDownloadRef.current) {
+        // Wait for active downloads to finish
+        await Promise.all(Array.from(activeDownloads));
+        toast.info(
+          `Download stopped. ${counters.successCount} tracks downloaded, ${tracksToDownload.length - currentIndex} remaining.`
+        );
+        break;
       }
 
-      const completedCount = skippedCount + successCount + errorCount;
-      setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+      // Start new downloads up to concurrency limit
+      while (activeDownloads.size < concurrency && currentIndex < tracksToDownload.length) {
+        const track = tracksToDownload[currentIndex];
+        const originalIndex = tracksWithIsrc.findIndex((t) => t.isrc === track.isrc);
+        const itemID = itemIDs[originalIndex];
+
+        const downloadPromise = processTrack(track, originalIndex, itemID).then(() => {
+          activeDownloads.delete(downloadPromise);
+        });
+
+        activeDownloads.add(downloadPromise);
+        currentIndex++;
+      }
+
+      // Wait for at least one download to complete
+      if (activeDownloads.size > 0) {
+        await Promise.race(Array.from(activeDownloads));
+      }
     }
 
     setDownloadingTrack(null);
     setCurrentDownloadInfo(null);
+    setCurrentlyDownloadingTracks(new Set());
     setIsDownloading(false);
     setBulkDownloadType(null);
     shouldStopDownloadRef.current = false;
@@ -954,21 +1038,21 @@ export function useDownload() {
     await CancelQueued();
 
     // Build summary message
-    logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
-    if (errorCount === 0 && skippedCount === 0) {
-      toast.success(`Downloaded ${successCount} tracks successfully`);
-    } else if (errorCount === 0 && successCount === 0) {
+    logger.info(`batch complete: ${counters.successCount} downloaded, ${counters.skippedCount} skipped, ${counters.errorCount} failed`);
+    if (counters.errorCount === 0 && counters.skippedCount === 0) {
+      toast.success(`Downloaded ${counters.successCount} tracks successfully`);
+    } else if (counters.errorCount === 0 && counters.successCount === 0) {
       // All skipped
-      toast.info(`${skippedCount} tracks already exist`);
-    } else if (errorCount === 0) {
+      toast.info(`${counters.skippedCount} tracks already exist`);
+    } else if (counters.errorCount === 0) {
       // Mix of downloaded and skipped
-      toast.info(`${successCount} downloaded, ${skippedCount} skipped`);
+      toast.info(`${counters.successCount} downloaded, ${counters.skippedCount} skipped`);
     } else {
       // Has errors
       const parts = [];
-      if (successCount > 0) parts.push(`${successCount} downloaded`);
-      if (skippedCount > 0) parts.push(`${skippedCount} skipped`);
-      parts.push(`${errorCount} failed`);
+      if (counters.successCount > 0) parts.push(`${counters.successCount} downloaded`);
+      if (counters.skippedCount > 0) parts.push(`${counters.skippedCount} skipped`);
+      parts.push(`${counters.errorCount} failed`);
       toast.warning(parts.join(", "));
     }
   };
@@ -994,6 +1078,7 @@ export function useDownload() {
     failedTracks,
     skippedTracks,
     currentDownloadInfo,
+    currentlyDownloadingTracks,
     handleDownloadTrack,
     handleDownloadSelected,
     handleDownloadAll,

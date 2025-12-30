@@ -302,6 +302,36 @@ export function SettingsPage() {
             </div>
           </div>
 
+          {/* Parallel Downloads */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="enable-parallel-downloads" className="cursor-pointer text-sm">Enable Parallel Downloads</Label>
+              <Switch
+                id="enable-parallel-downloads"
+                checked={tempSettings.enableParallelDownloads}
+                onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, enableParallelDownloads: checked }))}
+              />
+            </div>
+            {tempSettings.enableParallelDownloads && (
+              <div className="space-y-2 pl-4">
+                <Label htmlFor="concurrent-downloads" className="text-sm">Concurrent Downloads: {tempSettings.concurrentDownloads}</Label>
+                <input
+                  id="concurrent-downloads"
+                  type="range"
+                  min="1"
+                  max="10"
+                  value={tempSettings.concurrentDownloads}
+                  onChange={(e) => setTempSettings(prev => ({ ...prev, concurrentDownloads: parseInt(e.target.value) }))}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1</span>
+                  <span>10</span>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="border-t" />
 
           {/* Folder Structure */}
