@@ -18,10 +18,12 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 
 ![Image](https://github.com/user-attachments/assets/afe01529-bcf0-4486-8792-62af26adafee)
 
-## Other project
+## Other projects
+
+### [SpotiFLAC Mobile](https://github.com/zarzet/SpotiFLAC-Mobile)
+Mobile port of SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarzet)
 
 ### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader) 
-
 Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
