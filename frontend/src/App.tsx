@@ -30,6 +30,7 @@ import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
 import { AudioConverterPage } from "@/components/AudioConverterPage";
 import { FileManagerPage } from "@/components/FileManagerPage";
+import { CSVImportPage } from "@/components/CSVImportPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { DebugLoggerPage } from "@/components/DebugLoggerPage";
 import type { HistoryItem } from "@/components/FetchHistory";
@@ -547,6 +548,8 @@ function App() {
         return <AudioConverterPage />;
       case "file-manager":
         return <FileManagerPage />;
+      case "csv-import":
+        return <CSVImportPage onDownloadTrack={download.handleDownloadTrack} />;
       default:
         return (
           <>
