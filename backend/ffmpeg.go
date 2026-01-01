@@ -26,6 +26,49 @@ func decodeBase64(encoded string) (string, error) {
 	return string(decoded), nil
 }
 
+// ValidateExecutable checks if the path points to a valid, safe executable
+func ValidateExecutable(path string) error {
+	cleanedPath := filepath.Clean(path)
+	if cleanedPath == "" {
+		return fmt.Errorf("empty path")
+	}
+
+	// Ensure path is absolute
+	if !filepath.IsAbs(cleanedPath) {
+		return fmt.Errorf("path must be absolute: %s", path)
+	}
+
+	info, err := os.Stat(cleanedPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat file: %w", err)
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("path is a directory: %s", path)
+	}
+
+	// Check executable permission on Unix
+	if runtime.GOOS != "windows" {
+		if info.Mode()&0111 == 0 {
+			return fmt.Errorf("file is not executable: %s", path)
+		}
+	}
+
+	// Validate filename allowlist
+	base := filepath.Base(cleanedPath)
+	validNames := map[string]bool{
+		"ffmpeg":      true,
+		"ffmpeg.exe":  true,
+		"ffprobe":     true,
+		"ffprobe.exe": true,
+	}
+	if !validNames[base] {
+		return fmt.Errorf("invalid executable name: %s", base)
+	}
+
+	return nil
+}
+
 const (
 	ffmpegWindowsURL = "aHR0cHM6Ly9naXRodWIuY29tL0J0Yk4vRkZtcGVnLUJ1aWxkcy9yZWxlYXNlcy9kb3dubG9hZC9sYXRlc3QvZmZtcGVnLW1hc3Rlci1sYXRlc3Qtd2luNjQtZ3BsLnppcA=="
 	ffmpegLinuxURL   = "aHR0cHM6Ly9naXRodWIuY29tL0J0Yk4vRkZtcGVnLUJ1aWxkcy9yZWxlYXNlcy9kb3dubG9hZC9sYXRlc3QvZmZtcGVnLW1hc3Rlci1sYXRlc3QtbGludXg2NC1ncGwudGFyLnh6"
@@ -84,6 +127,10 @@ func IsFFprobeInstalled() (bool, error) {
 		return false, nil
 	}
 
+	if err := ValidateExecutable(ffprobePath); err != nil {
+		return false, nil
+	}
+
 	// Verify it's executable
 	cmd := exec.Command(ffprobePath, "-version")
 	setHideWindow(cmd)
@@ -98,12 +145,8 @@ func IsFFmpegInstalled() (bool, error) {
 		return false, err
 	}
 
-	_, err = os.Stat(ffmpegPath)
-	if os.IsNotExist(err) {
+	if err := ValidateExecutable(ffmpegPath); err != nil {
 		return false, nil
-	}
-	if err != nil {
-		return false, err
 	}
 
 	// Verify it's executable
@@ -423,6 +466,10 @@ func ConvertAudio(req ConvertAudioRequest) ([]ConvertAudioResult, error) {
 	ffmpegPath, err := GetFFmpegPath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ffmpeg path: %w", err)
+	}
+
+	if err := ValidateExecutable(ffmpegPath); err != nil {
+		return nil, fmt.Errorf("invalid ffmpeg executable: %w", err)
 	}
 
 	installed, err := IsFFmpegInstalled()
