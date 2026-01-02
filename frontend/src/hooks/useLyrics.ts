@@ -24,7 +24,8 @@ export function useLyrics() {
     position?: number,
     albumArtist?: string,
     releaseDate?: string,
-    discNumber?: number
+    discNumber?: number,
+    isAlbum?: boolean // Add isAlbum parameter
   ) => {
     if (!spotifyId) {
       toast.error("No Spotify ID found for this track");
@@ -51,7 +52,8 @@ export function useLyrics() {
       };
 
       // For playlist/discography, prepend the folder name
-      if (playlistName) {
+      // Only do this if it's NOT an album download
+      if (playlistName && !isAlbum) {
         outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
       }
 
@@ -113,7 +115,8 @@ export function useLyrics() {
   const handleDownloadAllLyrics = async (
     tracks: TrackMetadata[],
     playlistName?: string,
-    _isArtistDiscography?: boolean
+    _isArtistDiscography?: boolean,
+    isAlbum?: boolean // Add isAlbum parameter
   ) => {
     const tracksWithSpotifyId = tracks.filter((track) => track.spotify_id);
 
@@ -150,12 +153,12 @@ export function useLyrics() {
 
         // Replace forward slashes in template data values to prevent them from being interpreted as path separators
         const placeholder = "__SLASH_PLACEHOLDER__";
-        
+
         // Determine if we should use album track number or sequential position
         const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
         // Use track.track_number for album context, otherwise use sequential position (consistent with track download)
         const trackPosition = useAlbumTrackNumber ? (track.track_number || i + 1) : (i + 1);
-        
+
         // Build output path using template system
         const templateData: TemplateData = {
           artist: track.artists?.replace(/\//g, placeholder),
@@ -166,7 +169,8 @@ export function useLyrics() {
         };
 
         // For playlist/discography, prepend the folder name
-        if (playlistName) {
+        // Only do this if it's NOT an album download
+        if (playlistName && !isAlbum) {
           outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
 
