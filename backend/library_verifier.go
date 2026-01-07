@@ -219,10 +219,50 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 				searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)
 				coverURL, err = SearchSpotifyForCover(searchQuery, metadata.Title, metadata.Artist)
 				if err != nil || coverURL == "" {
-					track.Error = fmt.Sprintf("Failed to find cover: %v", err)
-					fmt.Printf("[Library Verifier] ✗ Cover not found via Spotify\n")
-					continue
+					fmt.Printf("[Library Verifier] ✗ Spotify failed: %v\n", err)
+				} else {
+					fmt.Printf("[Library Verifier] ✓ Found via Spotify\n")
 				}
+			}
+
+			// Try iTunes if Spotify failed
+			if coverURL == "" {
+				fmt.Printf("[Library Verifier] Trying iTunes API...\n")
+				coverURL, err = SearchITunesForCover(metadata.Title, metadata.Artist)
+				if err != nil || coverURL == "" {
+					fmt.Printf("[Library Verifier] ✗ iTunes failed: %v\n", err)
+				} else {
+					fmt.Printf("[Library Verifier] ✓ Found via iTunes\n")
+				}
+			}
+
+			// Try Deezer if iTunes failed
+			if coverURL == "" {
+				fmt.Printf("[Library Verifier] Trying Deezer API...\n")
+				coverURL, err = SearchDeezerForCover(metadata.Title, metadata.Artist)
+				if err != nil || coverURL == "" {
+					fmt.Printf("[Library Verifier] ✗ Deezer failed: %v\n", err)
+				} else {
+					fmt.Printf("[Library Verifier] ✓ Found via Deezer\n")
+				}
+			}
+
+			// Try MusicBrainz as last resort (slower due to rate limiting)
+			if coverURL == "" {
+				fmt.Printf("[Library Verifier] Trying MusicBrainz API...\n")
+				coverURL, err = SearchMusicBrainzForCover(metadata.Title, metadata.Artist)
+				if err != nil || coverURL == "" {
+					fmt.Printf("[Library Verifier] ✗ MusicBrainz failed: %v\n", err)
+				} else {
+					fmt.Printf("[Library Verifier] ✓ Found via MusicBrainz\n")
+				}
+			}
+
+			// If still no cover found, skip this track
+			if coverURL == "" {
+				track.Error = "Failed to find cover from any source"
+				fmt.Printf("[Library Verifier] ✗ Cover not found from any source\n")
+				continue
 			}
 
 			// Download cover to same location as audio file
