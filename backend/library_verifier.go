@@ -198,11 +198,22 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 				if err != nil {
 					fmt.Printf("[Library Verifier] Database query failed: %v\n", err)
 				} else if coverURL != "" {
-					fmt.Printf("[Library Verifier] ✓ Found cover in database\n")
+					fmt.Printf("[Library Verifier] ✓ Found cover in database by album\n")
 				}
 			}
 
-			// If not found in database, search Spotify
+			// If not found by album, try searching by track name and artist
+			if coverURL == "" && req.DatabasePath != "" && metadata.Title != "" && metadata.Artist != "" {
+				fmt.Printf("[Library Verifier] Searching database by track: %s - %s\n", metadata.Title, metadata.Artist)
+				coverURL, err = GetCoverByTrackFromDatabase(req.DatabasePath, metadata.Title, metadata.Artist)
+				if err != nil {
+					fmt.Printf("[Library Verifier] Track search failed: %v\n", err)
+				} else if coverURL != "" {
+					fmt.Printf("[Library Verifier] ✓ Found cover in database by track\n")
+				}
+			}
+
+			// If still not found in database, search Spotify
 			if coverURL == "" {
 				fmt.Printf("[Library Verifier] Searching Spotify for cover...\n")
 				searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)

@@ -180,3 +180,69 @@ func GetAlbumCoverFromDatabase(databasePath string, albumName string) (string, e
 	fmt.Printf("[Database] Found cover URL for album '%s': %s\n", albumName, coverURL)
 	return coverURL, nil
 }
+
+// GetCoverByTrackFromDatabase searches for a track by name and artist, then returns the album cover
+// This is more reliable than searching by album name since track names are more unique
+func GetCoverByTrackFromDatabase(databasePath string, trackName string, artistName string) (string, error) {
+	if databasePath == "" {
+		return "", nil
+	}
+
+	db, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		return "", fmt.Errorf("failed to connect to database: %v", err)
+	}
+
+	// Search for track by name, prioritizing exact matches
+	// Using LIKE with % to be more flexible with special characters
+	var albumRowID int
+	trackQuery := `
+		SELECT album_rowid 
+		FROM tracks 
+		WHERE LOWER(name) LIKE LOWER(?) 
+		AND (
+			LOWER(artists) LIKE LOWER(?) 
+			OR LOWER(artists) LIKE LOWER(?)
+		)
+		LIMIT 1
+	`
+	
+	// Try with exact match first
+	err = db.QueryRow(trackQuery, trackName, "%"+artistName+"%", artistName+"%").Scan(&albumRowID)
+
+	if err == sql.ErrNoRows {
+		// Track not found, return empty
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to query track: %v", err)
+	}
+
+	// Query for the largest cover image (highest width)
+	var coverURL string
+	imageQuery := `
+		SELECT url 
+		FROM album_images 
+		WHERE album_rowid = ? 
+		ORDER BY width DESC 
+		LIMIT 1
+	`
+	err = db.QueryRow(imageQuery, albumRowID).Scan(&coverURL)
+
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to query album image: %v", err)
+	}
+
+	fmt.Printf("[Database] Found cover via track search '%s - %s': %s\n", trackName, artistName, coverURL)
+	return coverURL, nil
+}
