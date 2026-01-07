@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderOpen, Save, RotateCcw, Info, Database } from "lucide-react";
+import { FolderOpen, Save, RotateCcw, Info, Database, CheckCircle2, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
-import { SelectFolder, SelectDatabaseFile, TestDatabaseConnection } from "../../wailsjs/go/main/App";
+import { SelectFolder, SelectDatabaseFile, TestDatabaseConnection, VerifyLibraryCompleteness } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 
 // Service Icons
@@ -53,6 +53,13 @@ export function SettingsPage() {
   const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  
+  // Library verification states
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [checkCovers, setCheckCovers] = useState(true);
+  const [checkLyrics, setCheckLyrics] = useState(false);
 
   useEffect(() => {
     applyThemeMode(savedSettings.themeMode);
@@ -144,6 +151,50 @@ export function SettingsPage() {
       toast.success(result);
     } catch (error) {
       toast.error(`Database connection failed: ${error}`);
+    }
+  };
+
+  const handleVerifyLibrary = async () => {
+    if (!tempSettings.downloadPath) {
+      toast.error("Please set a download path first");
+      return;
+    }
+
+    setIsVerifying(true);
+    setVerificationResult(null);
+
+    try {
+      const result = await VerifyLibraryCompleteness({
+        scan_path: tempSettings.downloadPath,
+        check_covers: checkCovers,
+        check_lyrics: checkLyrics,
+        download_missing: false, // For now, just scan
+      });
+
+      setVerificationResult(result);
+
+      if (result.success) {
+        const issues = [];
+        if (checkCovers && result.missing_covers > 0) {
+          issues.push(`${result.missing_covers} missing covers`);
+        }
+        if (checkLyrics && result.missing_lyrics > 0) {
+          issues.push(`${result.missing_lyrics} missing lyrics`);
+        }
+
+        if (issues.length === 0) {
+          toast.success("Library is complete! All tracks have the required files.");
+        } else {
+          toast.warning(`Found issues: ${issues.join(", ")}`);
+        }
+      } else {
+        toast.error(`Verification failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error verifying library:", error);
+      toast.error(`Error verifying library: ${error}`);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -502,6 +553,108 @@ export function SettingsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Advanced Tools Section */}
+      <div className="space-y-3">
+        <button
+          onClick={() => setShowAdvancedTools(!showAdvancedTools)}
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {showAdvancedTools ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          Advanced Tools
+        </button>
+
+        {showAdvancedTools && (
+          <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+            <div>
+              <h3 className="font-semibold mb-2 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                Library Completeness Checker
+              </h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Scan your library to verify that all tracks have cover art and lyrics (optional).
+                Useful before organizing or moving your music collection.
+              </p>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={checkCovers}
+                      onCheckedChange={setCheckCovers}
+                      id="check-covers"
+                    />
+                    <Label htmlFor="check-covers" className="text-sm cursor-pointer">
+                      Check for covers
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={checkLyrics}
+                      onCheckedChange={setCheckLyrics}
+                      id="check-lyrics"
+                    />
+                    <Label htmlFor="check-lyrics" className="text-sm cursor-pointer">
+                      Check for lyrics
+                    </Label>
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleVerifyLibrary}
+                  disabled={isVerifying || (!checkCovers && !checkLyrics)}
+                  className="w-full"
+                >
+                  {isVerifying ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Scanning Library...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Verify Library Completeness
+                    </>
+                  )}
+                </Button>
+
+                {verificationResult && verificationResult.success && (
+                  <div className="mt-4 p-4 border rounded-lg bg-background space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">Total Tracks:</span>
+                      <span>{verificationResult.total_tracks}</span>
+                    </div>
+                    {checkCovers && (
+                      <>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-green-600 dark:text-green-400">With Cover:</span>
+                          <span>{verificationResult.tracks_with_cover}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-red-600 dark:text-red-400">Missing Cover:</span>
+                          <span>{verificationResult.missing_covers}</span>
+                        </div>
+                      </>
+                    )}
+                    {checkLyrics && (
+                      <>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-green-600 dark:text-green-400">With Lyrics:</span>
+                          <span>{verificationResult.tracks_with_lyrics}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-red-600 dark:text-red-400">Missing Lyrics:</span>
+                          <span>{verificationResult.missing_lyrics}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Actions */}

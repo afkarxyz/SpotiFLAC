@@ -1094,6 +1094,28 @@ func (a *App) CheckTrackExists(req CheckTrackExistsRequest) (CheckTrackExistsRes
 	return CheckTrackExistsResponse{Exists: false}, nil
 }
 
+// VerifyLibraryCompleteness verifies that all tracks in a directory have covers and/or lyrics
+func (a *App) VerifyLibraryCompleteness(req backend.LibraryVerificationRequest) (*backend.LibraryVerificationResponse, error) {
+	fmt.Println("\n========== LIBRARY VERIFICATION START ==========")
+	
+	if req.ScanPath == "" {
+		return &backend.LibraryVerificationResponse{
+			Success: false,
+			Error:   "Scan path is required",
+		}, fmt.Errorf("scan path is required")
+	}
+
+	response, err := backend.VerifyLibrary(req)
+	
+	if err != nil {
+		fmt.Printf("========== LIBRARY VERIFICATION END (FAILED) ==========\n\n")
+		return response, err
+	}
+
+	fmt.Printf("========== LIBRARY VERIFICATION END (SUCCESS) ==========\n\n")
+	return response, nil
+}
+
 // CSVBatchDownloadRequest represents a request to download tracks from a CSV file
 type CSVBatchDownloadRequest struct {
 	CSVFilePath string `json:"csv_file_path"`
