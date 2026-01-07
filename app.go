@@ -1097,7 +1097,7 @@ func (a *App) CheckTrackExists(req CheckTrackExistsRequest) (CheckTrackExistsRes
 // VerifyLibraryCompleteness verifies that all tracks in a directory have covers and/or lyrics
 func (a *App) VerifyLibraryCompleteness(req backend.LibraryVerificationRequest) (*backend.LibraryVerificationResponse, error) {
 	fmt.Println("\n========== LIBRARY VERIFICATION START ==========")
-	
+
 	if req.ScanPath == "" {
 		return &backend.LibraryVerificationResponse{
 			Success: false,
@@ -1106,7 +1106,7 @@ func (a *App) VerifyLibraryCompleteness(req backend.LibraryVerificationRequest) 
 	}
 
 	response, err := backend.VerifyLibrary(req)
-	
+
 	if err != nil {
 		fmt.Printf("========== LIBRARY VERIFICATION END (FAILED) ==========\n\n")
 		return response, err

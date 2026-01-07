@@ -57,6 +57,7 @@ export function SettingsPage() {
   // Library verification states
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const [checkCovers, setCheckCovers] = useState(true);
   const [checkLyrics, setCheckLyrics] = useState(false);
@@ -195,6 +196,49 @@ export function SettingsPage() {
       toast.error(`Error verifying library: ${error}`);
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleDownloadMissingItems = async () => {
+    if (!tempSettings.downloadPath) {
+      toast.error("Please set a download path first");
+      return;
+    }
+
+    setIsDownloading(true);
+
+    try {
+      const result = await VerifyLibraryCompleteness({
+        scan_path: tempSettings.downloadPath,
+        check_covers: checkCovers,
+        check_lyrics: checkLyrics,
+        download_missing: true, // Enable download mode
+      });
+
+      setVerificationResult(result);
+
+      if (result.success) {
+        const downloaded = [];
+        if (checkCovers && result.downloaded_covers > 0) {
+          downloaded.push(`${result.downloaded_covers} covers`);
+        }
+        if (checkLyrics && result.downloaded_lyrics > 0) {
+          downloaded.push(`${result.downloaded_lyrics} lyrics`);
+        }
+
+        if (downloaded.length > 0) {
+          toast.success(`Downloaded ${downloaded.join(" and ")}!`);
+        } else {
+          toast.info("No items needed to be downloaded.");
+        }
+      } else {
+        toast.error(`Download failed: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error downloading missing items:", error);
+      toast.error(`Error downloading missing items: ${error}`);
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -603,7 +647,7 @@ export function SettingsPage() {
 
                 <Button
                   onClick={handleVerifyLibrary}
-                  disabled={isVerifying || (!checkCovers && !checkLyrics)}
+                  disabled={isVerifying || isDownloading || (!checkCovers && !checkLyrics)}
                   className="w-full"
                 >
                   {isVerifying ? (
@@ -648,6 +692,29 @@ export function SettingsPage() {
                           <span>{verificationResult.missing_lyrics}</span>
                         </div>
                       </>
+                    )}
+                    
+                    {/* Show download button if there are missing items */}
+                    {((checkCovers && verificationResult.missing_covers > 0) || 
+                      (checkLyrics && verificationResult.missing_lyrics > 0)) && (
+                      <Button
+                        onClick={handleDownloadMissingItems}
+                        disabled={isDownloading}
+                        variant="default"
+                        className="w-full mt-3"
+                      >
+                        {isDownloading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Downloading Missing Items...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-4 w-4 mr-2" />
+                            Download Missing Items
+                          </>
+                        )}
+                      </Button>
                     )}
                   </div>
                 )}
