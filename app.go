@@ -1026,7 +1026,7 @@ func (a *App) ParseMultipleCSVFiles(filePaths []string) (backend.BatchCSVParseRe
 	fmt.Printf("========== BATCH CSV PARSE END ==========\n\n")
 
 	if !result.Success {
-		return result, fmt.Errorf(result.Error)
+		return result, fmt.Errorf("%s", result.Error)
 	}
 
 	return result, nil

@@ -19,6 +19,7 @@ type LibraryVerificationRequest struct {
 	CheckCovers     bool   `json:"check_covers"`
 	CheckLyrics     bool   `json:"check_lyrics"`
 	DownloadMissing bool   `json:"download_missing"`
+	DatabasePath    string `json:"database_path"`
 }
 
 // TrackVerificationResult represents the verification result for a single track
@@ -189,13 +190,28 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 				continue
 			}
 
-			// Search Spotify for cover URL
-			searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)
-			coverURL, err := SearchSpotifyForCover(searchQuery, metadata.Title, metadata.Artist)
-			if err != nil || coverURL == "" {
-				track.Error = fmt.Sprintf("Failed to find cover: %v", err)
-				fmt.Printf("[Library Verifier] ✗ Cover not found via Spotify\n")
-				continue
+			// Try to get cover from database first (much faster)
+			var coverURL string
+			if req.DatabasePath != "" && metadata.Album != "" {
+				fmt.Printf("[Library Verifier] Checking database for album: %s\n", metadata.Album)
+				coverURL, err = GetAlbumCoverFromDatabase(req.DatabasePath, metadata.Album)
+				if err != nil {
+					fmt.Printf("[Library Verifier] Database query failed: %v\n", err)
+				} else if coverURL != "" {
+					fmt.Printf("[Library Verifier] ✓ Found cover in database\n")
+				}
+			}
+
+			// If not found in database, search Spotify
+			if coverURL == "" {
+				fmt.Printf("[Library Verifier] Searching Spotify for cover...\n")
+				searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)
+				coverURL, err = SearchSpotifyForCover(searchQuery, metadata.Title, metadata.Artist)
+				if err != nil || coverURL == "" {
+					track.Error = fmt.Sprintf("Failed to find cover: %v", err)
+					fmt.Printf("[Library Verifier] ✗ Cover not found via Spotify\n")
+					continue
+				}
 			}
 
 			// Download cover to same location as audio file
@@ -242,24 +258,24 @@ func SearchSpotifyForCover(searchQuery, expectedTitle, expectedArtist string) (s
 	// Use the existing Spotify metadata client to search
 	ctx := context.Background()
 	client := NewSpotifyMetadataClient()
-	
+
 	// Search for the track
 	results, err := client.Search(ctx, searchQuery, 5) // Get top 5 results
 	if err != nil {
 		return "", fmt.Errorf("Spotify search failed: %w", err)
 	}
-	
+
 	// Check if we got any track results
 	if len(results.Tracks) == 0 {
 		return "", fmt.Errorf("no tracks found for query: %s", searchQuery)
 	}
-	
+
 	// Return the cover image from the first result
 	// The Images field contains the album cover URL
 	if results.Tracks[0].Images != "" {
 		return results.Tracks[0].Images, nil
 	}
-	
+
 	return "", fmt.Errorf("no cover image found for track")
 }
 

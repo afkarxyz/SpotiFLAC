@@ -170,6 +170,7 @@ export function SettingsPage() {
         check_covers: checkCovers,
         check_lyrics: checkLyrics,
         download_missing: false, // For now, just scan
+        database_path: tempSettings.databasePath || "",
       });
 
       setVerificationResult(result);
@@ -213,6 +214,7 @@ export function SettingsPage() {
         check_covers: checkCovers,
         check_lyrics: checkLyrics,
         download_missing: true, // Enable download mode
+        database_path: tempSettings.databasePath || "",
       });
 
       setVerificationResult(result);

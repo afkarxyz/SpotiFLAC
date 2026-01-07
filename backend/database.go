@@ -126,3 +126,57 @@ func TestDatabaseConnection(databasePath string) error {
 	fmt.Printf("[Database] Connection successful! Database contains %d tracks\n", count)
 	return nil
 }
+
+// GetAlbumCoverFromDatabase queries the album_images table for a cover URL
+// Returns the highest quality (largest) cover URL for the given album name
+func GetAlbumCoverFromDatabase(databasePath string, albumName string) (string, error) {
+	if databasePath == "" {
+		return "", nil
+	}
+
+	db, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		return "", fmt.Errorf("failed to connect to database: %v", err)
+	}
+
+	// First, find the album_rowid from the albums table
+	var albumRowID int
+	albumQuery := "SELECT rowid FROM albums WHERE name = ? LIMIT 1"
+	err = db.QueryRow(albumQuery, albumName).Scan(&albumRowID)
+
+	if err == sql.ErrNoRows {
+		// Album not found, return empty
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to query album: %v", err)
+	}
+
+	// Query for the largest cover image (highest width)
+	var coverURL string
+	imageQuery := `
+		SELECT url 
+		FROM album_images 
+		WHERE album_rowid = ? 
+		ORDER BY width DESC 
+		LIMIT 1
+	`
+	err = db.QueryRow(imageQuery, albumRowID).Scan(&coverURL)
+
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to query album image: %v", err)
+	}
+
+	fmt.Printf("[Database] Found cover URL for album '%s': %s\n", albumName, coverURL)
+	return coverURL, nil
+}
