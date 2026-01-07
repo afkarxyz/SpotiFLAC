@@ -213,19 +213,8 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 				}
 			}
 
-			// If still not found in database, search Spotify
-			if coverURL == "" {
-				fmt.Printf("[Library Verifier] Searching Spotify for cover...\n")
-				searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)
-				coverURL, err = SearchSpotifyForCover(searchQuery, metadata.Title, metadata.Artist)
-				if err != nil || coverURL == "" {
-					fmt.Printf("[Library Verifier] ✗ Spotify failed: %v\n", err)
-				} else {
-					fmt.Printf("[Library Verifier] ✓ Found via Spotify\n")
-				}
-			}
-
-			// Try iTunes if Spotify failed
+			// If still not found in database, try external APIs
+			// Try iTunes first (fast and reliable)
 			if coverURL == "" {
 				fmt.Printf("[Library Verifier] Trying iTunes API...\n")
 				coverURL, err = SearchITunesForCover(metadata.Title, metadata.Artist)
@@ -244,6 +233,18 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 					fmt.Printf("[Library Verifier] ✗ Deezer failed: %v\n", err)
 				} else {
 					fmt.Printf("[Library Verifier] ✓ Found via Deezer\n")
+				}
+			}
+
+			// Try Spotify if others failed
+			if coverURL == "" {
+				fmt.Printf("[Library Verifier] Trying Spotify API...\n")
+				searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)
+				coverURL, err = SearchSpotifyForCover(searchQuery, metadata.Title, metadata.Artist)
+				if err != nil || coverURL == "" {
+					fmt.Printf("[Library Verifier] ✗ Spotify failed: %v\n", err)
+				} else {
+					fmt.Printf("[Library Verifier] ✓ Found via Spotify\n")
 				}
 			}
 
