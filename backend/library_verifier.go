@@ -1,14 +1,12 @@
 package backend
 
 import (
+	"context"
 	"fmt"
-	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/bogem/id3v2"
 	"github.com/go-flac/flacvorbis"
@@ -175,12 +173,12 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 
 		for i := range response.Tracks {
 			track := &response.Tracks[i]
-			
+
 			if !track.MissingCover {
 				continue
 			}
 
-			fmt.Printf("[Library Verifier] Processing %d/%d: %s\n", 
+			fmt.Printf("[Library Verifier] Processing %d/%d: %s\n",
 				response.CoversDownloaded+1, response.MissingCovers, track.TrackName)
 
 			// Extract metadata from audio file
@@ -226,7 +224,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 // ExtractMetadataFromFile extracts basic metadata from an audio file
 func ExtractMetadataFromFile(filePath string) (*Metadata, error) {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	switch ext {
 	case ".flac":
 		return extractMetadataFromFLAC(filePath)
@@ -241,56 +239,28 @@ func ExtractMetadataFromFile(filePath string) (*Metadata, error) {
 
 // SearchSpotifyForCover searches Spotify for a track and returns the cover URL
 func SearchSpotifyForCover(searchQuery, expectedTitle, expectedArtist string) (string, error) {
-	// Use the Spotify metadata scraper to search
-	client := &http.Client{Timeout: 30 * time.Second}
+	// Use the existing Spotify metadata client to search
+	ctx := context.Background()
+	client := NewSpotifyMetadataClient()
 	
-	searchURL := fmt.Sprintf("https://open.spotify.com/search/%s/tracks", url.QueryEscape(searchQuery))
-	
-	req, err := http.NewRequest("GET", searchURL, nil)
+	// Search for the track
+	results, err := client.Search(ctx, searchQuery, 5) // Get top 5 results
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", fmt.Errorf("Spotify search failed: %w", err)
 	}
 	
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to search Spotify: %w", err)
-	}
-	defer resp.Body.Close()
-	
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("Spotify search failed with status: %d", resp.StatusCode)
+	// Check if we got any track results
+	if len(results.Tracks) == 0 {
+		return "", fmt.Errorf("no tracks found for query: %s", searchQuery)
 	}
 	
-	// Parse the HTML response to extract the first track's cover
-	// This is a simplified version - in production you'd want proper HTML parsing
-	body := make([]byte, 1024*1024) // 1MB buffer
-	n, _ := resp.Body.Read(body)
-	html := string(body[:n])
-	
-	// Look for Spotify image URLs in the HTML
-	// Format: https://i.scdn.co/image/...
-	imagePrefix := "https://i.scdn.co/image/"
-	idx := strings.Index(html, imagePrefix)
-	if idx == -1 {
-		return "", fmt.Errorf("no cover image found in search results")
+	// Return the cover image from the first result
+	// The Images field contains the album cover URL
+	if results.Tracks[0].Images != "" {
+		return results.Tracks[0].Images, nil
 	}
 	
-	// Extract the image URL (it's usually followed by a quote or space)
-	imageURL := imagePrefix
-	for i := idx + len(imagePrefix); i < len(html) && i < idx+len(imagePrefix)+200; i++ {
-		if html[i] == '"' || html[i] == '\'' || html[i] == ' ' || html[i] == '>' {
-			break
-		}
-		imageURL += string(html[i])
-	}
-	
-	if len(imageURL) == len(imagePrefix) {
-		return "", fmt.Errorf("failed to extract image URL")
-	}
-	
-	return imageURL, nil
+	return "", fmt.Errorf("no cover image found for track")
 }
 
 // Helper function to extract metadata from FLAC files
@@ -299,9 +269,9 @@ func extractMetadataFromFLAC(filePath string) (*Metadata, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse FLAC: %w", err)
 	}
-	
+
 	metadata := &Metadata{}
-	
+
 	// Find VorbisComment block
 	for _, block := range f.Meta {
 		if block.Type == flac.VorbisComment {
@@ -309,7 +279,7 @@ func extractMetadataFromFLAC(filePath string) (*Metadata, error) {
 			if err != nil {
 				continue
 			}
-			
+
 			// Extract fields
 			if vals, err := cmt.Get(flacvorbis.FIELD_TITLE); err == nil && len(vals) > 0 {
 				metadata.Title = vals[0]
@@ -326,7 +296,7 @@ func extractMetadataFromFLAC(filePath string) (*Metadata, error) {
 			break
 		}
 	}
-	
+
 	return metadata, nil
 }
 
@@ -337,18 +307,18 @@ func extractMetadataFromMP3(filePath string) (*Metadata, error) {
 		return nil, fmt.Errorf("failed to open MP3: %w", err)
 	}
 	defer tag.Close()
-	
+
 	metadata := &Metadata{
-		Title:       tag.Title(),
-		Artist:      tag.Artist(),
-		Album:       tag.Album(),
+		Title:  tag.Title(),
+		Artist: tag.Artist(),
+		Album:  tag.Album(),
 	}
-	
+
 	// Try to get album artist
 	if frame := tag.GetTextFrame("TPE2"); frame.Text != "" {
 		metadata.AlbumArtist = frame.Text
 	}
-	
+
 	// Try to get track number
 	if trackStr := tag.GetTextFrame(tag.CommonID("Track number/Position in set")).Text; trackStr != "" {
 		// Handle "1/12" format
@@ -357,17 +327,17 @@ func extractMetadataFromMP3(filePath string) (*Metadata, error) {
 			metadata.TrackNumber = trackNum
 		}
 	}
-	
+
 	return metadata, nil
 }
 
-// Helper function to extract metadata from M4A files  
+// Helper function to extract metadata from M4A files
 func extractMetadataFromM4A(filePath string) (*Metadata, error) {
 	// For M4A files, we'll need to use a different library or ffprobe
 	// For now, return basic info from filename
 	filename := filepath.Base(filePath)
 	nameWithoutExt := strings.TrimSuffix(filename, filepath.Ext(filename))
-	
+
 	// Try to parse "Artist - Title" format
 	parts := strings.Split(nameWithoutExt, " - ")
 	if len(parts) >= 2 {
@@ -376,9 +346,8 @@ func extractMetadataFromM4A(filePath string) (*Metadata, error) {
 			Title:  strings.TrimSpace(parts[1]),
 		}, nil
 	}
-	
+
 	return &Metadata{
 		Title: nameWithoutExt,
 	}, nil
 }
-
