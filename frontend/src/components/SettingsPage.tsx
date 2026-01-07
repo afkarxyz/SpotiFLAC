@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderOpen, Save, RotateCcw, Info } from "lucide-react";
+import { FolderOpen, Save, RotateCcw, Info, Database } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
-import { SelectFolder } from "../../wailsjs/go/main/App";
+import { SelectFolder, SelectDatabaseFile, TestDatabaseConnection } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 
 // Service Icons
@@ -121,6 +121,32 @@ export function SettingsPage() {
     }
   };
 
+  const handleBrowseDatabaseFile = async () => {
+    try {
+      const selectedPath = await SelectDatabaseFile();
+      if (selectedPath && selectedPath.trim() !== "") {
+        setTempSettings((prev) => ({ ...prev, databasePath: selectedPath }));
+      }
+    } catch (error) {
+      console.error("Error selecting database file:", error);
+      toast.error(`Error selecting database file: ${error}`);
+    }
+  };
+
+  const handleTestDatabase = async () => {
+    if (!tempSettings.databasePath) {
+      toast.error("Please select a database file first");
+      return;
+    }
+
+    try {
+      const result = await TestDatabaseConnection(tempSettings.databasePath);
+      toast.success(result);
+    } catch (error) {
+      toast.error(`Database connection failed: ${error}`);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Settings</h1>
@@ -143,6 +169,46 @@ export function SettingsPage() {
                 Browse
               </Button>
             </div>
+          </div>
+
+          {/* Database Path */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="database-path">Database Path</Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p className="text-xs max-w-xs">
+                    Optional: Point to a local SQLite database file (.db/.sqlite) with track ISRCs.
+                    If configured, the app will query this database first before falling back to Spotify API.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <div className="flex gap-2">
+              <InputWithContext
+                id="database-path"
+                value={tempSettings.databasePath}
+                onChange={(e) => setTempSettings((prev) => ({ ...prev, databasePath: e.target.value }))}
+                placeholder="C:\Music\spotify_clean.db (optional)"
+              />
+              <Button type="button" onClick={handleBrowseDatabaseFile} className="gap-1.5">
+                <Database className="h-4 w-4" />
+                Browse
+              </Button>
+              {tempSettings.databasePath && (
+                <Button type="button" variant="outline" onClick={handleTestDatabase} className="gap-1.5">
+                  Test
+                </Button>
+              )}
+            </div>
+            {tempSettings.databasePath && (
+              <p className="text-xs text-muted-foreground">
+                Database configured - will be queried before Spotify API
+              </p>
+            )}
           </div>
 
           {/* Theme Mode */}

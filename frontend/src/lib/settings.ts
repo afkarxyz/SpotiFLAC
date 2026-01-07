@@ -10,6 +10,7 @@ export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-
 
 export interface Settings {
   downloadPath: string;
+  databasePath: string; // Path to local SQLite database file
   downloader: "auto" | "tidal" | "qobuz" | "amazon";
   theme: string;
   themeMode: "auto" | "light" | "dark";
@@ -94,6 +95,7 @@ function detectOS(): "Windows" | "linux/MacOS" {
 
 export const DEFAULT_SETTINGS: Settings = {
   downloadPath: "",
+  databasePath: "", // Empty = fallback to Spotify API
   downloader: "auto",
   theme: "yellow",
   themeMode: "auto",

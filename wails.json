@@ -16,5 +16,6 @@
   },
   "wailsjsdir": "./frontend",
   "assetdir": "./frontend/dist",
-  "reloaddirs": "./frontend/src"
+  "reloaddirs": "./frontend/src",
+  "build:env": "CGO_ENABLED=1"
 }

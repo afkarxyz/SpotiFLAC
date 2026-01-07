@@ -549,7 +549,7 @@ function App() {
       case "file-manager":
         return <FileManagerPage />;
       case "csv-import":
-        return <CSVImportPage onDownloadTrack={download.handleDownloadTrack} />;
+        return null; // Rendered separately to keep mounted
       default:
         return (
           <>
@@ -691,7 +691,12 @@ function App() {
         {/* Main content area with sidebar offset */}
         <div className="flex-1 ml-14 mt-10 p-4 md:p-8">
           <div className="max-w-4xl mx-auto space-y-6">
-            {renderPage()}
+            {/* Keep CSV Import Page mounted to preserve download state */}
+            <div style={{ display: currentPage === "csv-import" ? "block" : "none" }}>
+              <CSVImportPage onDownloadTrack={download.handleDownloadTrack} />
+            </div>
+            {/* Render other pages normally */}
+            {currentPage !== "csv-import" && renderPage()}
           </div>
         </div>
 

@@ -280,3 +280,18 @@ export interface CSVBatchDownloadResponse {
   skipped_tracks: number;
   error?: string;
 }
+
+export interface CheckTrackExistsRequest {
+  track_name: string;
+  artist_name: string;
+  album_name?: string;
+  output_dir: string;
+  filename_format?: string;
+  track_number?: boolean;
+  position?: number;
+}
+
+export interface CheckTrackExistsResponse {
+  exists: boolean;
+  file_path?: string;
+}

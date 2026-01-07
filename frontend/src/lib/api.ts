@@ -7,8 +7,10 @@ import type {
   LyricsDownloadResponse,
   CoverDownloadRequest,
   CoverDownloadResponse,
+  CheckTrackExistsRequest,
+  CheckTrackExistsResponse,
 } from "@/types/api";
-import { GetSpotifyMetadata, DownloadTrack, DownloadLyrics, DownloadCover } from "../../wailsjs/go/main/App";
+import { GetSpotifyMetadata, DownloadTrack, DownloadLyrics, DownloadCover, CheckTrackExists } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
 
 export async function fetchSpotifyMetadata(
@@ -56,4 +58,11 @@ export async function downloadCover(
 ): Promise<CoverDownloadResponse> {
   const req = new main.CoverDownloadRequest(request);
   return await DownloadCover(req);
+}
+
+export async function checkTrackExists(
+  request: CheckTrackExistsRequest
+): Promise<CheckTrackExistsResponse> {
+  const req = new main.CheckTrackExistsRequest(request);
+  return await CheckTrackExists(req);
 }

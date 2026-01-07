@@ -76,3 +76,31 @@ func SelectFileDialog(ctx context.Context) (string, error) {
 
 	return selectedFile, nil
 }
+
+func SelectDatabaseFileDialog(ctx context.Context) (string, error) {
+	options := wailsRuntime.OpenDialogOptions{
+		Title: "Select Database File",
+		Filters: []wailsRuntime.FileFilter{
+			{
+				DisplayName: "SQLite Database Files (*.db;*.sqlite;*.sqlite3)",
+				Pattern:     "*.db;*.sqlite;*.sqlite3",
+			},
+			{
+				DisplayName: "All Files (*.*)",
+				Pattern:     "*.*",
+			},
+		},
+	}
+
+	selectedFile, err := wailsRuntime.OpenFileDialog(ctx, options)
+	if err != nil {
+		return "", err
+	}
+
+	// If user cancelled, selectedFile will be empty
+	if selectedFile == "" {
+		return "", nil
+	}
+
+	return selectedFile, nil
+}
