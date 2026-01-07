@@ -178,3 +178,75 @@ type CSVParseResult struct {
 	Tracks     []CSVTrack `json:"tracks"`
 	Error      string     `json:"error,omitempty"`
 }
+
+// CSVFileParseResult represents the result of parsing a single CSV file with its filename
+type CSVFileParseResult struct {
+	FilePath   string     `json:"file_path"`
+	FileName   string     `json:"file_name"`
+	Success    bool       `json:"success"`
+	TrackCount int        `json:"track_count"`
+	Tracks     []CSVTrack `json:"tracks"`
+	Error      string     `json:"error,omitempty"`
+}
+
+// BatchCSVParseResult represents the result of parsing multiple CSV files
+type BatchCSVParseResult struct {
+	Success         bool                 `json:"success"`
+	TotalFiles      int                  `json:"total_files"`
+	SuccessfulFiles int                  `json:"successful_files"`
+	TotalTracks     int                  `json:"total_tracks"`
+	Files           []CSVFileParseResult `json:"files"`
+	Error           string               `json:"error,omitempty"`
+}
+
+// ParseMultipleCSVFiles parses multiple CSV files and returns aggregated results
+func ParseMultipleCSVFiles(filePaths []string) BatchCSVParseResult {
+	fmt.Printf("\n[Batch CSV Parser] Starting batch parse for %d files\n", len(filePaths))
+
+	result := BatchCSVParseResult{
+		Success:    true,
+		TotalFiles: len(filePaths),
+		Files:      make([]CSVFileParseResult, 0, len(filePaths)),
+	}
+
+	for i, filePath := range filePaths {
+		fmt.Printf("\n[Batch CSV Parser] Processing file %d/%d: %s\n", i+1, len(filePaths), filePath)
+
+		// Extract filename from path
+		parts := strings.Split(filePath, string(os.PathSeparator))
+		fileName := parts[len(parts)-1]
+
+		fileResult := CSVFileParseResult{
+			FilePath: filePath,
+			FileName: fileName,
+		}
+
+		// Parse the CSV file
+		tracks, err := ParseCSVPlaylist(filePath)
+		if err != nil {
+			fmt.Printf("[Batch CSV Parser] ERROR parsing file %s: %v\n", fileName, err)
+			fileResult.Success = false
+			fileResult.Error = err.Error()
+		} else {
+			fmt.Printf("[Batch CSV Parser] Successfully parsed %d tracks from %s\n", len(tracks), fileName)
+			fileResult.Success = true
+			fileResult.TrackCount = len(tracks)
+			fileResult.Tracks = tracks
+			result.SuccessfulFiles++
+			result.TotalTracks += len(tracks)
+		}
+
+		result.Files = append(result.Files, fileResult)
+	}
+
+	if result.SuccessfulFiles == 0 {
+		result.Success = false
+		result.Error = "Failed to parse any CSV files"
+		fmt.Println("[Batch CSV Parser] ERROR: No files were successfully parsed")
+	} else {
+		fmt.Printf("[Batch CSV Parser] Completed: %d/%d files successful, %d total tracks\n",
+			result.SuccessfulFiles, result.TotalFiles, result.TotalTracks)
+	}
+
+	return result
+}

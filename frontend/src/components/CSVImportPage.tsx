@@ -4,13 +4,13 @@ import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Upload, FileText, Download, CheckCircle, XCircle, Loader2, X, Image } from "lucide-react";
+import { Upload, FileText, Download, CheckCircle, XCircle, Loader2, X, Image, Files } from "lucide-react";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { getSettings } from "@/lib/settings";
 import { downloadCover, checkTrackExists } from "@/lib/api";
 import { logger } from "@/lib/logger";
 import type { CSVTrack } from "@/types/api";
-import { SelectCSVFile, ParseCSVPlaylist, GetISRCWithFallback, GetSpotifyMetadata } from "../../wailsjs/go/main/App";
+import { SelectCSVFile, SelectMultipleCSVFiles, ParseCSVPlaylist, ParseMultipleCSVFiles, GetISRCWithFallback, GetSpotifyMetadata } from "../../wailsjs/go/main/App";
 
 interface CSVImportPageProps {
   onDownloadTrack: (
@@ -31,10 +31,22 @@ interface CSVImportPageProps {
   ) => void;
 }
 
+interface CSVFileInfo {
+  filePath: string;
+  fileName: string;
+  playlistName: string;
+  tracks: CSVTrack[];
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error?: string;
+}
+
 export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
   const [csvFilePath, setCSVFilePath] = useState<string>("");
   const [playlistName, setPlaylistName] = useState<string>("");
   const [tracks, setTracks] = useState<CSVTrack[]>([]);
+  const [csvFiles, setCsvFiles] = useState<CSVFileInfo[]>([]);
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const [currentFileIndex, setCurrentFileIndex] = useState<number>(-1);
   const [isLoading, setIsLoading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
@@ -60,6 +72,8 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
       const filePath = await SelectCSVFile();
       if (filePath) {
         setCSVFilePath(filePath);
+        setIsBatchMode(false);
+        setCsvFiles([]);
         
         // Extract playlist name from filename (remove path and .csv extension)
         const fileName = filePath.split(/[/\\]/).pop() || "";
@@ -71,6 +85,47 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
     } catch (err) {
       toast.error("Failed to select CSV file");
       console.error(err);
+    }
+  }, []);
+
+  const handleSelectMultipleCSV = useCallback(async () => {
+    try {
+      const filePaths = await SelectMultipleCSVFiles();
+      if (filePaths && filePaths.length > 0) {
+        setIsBatchMode(true);
+        setCSVFilePath("");
+        setTracks([]);
+        setPlaylistName("");
+        
+        setIsLoading(true);
+        const result = await ParseMultipleCSVFiles(filePaths);
+        
+        if (result.success && result.files) {
+          const fileInfos: CSVFileInfo[] = result.files.map(file => {
+            const fileName = file.file_name || file.file_path.split(/[/\\]/).pop() || "";
+            const nameWithoutExt = fileName.replace(/\.csv$/i, "");
+            
+            return {
+              filePath: file.file_path,
+              fileName: fileName,
+              playlistName: nameWithoutExt,
+              tracks: file.tracks || [],
+              status: file.success ? 'pending' : 'failed',
+              error: file.error
+            };
+          });
+          
+          setCsvFiles(fileInfos);
+          toast.success(`Loaded ${result.successful_files}/${result.total_files} CSV files with ${result.total_tracks} total tracks`);
+        } else {
+          toast.error(result.error || "Failed to parse CSV files");
+        }
+        setIsLoading(false);
+      }
+    } catch (err) {
+      toast.error("Failed to select CSV files");
+      console.error(err);
+      setIsLoading(false);
     }
   }, []);
 
@@ -93,6 +148,198 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
   }, []);
 
   const handleDownloadAll = useCallback(async () => {
+    if (isBatchMode && csvFiles.length > 0) {
+      // Batch mode: process CSV files one by one
+      await handleDownloadAllBatch();
+    } else if (tracks.length > 0) {
+      // Single mode: download all tracks from current CSV
+      await handleDownloadAllSingle();
+    } else {
+      toast.error("No tracks to download");
+    }
+  }, [isBatchMode, csvFiles, tracks]);
+
+  const handleDownloadAllBatch = useCallback(async () => {
+    const filesToProcess = csvFiles.filter(f => f.status === 'pending' || f.status === 'failed');
+    
+    if (filesToProcess.length === 0) {
+      toast.error("No CSV files to process");
+      return;
+    }
+
+    setIsDownloading(true);
+    shouldStopDownloadRef.current = false;
+
+    let totalSuccessCount = 0;
+    let totalFailCount = 0;
+    let totalSkippedCount = 0;
+
+    for (let i = 0; i < csvFiles.length; i++) {
+      if (shouldStopDownloadRef.current) {
+        toast.info(`Batch download stopped at file ${i + 1}/${csvFiles.length}`);
+        break;
+      }
+
+      const fileInfo = csvFiles[i];
+      if (fileInfo.status !== 'pending' && fileInfo.status !== 'failed') {
+        continue;
+      }
+
+      setCurrentFileIndex(i);
+      setCsvFiles(prev => prev.map((f, idx) => 
+        idx === i ? { ...f, status: 'processing' as const } : f
+      ));
+
+      logger.info(`[Batch CSV] Processing file ${i + 1}/${csvFiles.length}: ${fileInfo.fileName}`);
+      toast.info(`Processing ${fileInfo.fileName} (${i + 1}/${csvFiles.length})`);
+
+      try {
+        const { successCount, failCount, skippedCount } = await processCSVFile(fileInfo);
+        
+        totalSuccessCount += successCount;
+        totalFailCount += failCount;
+        totalSkippedCount += skippedCount;
+
+        setCsvFiles(prev => prev.map((f, idx) => 
+          idx === i ? { ...f, status: 'completed' as const } : f
+        ));
+
+        logger.success(`[Batch CSV] Completed ${fileInfo.fileName}: ${successCount} success, ${failCount} failed, ${skippedCount} skipped`);
+      } catch (err) {
+        logger.error(`[Batch CSV] Failed to process ${fileInfo.fileName}: ${err}`);
+        setCsvFiles(prev => prev.map((f, idx) => 
+          idx === i ? { ...f, status: 'failed' as const, error: String(err) } : f
+        ));
+      }
+    }
+
+    setIsDownloading(false);
+    setCurrentFileIndex(-1);
+
+    if (!shouldStopDownloadRef.current) {
+      if (totalFailCount === 0 && totalSkippedCount === 0) {
+        toast.success(`Batch complete! Downloaded ${totalSuccessCount} tracks from ${csvFiles.length} files`);
+      } else {
+        toast.warning(`Batch complete: ${totalSuccessCount} downloaded, ${totalSkippedCount} existed, ${totalFailCount} failed`);
+      }
+    }
+  }, [csvFiles]);
+
+  const processCSVFile = useCallback(async (fileInfo: CSVFileInfo) => {
+    const counters = {
+      successCount: 0,
+      failCount: 0,
+      skippedCount: 0,
+    };
+
+    const settings = getSettings();
+    const concurrency = settings.enableParallelDownloads ? settings.concurrentDownloads : 1;
+
+    let currentIndex = 0;
+    const activeDownloads = new Set<Promise<void>>();
+
+    const processTrack = async (track: CSVTrack, index: number) => {
+      if (shouldStopDownloadRef.current) {
+        return;
+      }
+
+      try {
+        const existsCheck = await checkTrackExists({
+          track_name: track.track_name,
+          artist_name: track.artist_name,
+          album_name: track.album_name,
+          output_dir: settings.downloadPath + (fileInfo.playlistName ? `/${fileInfo.playlistName}` : ""),
+          filename_format: settings.filenameTemplate || "{title}",
+          track_number: settings.trackNumber,
+          position: index + 1,
+        });
+
+        if (existsCheck.exists) {
+          counters.skippedCount++;
+          return;
+        }
+
+        const isrcResponse = await GetISRCWithFallback({
+          spotify_id: track.spotify_id,
+          database_path: settings.databasePath || "",
+          spotify_url: `https://open.spotify.com/track/${track.spotify_id}`,
+        });
+
+        if (!isrcResponse.success || !isrcResponse.isrc) {
+          throw new Error(isrcResponse.error || "Failed to get ISRC");
+        }
+
+        let trackData: any;
+        if (isrcResponse.source === "database") {
+          trackData = {
+            isrc: isrcResponse.isrc,
+            album_artist: track.artist_name,
+            images: "",
+            track_number: 0,
+            disc_number: 1,
+            total_tracks: 0,
+          };
+        } else {
+          const metadata = JSON.parse(isrcResponse.track_data);
+          trackData = metadata.track;
+        }
+        
+        let coverUrl = trackData.images || "";
+        if (Array.isArray(coverUrl) && coverUrl.length > 0) {
+          coverUrl = coverUrl[0].url || coverUrl[0];
+        }
+        
+        await onDownloadTrack(
+          isrcResponse.isrc,
+          track.track_name,
+          track.artist_name,
+          track.album_name,
+          track.spotify_id,
+          fileInfo.playlistName,
+          track.duration_ms,
+          index + 1,
+          trackData.album_artist || track.artist_name,
+          track.release_date,
+          coverUrl,
+          trackData.track_number,
+          trackData.disc_number,
+          trackData.total_tracks
+        );
+
+        counters.successCount++;
+      } catch (err) {
+        console.error(`Failed to download track ${track.track_name}:`, err);
+        counters.failCount++;
+      }
+    };
+
+    while (currentIndex < fileInfo.tracks.length || activeDownloads.size > 0) {
+      if (shouldStopDownloadRef.current) {
+        await Promise.all(Array.from(activeDownloads));
+        break;
+      }
+
+      while (activeDownloads.size < concurrency && currentIndex < fileInfo.tracks.length) {
+        const track = fileInfo.tracks[currentIndex];
+        const index = currentIndex;
+
+        const downloadPromise = processTrack(track, index).then(() => {
+          activeDownloads.delete(downloadPromise);
+        });
+
+        activeDownloads.add(downloadPromise);
+        currentIndex++;
+      }
+
+      if (activeDownloads.size > 0) {
+        await Promise.race(Array.from(activeDownloads));
+      }
+    }
+
+    return counters;
+  }, [onDownloadTrack]);
+
+  const handleDownloadAllSingle = useCallback(async () => {
     if (tracks.length === 0) {
       toast.error("No tracks to download");
       return;
@@ -494,20 +741,97 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
       <div>
         <h2 className="text-2xl font-bold mb-2">CSV Playlist Import</h2>
         <p className="text-muted-foreground">
-          Import and download tracks from a Spotify CSV export file
+          Import and download tracks from Spotify CSV export files
         </p>
       </div>
 
       <Card className="p-6">
         <div className="space-y-4">
-          <div>
+          <div className="flex gap-2">
             <Button onClick={handleSelectCSV} disabled={isLoading || isDownloading}>
               <Upload className="h-4 w-4 mr-2" />
-              Select CSV File
+              Select Single CSV File
+            </Button>
+            <Button onClick={handleSelectMultipleCSV} disabled={isLoading || isDownloading} variant="outline">
+              <Files className="h-4 w-4 mr-2" />
+              Select Multiple CSV Files
             </Button>
           </div>
 
-          {csvFilePath && (
+          {isBatchMode && csvFiles.length > 0 && (
+            <div className="space-y-4">
+              <div className="border-t pt-4">
+                <h3 className="font-semibold mb-3">
+                  Batch Mode: {csvFiles.length} CSV file{csvFiles.length !== 1 ? 's' : ''} loaded
+                </h3>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {csvFiles.map((file, index) => (
+                    <div
+                      key={file.filePath}
+                      className={`p-3 border rounded-lg ${
+                        currentFileIndex === index ? 'bg-blue-50 dark:bg-blue-950 border-blue-300' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">{file.fileName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {file.tracks.length} track{file.tracks.length !== 1 ? 's' : ''} • Folder: {file.playlistName}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {file.status === 'completed' && (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          )}
+                          {file.status === 'failed' && (
+                            <XCircle className="h-5 w-5 text-red-500" />
+                          )}
+                          {file.status === 'processing' && (
+                            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                          )}
+                          {file.status === 'pending' && (
+                            <span className="text-xs text-muted-foreground">Pending</span>
+                          )}
+                        </div>
+                      </div>
+                      {file.error && (
+                        <p className="text-xs text-red-500 mt-1">{file.error}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex gap-2 mt-4">
+                  {isDownloading ? (
+                    <>
+                      <Button
+                        onClick={handleStopDownload}
+                        variant="destructive"
+                        size="lg"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Stop Batch Download
+                      </Button>
+                      <Button disabled size="lg">
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing CSV Files...
+                      </Button>
+                    </>
+                  ) : (
+                    <Button onClick={handleDownloadAll} size="lg">
+                      <Download className="h-4 w-4 mr-2" />
+                      Download All ({csvFiles.reduce((sum, f) => sum + f.tracks.length, 0)} tracks)
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isBatchMode && csvFilePath && (
             <div className="flex items-center gap-2 text-sm">
               <FileText className="h-4 w-4 text-muted-foreground" />
               <span className="text-muted-foreground">Selected file:</span>
@@ -515,7 +839,7 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
             </div>
           )}
 
-          {csvFilePath && (
+          {!isBatchMode && csvFilePath && (
             <div className="space-y-2">
               <Label htmlFor="playlist-name">Playlist/Folder Name</Label>
               <Input
@@ -532,7 +856,7 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
             </div>
           )}
 
-          {tracks.length > 0 && (
+          {!isBatchMode && tracks.length > 0 && (
             <>
               <div className="border-t pt-4">
                 <div className="flex items-center justify-between mb-4">
@@ -673,10 +997,11 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
       <Card className="p-6 bg-muted/30">
         <h3 className="font-semibold mb-2">How to use:</h3>
         <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-          <li>Export your Spotify playlist as a CSV file</li>
-          <li>Click "Select CSV File" to choose your exported playlist</li>
+          <li>Export your Spotify playlist(s) as CSV file(s)</li>
+          <li>Click "Select Single CSV File" for one playlist, or "Select Multiple CSV Files" to process several playlists at once</li>
           <li>Review the loaded tracks in the table</li>
           <li>Click "Download All Tracks" to batch download, or use individual download buttons</li>
+          <li>In batch mode, the app will process each CSV file sequentially with its own folder</li>
           <li>The app will fetch metadata and download each track automatically</li>
         </ol>
       </Card>

@@ -71,3 +71,24 @@ func SelectCSVFileDialog(ctx context.Context) (string, error) {
 	return file, nil
 }
 
+// SelectMultipleCSVFiles opens a file dialog to select multiple CSV files
+func SelectMultipleCSVFiles(ctx context.Context) ([]string, error) {
+	files, err := runtime.OpenMultipleFilesDialog(ctx, runtime.OpenDialogOptions{
+		Title: "Select CSV Playlist Files",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "CSV Files (*.csv)",
+				Pattern:     "*.csv",
+			},
+			{
+				DisplayName: "All Files (*.*)",
+				Pattern:     "*.*",
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return files, nil
+}
+

@@ -971,6 +971,11 @@ func (a *App) SelectCSVFile() (string, error) {
 	return backend.SelectCSVFileDialog(a.ctx)
 }
 
+// SelectMultipleCSVFiles opens a file dialog to select multiple CSV files
+func (a *App) SelectMultipleCSVFiles() ([]string, error) {
+	return backend.SelectMultipleCSVFiles(a.ctx)
+}
+
 // ParseCSVPlaylist parses a CSV playlist file and returns tracks
 func (a *App) ParseCSVPlaylist(filePath string) (backend.CSVParseResult, error) {
 	if filePath == "" {
@@ -1002,6 +1007,29 @@ func (a *App) ParseCSVPlaylist(filePath string) (backend.CSVParseResult, error) 
 		TrackCount: len(tracks),
 		Tracks:     tracks,
 	}, nil
+}
+
+// ParseMultipleCSVFiles parses multiple CSV playlist files and returns batch results
+func (a *App) ParseMultipleCSVFiles(filePaths []string) (backend.BatchCSVParseResult, error) {
+	if len(filePaths) == 0 {
+		return backend.BatchCSVParseResult{
+			Success: false,
+			Error:   "No file paths provided",
+		}, fmt.Errorf("no file paths provided")
+	}
+
+	fmt.Printf("\n========== BATCH CSV PARSE START ==========\n")
+	fmt.Printf("Number of files: %d\n", len(filePaths))
+
+	result := backend.ParseMultipleCSVFiles(filePaths)
+
+	fmt.Printf("========== BATCH CSV PARSE END ==========\n\n")
+
+	if !result.Success {
+		return result, fmt.Errorf(result.Error)
+	}
+
+	return result, nil
 }
 
 // CheckTrackExistsRequest represents a request to check if a track file already exists
