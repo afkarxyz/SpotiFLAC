@@ -190,6 +190,33 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 				continue
 			}
 
+			// Fallback: parse filename if metadata is empty
+			if metadata.Title == "" || metadata.Artist == "" {
+				fmt.Printf("[Library Verifier] Metadata empty, parsing filename...\n")
+				filename := filepath.Base(track.FilePath)
+				filename = strings.TrimSuffix(filename, filepath.Ext(filename))
+				
+				// Try to parse "Title - Artist" format
+				if strings.Contains(filename, " - ") {
+					parts := strings.SplitN(filename, " - ", 2)
+					if len(parts) == 2 {
+						if metadata.Title == "" {
+							metadata.Title = strings.TrimSpace(parts[0])
+						}
+						if metadata.Artist == "" {
+							metadata.Artist = strings.TrimSpace(parts[1])
+						}
+						fmt.Printf("[Library Verifier] Parsed from filename: '%s' - '%s'\n", metadata.Title, metadata.Artist)
+					}
+				}
+				
+				// If still empty, use the whole filename as title
+				if metadata.Title == "" {
+					metadata.Title = filename
+					fmt.Printf("[Library Verifier] Using filename as title: '%s'\n", metadata.Title)
+				}
+			}
+
 			// Try to get cover from database first (much faster)
 			var coverURL string
 			if req.DatabasePath != "" && metadata.Album != "" {
