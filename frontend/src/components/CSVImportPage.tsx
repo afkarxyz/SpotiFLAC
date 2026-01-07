@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
 import { Input } from "./ui/input";
@@ -42,8 +43,19 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
   const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
   const [isDownloadingCovers, setIsDownloadingCovers] = useState(false);
   const shouldStopDownloadRef = useRef(false);
+  
+  // Ref for the scrollable parent element
+  const parentRef = useRef<HTMLDivElement>(null);
+  
+  // Virtual scrolling for large lists
+  const rowVirtualizer = useVirtualizer({
+    count: tracks.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 53, // Estimated row height in pixels
+    overscan: 10, // Number of items to render outside of the visible area
+  });
 
-  const handleSelectCSV = async () => {
+  const handleSelectCSV = useCallback(async () => {
     try {
       const filePath = await SelectCSVFile();
       if (filePath) {
@@ -60,9 +72,9 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
       toast.error("Failed to select CSV file");
       console.error(err);
     }
-  };
+  }, []);
 
-  const parseCSV = async (filePath: string) => {
+  const parseCSV = useCallback(async (filePath: string) => {
     setIsLoading(true);
     try {
       const result = await ParseCSVPlaylist(filePath);
@@ -78,9 +90,9 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleDownloadAll = async () => {
+  const handleDownloadAll = useCallback(async () => {
     if (tracks.length === 0) {
       toast.error("No tracks to download");
       return;
@@ -245,14 +257,14 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
         toast.warning(`Downloaded ${counters.successCount} tracks, ${counters.skippedCount} existed, ${counters.failCount} failed`);
       }
     }
-  };
+  }, [tracks, playlistName, onDownloadTrack]);
 
-  const handleStopDownload = () => {
+  const handleStopDownload = useCallback(() => {
     shouldStopDownloadRef.current = true;
     toast.info("Stopping download...");
-  };
+  }, []);
 
-  const handleDownloadCoversOnly = async () => {
+  const handleDownloadCoversOnly = useCallback(async () => {
     if (tracks.length === 0) {
       toast.error("No tracks to download covers for");
       return;
@@ -396,9 +408,9 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
         toast.warning(`Downloaded ${counters.successCount} covers, ${counters.skippedCount} existed, ${counters.failCount} failed`);
       }
     }
-  };
+  }, [tracks, playlistName]);
 
-  const handleDownloadSingle = async (track: CSVTrack, index: number) => {
+  const handleDownloadSingle = useCallback(async (track: CSVTrack, index: number) => {
     if (downloadedTracks.has(track.spotify_id) || downloadingTrack) {
       return;
     }
@@ -472,7 +484,10 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
     } finally {
       setDownloadingTrack(null);
     }
-  };
+  }, [downloadedTracks, downloadingTrack, playlistName, onDownloadTrack]);
+
+  // Virtual items for rendering
+  const virtualItems = rowVirtualizer.getVirtualItems();
 
   return (
     <div className="p-6 space-y-6">
@@ -570,64 +585,78 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
                   </div>
                 </div>
 
-                <div className="max-h-[400px] overflow-y-auto border rounded-lg">
-                  <table className="w-full">
-                    <thead className="bg-muted sticky top-0">
-                      <tr>
-                        <th className="p-3 text-left text-sm font-medium">Status</th>
-                        <th className="p-3 text-left text-sm font-medium">Track</th>
-                        <th className="p-3 text-left text-sm font-medium">Artist</th>
-                        <th className="p-3 text-left text-sm font-medium">Album</th>
-                        <th className="p-3 text-center text-sm font-medium">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tracks.map((track, index) => (
-                        <tr
-                          key={track.spotify_id || index}
-                          className="border-b hover:bg-muted/30"
-                        >
-                          <td className="p-3">
-                            {downloadedTracks.has(track.spotify_id) ? (
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                            ) : failedTracks.has(track.spotify_id) ? (
-                              <XCircle className="h-4 w-4 text-red-500" />
-                            ) : (isDownloading && downloadProgress.current === index + 1) ||
-                              downloadingTrack === track.spotify_id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : null}
-                          </td>
-                          <td className="p-3 text-sm">{track.track_name}</td>
-                          <td className="p-3 text-sm text-muted-foreground">
-                            {track.artist_name}
-                          </td>
-                          <td className="p-3 text-sm text-muted-foreground">
-                            {track.album_name}
-                          </td>
-                          <td className="p-3 text-center">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDownloadSingle(track, index)}
-                              disabled={
-                                downloadingTrack !== null ||
-                                isDownloading ||
-                                downloadedTracks.has(track.spotify_id)
-                              }
-                            >
-                              {downloadingTrack === track.spotify_id ? (
+                <div 
+                  ref={parentRef}
+                  className="max-h-[400px] overflow-y-auto border rounded-lg"
+                >
+                  <div className="w-full">
+                    {/* Header */}
+                    <div className="bg-muted sticky top-0 z-10 grid grid-cols-[60px_1fr_1fr_1fr_100px] gap-3 p-3 border-b font-medium text-sm">
+                      <div className="text-left">Status</div>
+                      <div className="text-left">Track</div>
+                      <div className="text-left">Artist</div>
+                      <div className="text-left">Album</div>
+                      <div className="text-center">Action</div>
+                    </div>
+                    
+                    {/* Virtual scrolling container */}
+                    <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: 'relative' }}>
+                      {virtualItems.map((virtualRow) => {
+                        const track = tracks[virtualRow.index];
+                        const isDownloaded = downloadedTracks.has(track.spotify_id);
+                        const isFailed = failedTracks.has(track.spotify_id);
+                        const isDownloadingThis = downloadingTrack === track.spotify_id;
+                        
+                        return (
+                          <div
+                            key={track.spotify_id || virtualRow.index}
+                            className="border-b hover:bg-muted/30 absolute w-full grid grid-cols-[60px_1fr_1fr_1fr_100px] gap-3 p-3 items-center"
+                            style={{
+                              height: `${virtualRow.size}px`,
+                              transform: `translateY(${virtualRow.start}px)`,
+                            }}
+                          >
+                            <div className="flex items-center">
+                              {isDownloaded ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : isFailed ? (
+                                <XCircle className="h-4 w-4 text-red-500" />
+                              ) : isDownloadingThis ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : downloadedTracks.has(track.spotify_id) ? (
-                                <CheckCircle className="h-4 w-4" />
-                              ) : (
-                                <Download className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              ) : null}
+                            </div>
+                            <div className="text-sm truncate">{track.track_name}</div>
+                            <div className="text-sm text-muted-foreground truncate">
+                              {track.artist_name}
+                            </div>
+                            <div className="text-sm text-muted-foreground truncate">
+                              {track.album_name}
+                            </div>
+                            <div className="flex justify-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadSingle(track, virtualRow.index)}
+                                disabled={
+                                  downloadingTrack !== null ||
+                                  isDownloading ||
+                                  isDownloaded
+                                }
+                              >
+                                {isDownloadingThis ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : isDownloaded ? (
+                                  <CheckCircle className="h-4 w-4" />
+                                ) : (
+                                  <Download className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </>
