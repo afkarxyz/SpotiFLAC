@@ -219,11 +219,11 @@ export function SettingsPage() {
 
       if (result.success) {
         const downloaded = [];
-        if (checkCovers && result.downloaded_covers > 0) {
-          downloaded.push(`${result.downloaded_covers} covers`);
+        if (checkCovers && result.covers_downloaded > 0) {
+          downloaded.push(`${result.covers_downloaded} covers`);
         }
-        if (checkLyrics && result.downloaded_lyrics > 0) {
-          downloaded.push(`${result.downloaded_lyrics} lyrics`);
+        if (checkLyrics && result.lyrics_downloaded > 0) {
+          downloaded.push(`${result.lyrics_downloaded} lyrics`);
         }
 
         if (downloaded.length > 0) {
