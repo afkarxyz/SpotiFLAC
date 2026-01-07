@@ -271,14 +271,29 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
 
         let trackData: any;
         if (isrcResponse.source === "database") {
-          trackData = {
-            isrc: isrcResponse.isrc,
-            album_artist: track.artist_name,
-            images: "",
-            track_number: 0,
-            disc_number: 1,
-            total_tracks: 0,
-          };
+          // ISRC from database - we need to fetch metadata for cover URL and track numbers
+          try {
+            const metadataJson = await GetSpotifyMetadata({
+              url: `https://open.spotify.com/track/${track.spotify_id}`,
+              batch: false,
+              delay: 0,
+              timeout: 30,
+            });
+            const metadata = JSON.parse(metadataJson);
+            trackData = metadata.track || {};
+            // Fallback to CSV data if metadata fetch fails
+            if (!trackData.album_artist) trackData.album_artist = track.artist_name;
+          } catch (metadataErr) {
+            console.warn(`Failed to fetch metadata for ${track.track_name}, using CSV data:`, metadataErr);
+            trackData = {
+              isrc: isrcResponse.isrc,
+              album_artist: track.artist_name,
+              images: "",
+              track_number: 0,
+              disc_number: 1,
+              total_tracks: 0,
+            };
+          }
         } else {
           const metadata = JSON.parse(isrcResponse.track_data);
           trackData = metadata.track;
@@ -408,16 +423,29 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
         // Use the track data from CSV and Spotify API fallback if needed
         let trackData: any;
         if (isrcResponse.source === "database") {
-          // We have ISRC from database, but need cover URL etc. for download
-          // Use basic track data from CSV
-          trackData = {
-            isrc: isrcResponse.isrc,
-            album_artist: track.artist_name, // Use CSV artist as fallback
-            images: "", // Will be fetched during download if needed
-            track_number: 0,
-            disc_number: 1,
-            total_tracks: 0,
-          };
+          // ISRC from database - we need to fetch metadata for cover URL and track numbers
+          try {
+            const metadataJson = await GetSpotifyMetadata({
+              url: `https://open.spotify.com/track/${track.spotify_id}`,
+              batch: false,
+              delay: 0,
+              timeout: 30,
+            });
+            const metadata = JSON.parse(metadataJson);
+            trackData = metadata.track || {};
+            // Fallback to CSV data if metadata fetch fails
+            if (!trackData.album_artist) trackData.album_artist = track.artist_name;
+          } catch (metadataErr) {
+            console.warn(`Failed to fetch metadata for ${track.track_name}, using CSV data:`, metadataErr);
+            trackData = {
+              isrc: isrcResponse.isrc,
+              album_artist: track.artist_name,
+              images: "",
+              track_number: 0,
+              disc_number: 1,
+              total_tracks: 0,
+            };
+          }
         } else {
           // We got full metadata from API
           const metadata = JSON.parse(isrcResponse.track_data);
@@ -682,20 +710,34 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
       // Parse track data
       let trackData: any;
       if (isrcResponse.source === "database") {
-        // Basic data from database
-        trackData = {
-          isrc: isrcResponse.isrc,
-          album_artist: track.artist_name,
-          images: "",
-          track_number: 0,
-          disc_number: 1,
-          total_tracks: 0,
-        };
-      } else {
-        // Full metadata from API
-        const metadata = JSON.parse(isrcResponse.track_data);
-        trackData = metadata.track;
-      }
+          // ISRC from database - we need to fetch metadata for cover URL and track numbers
+          try {
+            const metadataJson = await GetSpotifyMetadata({
+              url: `https://open.spotify.com/track/${track.spotify_id}`,
+              batch: false,
+              delay: 0,
+              timeout: 30,
+            });
+            const metadata = JSON.parse(metadataJson);
+            trackData = metadata.track || {};
+            // Fallback to CSV data if metadata fetch fails
+            if (!trackData.album_artist) trackData.album_artist = track.artist_name;
+          } catch (metadataErr) {
+            console.warn(`Failed to fetch metadata for ${track.track_name}, using CSV data:`, metadataErr);
+            trackData = {
+              isrc: isrcResponse.isrc,
+              album_artist: track.artist_name,
+              images: "",
+              track_number: 0,
+              disc_number: 1,
+              total_tracks: 0,
+            };
+          }
+        } else {
+          // Full metadata from API
+          const metadata = JSON.parse(isrcResponse.track_data);
+          trackData = metadata.track;
+        }
       
       // Extract cover URL - handle both string and array formats
       let coverUrl = trackData.images || "";
