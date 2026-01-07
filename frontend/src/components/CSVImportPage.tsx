@@ -254,8 +254,48 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
           position: index + 1,
         });
 
+        // Track audio file exists - but we should still check for cover/lyrics
         if (existsCheck.exists) {
+          logger.info(`[CSV] Track exists, checking for missing cover/lyrics: ${track.track_name}`);
           counters.skippedCount++;
+          
+          // Fetch metadata for cover URL even when track exists
+          try {
+            const metadataJson = await GetSpotifyMetadata({
+              url: `https://open.spotify.com/track/${track.spotify_id}`,
+              batch: false,
+              delay: 0,
+              timeout: 30,
+            });
+            const metadata = JSON.parse(metadataJson);
+            const trackData = metadata.track || {};
+            
+            let coverUrl = trackData.images || "";
+            if (Array.isArray(coverUrl) && coverUrl.length > 0) {
+              coverUrl = coverUrl[0].url || coverUrl[0];
+            }
+            
+            // Download cover if available
+            if (coverUrl) {
+              await downloadCover({
+                cover_url: coverUrl,
+                track_name: track.track_name,
+                artist_name: track.artist_name,
+                album_name: track.album_name,
+                album_artist: trackData.album_artist || track.artist_name,
+                release_date: track.release_date || "",
+                output_dir: settings.downloadPath + (fileInfo.playlistName ? `/${fileInfo.playlistName}` : ""),
+                filename_format: settings.filenameTemplate || "{title}",
+                track_number: settings.trackNumber,
+                position: index + 1,
+                disc_number: trackData.disc_number || 0,
+              });
+              logger.debug(`[CSV] Cover check completed for: ${track.track_name}`);
+            }
+          } catch (coverErr) {
+            logger.warning(`[CSV] Failed to check/download cover for existing track ${track.track_name}: ${coverErr}`);
+          }
+          
           return;
         }
 
@@ -399,9 +439,48 @@ export function CSVImportPage({ onDownloadTrack }: CSVImportPageProps) {
         });
 
         if (existsCheck.exists) {
-          // File already exists, skip Spotify API call entirely
+          // Track audio file exists - but check for missing cover/lyrics
+          logger.info(`[CSV] Track exists, checking for missing cover/lyrics: ${track.track_name}`);
           setDownloadedTracks((prev) => new Set(prev).add(track.spotify_id));
           counters.skippedCount++;
+          
+          // Fetch metadata for cover URL even when track exists
+          try {
+            const metadataJson = await GetSpotifyMetadata({
+              url: `https://open.spotify.com/track/${track.spotify_id}`,
+              batch: false,
+              delay: 0,
+              timeout: 30,
+            });
+            const metadata = JSON.parse(metadataJson);
+            const trackData = metadata.track || {};
+            
+            let coverUrl = trackData.images || "";
+            if (Array.isArray(coverUrl) && coverUrl.length > 0) {
+              coverUrl = coverUrl[0].url || coverUrl[0];
+            }
+            
+            // Download cover if available
+            if (coverUrl) {
+              await downloadCover({
+                cover_url: coverUrl,
+                track_name: track.track_name,
+                artist_name: track.artist_name,
+                album_name: track.album_name,
+                album_artist: trackData.album_artist || track.artist_name,
+                release_date: track.release_date || "",
+                output_dir: settings.downloadPath + (playlistName ? `/${playlistName}` : ""),
+                filename_format: settings.filenameTemplate || "{title}",
+                track_number: settings.trackNumber,
+                position: index + 1,
+                disc_number: trackData.disc_number || 0,
+              });
+              logger.debug(`[CSV] Cover check completed for: ${track.track_name}`);
+            }
+          } catch (coverErr) {
+            logger.warning(`[CSV] Failed to check/download cover for existing track ${track.track_name}: ${coverErr}`);
+          }
+          
           return;
         }
 
