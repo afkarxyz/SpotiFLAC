@@ -211,7 +211,7 @@ func GetCoverByTrackFromDatabase(databasePath string, trackName string, artistNa
 		)
 		LIMIT 1
 	`
-	
+
 	// Try with exact match first
 	err = db.QueryRow(trackQuery, trackName, "%"+artistName+"%", artistName+"%").Scan(&albumRowID)
 

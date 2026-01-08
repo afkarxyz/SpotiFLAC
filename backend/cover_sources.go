@@ -14,11 +14,11 @@ import (
 type iTunesSearchResponse struct {
 	ResultCount int `json:"resultCount"`
 	Results     []struct {
-		TrackName        string `json:"trackName"`
-		ArtistName       string `json:"artistName"`
-		CollectionName   string `json:"collectionName"`
-		ArtworkUrl100    string `json:"artworkUrl100"`
-		ArtworkUrl600    string `json:"artworkUrl60"`
+		TrackName         string `json:"trackName"`
+		ArtistName        string `json:"artistName"`
+		CollectionName    string `json:"collectionName"`
+		ArtworkUrl100     string `json:"artworkUrl100"`
+		ArtworkUrl600     string `json:"artworkUrl60"`
 		CollectionViewURL string `json:"collectionViewUrl"`
 	} `json:"results"`
 }

@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/bogem/id3v2"
 	"github.com/go-flac/flacvorbis"
@@ -172,145 +174,249 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 		fmt.Printf("\n[Library Verifier] Starting to download missing covers...\n")
 		coverClient := NewCoverClient()
 
+		// Parallel download with worker pool
+		const maxWorkers = 10
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		downloadedCount := int32(0)
+		
+		// Create a channel for tracks to download
+		trackChan := make(chan *TrackVerificationResult, response.MissingCovers)
+		
+		// Send tracks to channel
 		for i := range response.Tracks {
-			track := &response.Tracks[i]
-
-			if !track.MissingCover {
-				continue
+			if response.Tracks[i].MissingCover {
+				trackChan <- &response.Tracks[i]
 			}
+		}
+		close(trackChan)
 
-			fmt.Printf("[Library Verifier] Processing %d/%d: %s\n",
-				response.CoversDownloaded+1, response.MissingCovers, track.TrackName)
-
-			// Extract metadata from audio file
-			metadata, err := ExtractMetadataFromFile(track.FilePath)
-			if err != nil {
-				track.Error = fmt.Sprintf("Failed to extract metadata: %v", err)
-				fmt.Printf("[Library Verifier] ✗ Failed to extract metadata: %v\n", err)
-				continue
-			}
-
-			// Fallback: parse filename if metadata is empty
-			if metadata.Title == "" || metadata.Artist == "" {
-				fmt.Printf("[Library Verifier] Metadata empty, parsing filename...\n")
-				filename := filepath.Base(track.FilePath)
-				filename = strings.TrimSuffix(filename, filepath.Ext(filename))
+		// Start workers
+		for w := 0; w < maxWorkers; w++ {
+			wg.Add(1)
+			go func(workerID int) {
+				defer wg.Done()
 				
-				// Try to parse "Title - Artist" format
-				if strings.Contains(filename, " - ") {
-					parts := strings.SplitN(filename, " - ", 2)
-					if len(parts) == 2 {
-						if metadata.Title == "" {
-							metadata.Title = strings.TrimSpace(parts[0])
-						}
-						if metadata.Artist == "" {
-							metadata.Artist = strings.TrimSpace(parts[1])
-						}
-						fmt.Printf("[Library Verifier] Parsed from filename: '%s' - '%s'\n", metadata.Title, metadata.Artist)
+				for track := range trackChan {
+					current := atomic.AddInt32(&downloadedCount, 1)
+					fmt.Printf("[Library Verifier] Worker %d processing %d/%d: %s\n",
+						workerID, current, response.MissingCovers, track.TrackName)
+
+					// Extract metadata from audio file
+					metadata, err := ExtractMetadataFromFile(track.FilePath)
+					if err != nil {
+						track.Error = fmt.Sprintf("Failed to extract metadata: %v", err)
+						fmt.Printf("[Library Verifier] ✗ Failed to extract metadata: %v\n", err)
+						continue
 					}
+
+					// Fallback: parse filename if metadata is empty
+					if metadata.Title == "" || metadata.Artist == "" {
+						filename := filepath.Base(track.FilePath)
+						filename = strings.TrimSuffix(filename, filepath.Ext(filename))
+						
+						if strings.Contains(filename, " - ") {
+							parts := strings.SplitN(filename, " - ", 2)
+							if len(parts) == 2 {
+								if metadata.Title == "" {
+									metadata.Title = strings.TrimSpace(parts[0])
+								}
+								if metadata.Artist == "" {
+									metadata.Artist = strings.TrimSpace(parts[1])
+								}
+							}
+						}
+						
+						if metadata.Title == "" {
+							metadata.Title = filename
+						}
+					}
+
+					// Try to get cover from database first (much faster)
+					var coverURL string
+					if req.DatabasePath != "" && metadata.Album != "" {
+						coverURL, err = GetAlbumCoverFromDatabase(req.DatabasePath, metadata.Album)
+						if err == nil && coverURL != "" {
+							fmt.Printf("[Library Verifier] ✓ Found cover in database by album\n")
+						}
+					}
+
+					// If not found by album, try searching by track name and artist
+					if coverURL == "" && req.DatabasePath != "" && metadata.Title != "" && metadata.Artist != "" {
+						coverURL, err = GetCoverByTrackFromDatabase(req.DatabasePath, metadata.Title, metadata.Artist)
+						if err == nil && coverURL != "" {
+							fmt.Printf("[Library Verifier] ✓ Found cover in database by track\n")
+						}
+					}
+
+					// If still not found in database, try external APIs
+					if coverURL == "" {
+						coverURL, err = SearchITunesForCover(metadata.Title, metadata.Artist)
+						if err == nil && coverURL != "" {
+							fmt.Printf("[Library Verifier] ✓ Found via iTunes\n")
+						}
+					}
+
+					if coverURL == "" {
+						coverURL, err = SearchDeezerForCover(metadata.Title, metadata.Artist)
+						if err == nil && coverURL != "" {
+							fmt.Printf("[Library Verifier] ✓ Found via Deezer\n")
+						}
+					}
+
+					if coverURL == "" {
+						searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)
+						coverURL, err = SearchSpotifyForCover(searchQuery, metadata.Title, metadata.Artist)
+						if err == nil && coverURL != "" {
+							fmt.Printf("[Library Verifier] ✓ Found via Spotify\n")
+						}
+					}
+
+					if coverURL == "" {
+						coverURL, err = SearchMusicBrainzForCover(metadata.Title, metadata.Artist)
+						if err == nil && coverURL != "" {
+							fmt.Printf("[Library Verifier] ✓ Found via MusicBrainz\n")
+						}
+					}
+
+					if coverURL == "" {
+						track.Error = "Failed to find cover from any source"
+						fmt.Printf("[Library Verifier] ✗ Cover not found from any source\n")
+						continue
+					}
+
+					// Download cover to same location as audio file
+					basePath := strings.TrimSuffix(track.FilePath, filepath.Ext(track.FilePath))
+					coverPath := basePath + ".jpg"
+
+					err = coverClient.DownloadCoverToPath(coverURL, coverPath, false)
+					if err != nil {
+						track.Error = fmt.Sprintf("Failed to download cover: %v", err)
+						fmt.Printf("[Library Verifier] ✗ Failed to download: %v\n", err)
+						continue
+					}
+
+					mu.Lock()
+					track.CoverDownloaded = true
+					track.CoverPath = coverPath
+					response.CoversDownloaded++
+					mu.Unlock()
+					
+					fmt.Printf("[Library Verifier] ✓ Cover downloaded successfully\n")
 				}
-				
-				// If still empty, use the whole filename as title
-				if metadata.Title == "" {
-					metadata.Title = filename
-					fmt.Printf("[Library Verifier] Using filename as title: '%s'\n", metadata.Title)
-				}
-			}
-
-			// Try to get cover from database first (much faster)
-			var coverURL string
-			if req.DatabasePath != "" && metadata.Album != "" {
-				fmt.Printf("[Library Verifier] Checking database for album: %s\n", metadata.Album)
-				coverURL, err = GetAlbumCoverFromDatabase(req.DatabasePath, metadata.Album)
-				if err != nil {
-					fmt.Printf("[Library Verifier] Database query failed: %v\n", err)
-				} else if coverURL != "" {
-					fmt.Printf("[Library Verifier] ✓ Found cover in database by album\n")
-				}
-			}
-
-			// If not found by album, try searching by track name and artist
-			if coverURL == "" && req.DatabasePath != "" && metadata.Title != "" && metadata.Artist != "" {
-				fmt.Printf("[Library Verifier] Searching database by track: %s - %s\n", metadata.Title, metadata.Artist)
-				coverURL, err = GetCoverByTrackFromDatabase(req.DatabasePath, metadata.Title, metadata.Artist)
-				if err != nil {
-					fmt.Printf("[Library Verifier] Track search failed: %v\n", err)
-				} else if coverURL != "" {
-					fmt.Printf("[Library Verifier] ✓ Found cover in database by track\n")
-				}
-			}
-
-			// If still not found in database, try external APIs
-			// Try iTunes first (fast and reliable)
-			if coverURL == "" {
-				fmt.Printf("[Library Verifier] Trying iTunes API...\n")
-				coverURL, err = SearchITunesForCover(metadata.Title, metadata.Artist)
-				if err != nil || coverURL == "" {
-					fmt.Printf("[Library Verifier] ✗ iTunes failed: %v\n", err)
-				} else {
-					fmt.Printf("[Library Verifier] ✓ Found via iTunes\n")
-				}
-			}
-
-			// Try Deezer if iTunes failed
-			if coverURL == "" {
-				fmt.Printf("[Library Verifier] Trying Deezer API...\n")
-				coverURL, err = SearchDeezerForCover(metadata.Title, metadata.Artist)
-				if err != nil || coverURL == "" {
-					fmt.Printf("[Library Verifier] ✗ Deezer failed: %v\n", err)
-				} else {
-					fmt.Printf("[Library Verifier] ✓ Found via Deezer\n")
-				}
-			}
-
-			// Try Spotify if others failed
-			if coverURL == "" {
-				fmt.Printf("[Library Verifier] Trying Spotify API...\n")
-				searchQuery := fmt.Sprintf("track:%s artist:%s", metadata.Title, metadata.Artist)
-				coverURL, err = SearchSpotifyForCover(searchQuery, metadata.Title, metadata.Artist)
-				if err != nil || coverURL == "" {
-					fmt.Printf("[Library Verifier] ✗ Spotify failed: %v\n", err)
-				} else {
-					fmt.Printf("[Library Verifier] ✓ Found via Spotify\n")
-				}
-			}
-
-			// Try MusicBrainz as last resort (slower due to rate limiting)
-			if coverURL == "" {
-				fmt.Printf("[Library Verifier] Trying MusicBrainz API...\n")
-				coverURL, err = SearchMusicBrainzForCover(metadata.Title, metadata.Artist)
-				if err != nil || coverURL == "" {
-					fmt.Printf("[Library Verifier] ✗ MusicBrainz failed: %v\n", err)
-				} else {
-					fmt.Printf("[Library Verifier] ✓ Found via MusicBrainz\n")
-				}
-			}
-
-			// If still no cover found, skip this track
-			if coverURL == "" {
-				track.Error = "Failed to find cover from any source"
-				fmt.Printf("[Library Verifier] ✗ Cover not found from any source\n")
-				continue
-			}
-
-			// Download cover to same location as audio file
-			basePath := strings.TrimSuffix(track.FilePath, filepath.Ext(track.FilePath))
-			coverPath := basePath + ".jpg"
-
-			err = coverClient.DownloadCoverToPath(coverURL, coverPath, false)
-			if err != nil {
-				track.Error = fmt.Sprintf("Failed to download cover: %v", err)
-				fmt.Printf("[Library Verifier] ✗ Failed to download: %v\n", err)
-				continue
-			}
-
-			track.CoverDownloaded = true
-			track.CoverPath = coverPath
-			response.CoversDownloaded++
-			fmt.Printf("[Library Verifier] ✓ Cover downloaded successfully\n")
+			}(w)
 		}
 
-		fmt.Printf("[Library Verifier] Download complete: %d covers downloaded\n", response.CoversDownloaded)
+		wg.Wait()
+		fmt.Printf("[Library Verifier] Cover download complete: %d covers downloaded\n", response.CoversDownloaded)
+	}
+
+	// Download missing lyrics if requested
+	if req.DownloadMissing && response.MissingLyrics > 0 {
+		fmt.Printf("\n[Library Verifier] Starting to download missing lyrics...\n")
+		lyricsClient := NewLyricsClient()
+
+		// Parallel download with worker pool
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		downloadedCount := int32(0)
+		
+		// Create a channel for tracks to download
+		trackChan := make(chan *TrackVerificationResult, response.MissingLyrics)
+		
+		// Send tracks to channel
+		for i := range response.Tracks {
+			if response.Tracks[i].MissingLyrics {
+				trackChan <- &response.Tracks[i]
+			}
+		}
+		close(trackChan)
+
+		// Start workers
+		for w := 0; w < maxWorkers; w++ {
+			wg.Add(1)
+			go func(workerID int) {
+				defer wg.Done()
+				
+				for track := range trackChan {
+					current := atomic.AddInt32(&downloadedCount, 1)
+					fmt.Printf("[Library Verifier] Worker %d processing lyrics %d/%d: %s\n",
+						workerID, current, response.MissingLyrics, track.TrackName)
+
+					// Extract metadata from audio file
+					metadata, err := ExtractMetadataFromFile(track.FilePath)
+					if err != nil {
+						track.Error = fmt.Sprintf("Failed to extract metadata: %v", err)
+						fmt.Printf("[Library Verifier] ✗ Failed to extract metadata: %v\n", err)
+						continue
+					}
+
+					// Fallback: parse filename if metadata is empty
+					if metadata.Title == "" || metadata.Artist == "" {
+						filename := filepath.Base(track.FilePath)
+						filename = strings.TrimSuffix(filename, filepath.Ext(filename))
+						
+						if strings.Contains(filename, " - ") {
+							parts := strings.SplitN(filename, " - ", 2)
+							if len(parts) == 2 {
+								if metadata.Title == "" {
+									metadata.Title = strings.TrimSpace(parts[0])
+								}
+								if metadata.Artist == "" {
+									metadata.Artist = strings.TrimSpace(parts[1])
+								}
+							}
+						}
+						
+						if metadata.Title == "" {
+							metadata.Title = filename
+						}
+					}
+
+					// Skip if we don't have at least track name
+					if metadata.Title == "" {
+						fmt.Printf("[Library Verifier] ✗ Cannot download lyrics without track name\n")
+						continue
+					}
+
+					// Fetch lyrics using track name and artist
+					lyricsResp, err := lyricsClient.FetchLyricsWithMetadata(metadata.Title, metadata.Artist)
+					if err != nil || lyricsResp == nil {
+						fmt.Printf("[Library Verifier] ✗ Lyrics not found: %v\n", err)
+						continue
+					}
+
+					// Convert to LRC format
+					lrcContent := lyricsClient.ConvertToLRC(lyricsResp, metadata.Title, metadata.Artist)
+					if lrcContent == "" {
+						fmt.Printf("[Library Verifier] ✗ Failed to convert lyrics to LRC format\n")
+						continue
+					}
+
+					// Save lyrics to same location as audio file
+					basePath := strings.TrimSuffix(track.FilePath, filepath.Ext(track.FilePath))
+					lyricsPath := basePath + ".lrc"
+
+					err = os.WriteFile(lyricsPath, []byte(lrcContent), 0644)
+					if err != nil {
+						track.Error = fmt.Sprintf("Failed to save lyrics: %v", err)
+						fmt.Printf("[Library Verifier] ✗ Failed to save lyrics: %v\n", err)
+						continue
+					}
+
+					mu.Lock()
+					track.LyricsDownloaded = true
+					track.LyricsPath = lyricsPath
+					response.LyricsDownloaded++
+					mu.Unlock()
+					
+					fmt.Printf("[Library Verifier] ✓ Lyrics downloaded successfully\n")
+				}
+			}(w)
+		}
+
+		wg.Wait()
+		fmt.Printf("[Library Verifier] Lyrics download complete: %d lyrics downloaded\n", response.LyricsDownloaded)
 	}
 
 	return response, nil
