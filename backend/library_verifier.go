@@ -179,10 +179,10 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 		downloadedCount := int32(0)
-		
+
 		// Create a channel for tracks to download
 		trackChan := make(chan *TrackVerificationResult, response.MissingCovers)
-		
+
 		// Send tracks to channel
 		for i := range response.Tracks {
 			if response.Tracks[i].MissingCover {
@@ -196,7 +196,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 			wg.Add(1)
 			go func(workerID int) {
 				defer wg.Done()
-				
+
 				for track := range trackChan {
 					current := atomic.AddInt32(&downloadedCount, 1)
 					fmt.Printf("[Library Verifier] Worker %d processing %d/%d: %s\n",
@@ -214,7 +214,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 					if metadata.Title == "" || metadata.Artist == "" {
 						filename := filepath.Base(track.FilePath)
 						filename = strings.TrimSuffix(filename, filepath.Ext(filename))
-						
+
 						if strings.Contains(filename, " - ") {
 							parts := strings.SplitN(filename, " - ", 2)
 							if len(parts) == 2 {
@@ -226,7 +226,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 								}
 							}
 						}
-						
+
 						if metadata.Title == "" {
 							metadata.Title = filename
 						}
@@ -301,7 +301,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 					track.CoverPath = coverPath
 					response.CoversDownloaded++
 					mu.Unlock()
-					
+
 					fmt.Printf("[Library Verifier] ✓ Cover downloaded successfully\n")
 				}
 			}(w)
@@ -321,10 +321,10 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 		downloadedCount := int32(0)
-		
+
 		// Create a channel for tracks to download
 		trackChan := make(chan *TrackVerificationResult, response.MissingLyrics)
-		
+
 		// Send tracks to channel
 		for i := range response.Tracks {
 			if response.Tracks[i].MissingLyrics {
@@ -338,7 +338,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 			wg.Add(1)
 			go func(workerID int) {
 				defer wg.Done()
-				
+
 				for track := range trackChan {
 					current := atomic.AddInt32(&downloadedCount, 1)
 					fmt.Printf("[Library Verifier] Worker %d processing lyrics %d/%d: %s\n",
@@ -356,7 +356,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 					if metadata.Title == "" || metadata.Artist == "" {
 						filename := filepath.Base(track.FilePath)
 						filename = strings.TrimSuffix(filename, filepath.Ext(filename))
-						
+
 						if strings.Contains(filename, " - ") {
 							parts := strings.SplitN(filename, " - ", 2)
 							if len(parts) == 2 {
@@ -368,7 +368,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 								}
 							}
 						}
-						
+
 						if metadata.Title == "" {
 							metadata.Title = filename
 						}
@@ -410,7 +410,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 					track.LyricsPath = lyricsPath
 					response.LyricsDownloaded++
 					mu.Unlock()
-					
+
 					fmt.Printf("[Library Verifier] ✓ Lyrics downloaded successfully\n")
 				}
 			}(w)

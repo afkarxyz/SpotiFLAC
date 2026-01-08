@@ -37,6 +37,7 @@ This fork includes several improvements and new features:
 | Parallel Downloads | ❌ | ✅ Configurable |
 | Library Verification | ❌ | ✅ |
 | Multiple Cover Sources | Spotify only | ✅ iTunes, Deezer, MusicBrainz |
+| SQLite Database Support | ❌ | ✅ Optional |
 | Path Sanitization Bug | ❌ | ✅ Fixed |
 | Large CSV Performance | Slow | ✅ Optimized |
 | Metadata Parsing | Basic | ✅ Enhanced |
@@ -46,7 +47,7 @@ This fork includes several improvements and new features:
 - **Individual Track Download** - Download individual tracks from playlists without fetching the entire playlist
 - **Parallel Downloads** - Configurable parallel downloading for covers and lyrics with worker pool pattern
 - **Enhanced Cover Sources** - Added iTunes, Deezer, and MusicBrainz as additional cover art sources
-- **Database Integration** - Track-based database search for better cover art matching
+- **SQLite Database Integration** - Optional local SQLite database for fast ISRC and cover art lookups, reducing API calls and improving performance
 - **Library Verification** - Batch verification of existing music libraries with progress tracking
 
 ### 🔧 Bug Fixes & Improvements
@@ -118,6 +119,53 @@ SpotiFLAC uses **Spotify metadata only** for track information (track names, art
 - **Amazon Music** - Additional source
 
 > **Important:** Spotify API is used only for metadata retrieval (track information, album art URLs, etc.). If Spotify's API becomes unavailable, the search functionality may be affected, but downloads from Tidal/Qobuz/Amazon will continue to work if you have direct URLs.
+
+### SQLite Database Integration (Optional)
+
+This fork supports an optional local SQLite database to cache track metadata and improve performance:
+
+**Benefits:**
+- **Faster lookups** - Query local database instead of making API calls
+- **Reduced API load** - Fewer requests to Spotify API
+- **Offline capability** - Access cached ISRC codes and cover art URLs without internet
+
+**Database Source:**
+The database used is `spotify_clean.sqlite3` from [Anna's Archive](https://annas-archive.org/), which contains scraped Spotify metadata.
+
+> ⚠️ **Legal Disclaimer:** The database contains scraped data from Spotify. The legality of downloading and using such databases may vary by jurisdiction. Users are responsible for ensuring compliance with their local laws and Spotify's Terms of Service. This feature is completely optional - the app works perfectly fine without a database by making API calls directly.
+
+**Database Schema:**
+```sql
+-- tracks table
+CREATE TABLE tracks (
+    id TEXT PRIMARY KEY,              -- Spotify ID
+    external_id_isrc TEXT,            -- ISRC code
+    -- ... other metadata
+);
+
+-- albums table
+CREATE TABLE albums (
+    rowid INTEGER PRIMARY KEY,
+    name TEXT,                        -- Album name
+    -- ... other metadata
+);
+
+-- album_images table  
+CREATE TABLE album_images (
+    album_rowid INTEGER,              -- Foreign key to albums.rowid
+    url TEXT,                         -- Cover art URL
+    width INTEGER,                    -- Image width
+    height INTEGER                    -- Image height
+);
+```
+
+**Usage:**
+1. Obtain `spotify_clean.sqlite3` database (if you choose to use this feature)
+2. Configure the database path in settings
+3. App will automatically query database first, then fallback to API if needed
+4. Use `TestDatabaseConnection` to verify database schema
+
+**Note:** This feature is entirely optional. The app functions normally without a database.
 
 ## 🔧 Troubleshooting
 
