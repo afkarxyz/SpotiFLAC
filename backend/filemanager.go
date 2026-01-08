@@ -244,6 +244,10 @@ func readMetadataWithFFprobe(filePath string) (*AudioMetadata, error) {
 		return nil, err
 	}
 
+	if err := ValidateExecutable(ffprobePath); err != nil {
+		return nil, fmt.Errorf("invalid ffprobe executable: %w", err)
+	}
+
 	// Use ffprobe to get metadata in JSON format (both format and stream tags)
 	cmd := exec.Command(ffprobePath,
 		"-v", "quiet",

@@ -541,6 +541,10 @@ func embedLyricsToM4A(filepath string, lyrics string) error {
 		return fmt.Errorf("ffmpeg not found: %w", err)
 	}
 
+	if err := ValidateExecutable(ffmpegPath); err != nil {
+		return fmt.Errorf("invalid ffmpeg executable: %w", err)
+	}
+
 	// Create temporary output file with proper extension so ffmpeg can detect format
 	tmpOutputFile := strings.TrimSuffix(filepath, pathfilepath.Ext(filepath)) + ".tmp" + pathfilepath.Ext(filepath)
 	defer func() {
