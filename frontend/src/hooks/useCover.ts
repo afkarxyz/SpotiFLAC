@@ -26,7 +26,8 @@ export function useCover() {
     trackId?: string,
     albumArtist?: string,
     releaseDate?: string,
-    discNumber?: number
+    discNumber?: number,
+    isAlbum?: boolean
   ) => {
     if (!coverUrl) {
       toast.error("No cover URL found for this track");
@@ -54,7 +55,8 @@ export function useCover() {
       };
 
       // For playlist/discography, prepend the folder name
-      if (playlistName) {
+      // Only do this if it's NOT an album download, to avoid double nesting (AlbumName/Artist/AlbumName)
+      if (playlistName && !isAlbum) {
         outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
       }
 
@@ -113,7 +115,8 @@ export function useCover() {
 
   const handleDownloadAllCovers = async (
     tracks: TrackMetadata[],
-    playlistName?: string
+    playlistName?: string,
+    isAlbum?: boolean // Add isAlbum parameter
   ) => {
     if (tracks.length === 0) {
       toast.error("No tracks to download covers");
@@ -166,7 +169,8 @@ export function useCover() {
         };
 
         // For playlist/discography, prepend the folder name
-        if (playlistName) {
+        // Only do this if it's NOT an album download
+        if (playlistName && !isAlbum) {
           outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
 
