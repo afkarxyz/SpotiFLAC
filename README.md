@@ -14,11 +14,140 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 
 </div>
 
-### [Download](https://github.com/afkarxyz/SpotiFLAC/releases)
+## ⚠️ Enhanced Fork with Bug Fixes
+
+> **Note:** The original SpotiFLAC repository currently has issues with Spotify API calls being blocked. This fork includes bug fixes, performance improvements, and additional features while maintaining full compatibility with the original codebase.
+
+### [Download Original](https://github.com/afkarxyz/SpotiFLAC/releases) | [Fork Repository](https://github.com/keypaa/SpotiFLAC)
 
 ## Screenshot
 
 ![Image](https://github.com/user-attachments/assets/afe01529-bcf0-4486-8792-62af26adafee)
+
+## 🚀 Fork Features & Enhancements
+
+This fork includes several improvements and new features:
+
+### 📊 Comparison with Original
+
+| Feature | Original | This Fork |
+|---------|----------|--------|
+| CSV Import | ❌ | ✅ |
+| Individual Track Download | ❌ | ✅ |
+| Parallel Downloads | ❌ | ✅ Configurable |
+| Library Verification | ❌ | ✅ |
+| Multiple Cover Sources | Spotify only | ✅ iTunes, Deezer, MusicBrainz |
+| Path Sanitization Bug | ❌ | ✅ Fixed |
+| Large CSV Performance | Slow | ✅ Optimized |
+| Metadata Parsing | Basic | ✅ Enhanced |
+
+### ✨ New Features
+- **CSV Playlist Import** - Import playlists from CSV files for batch downloading
+- **Individual Track Download** - Download individual tracks from playlists without fetching the entire playlist
+- **Parallel Downloads** - Configurable parallel downloading for covers and lyrics with worker pool pattern
+- **Enhanced Cover Sources** - Added iTunes, Deezer, and MusicBrainz as additional cover art sources
+- **Database Integration** - Track-based database search for better cover art matching
+- **Library Verification** - Batch verification of existing music libraries with progress tracking
+
+### 🔧 Bug Fixes & Improvements
+- **Performance Optimization** - Improved CSV parsing for large files
+- **Better Metadata Parsing** - Enhanced filename parsing when metadata is missing
+- **Cover Priority** - Prioritized iTunes and Deezer over Spotify for more reliable cover art
+- **Path Sanitization** - Fixed whitespace trimming in path handling
+- **Security** - Enforced strict validation for FFmpeg binary paths
+- **Nested Paths** - Resolved issues with nested download paths for covers and lyrics
+
+## 📦 Building from Source
+
+### Prerequisites
+- [Go](https://golang.org/dl/) 1.21 or later
+- [Node.js](https://nodejs.org/) 18+ and [pnpm](https://pnpm.io/)
+- [Wails](https://wails.io/) v2.9.0 or later
+
+### Development Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/keypaa/SpotiFLAC.git
+   cd SpotiFLAC
+   ```
+
+2. **Install Wails CLI**
+   ```bash
+   go install github.com/wailsapp/wails/v2/cmd/wails@latest
+   ```
+
+3. **Install frontend dependencies**
+   ```bash
+   cd frontend
+   pnpm install
+   cd ..
+   ```
+
+4. **Run in development mode**
+   ```bash
+   wails dev
+   ```
+
+5. **Build for production**
+   ```bash
+   wails build
+   ```
+   
+   The executable will be in `build/bin/`
+
+### Platform-Specific Notes
+
+**Windows:**
+- Requires Windows 10/11 with WebView2 runtime (usually pre-installed)
+- Build produces `SpotiFLAC.exe`
+
+**macOS:**
+- Requires macOS 10.13 or later
+- Build produces `SpotiFLAC.app`
+
+**Linux:**
+- Requires webkit2gtk
+- Install dependencies: `sudo apt install libgtk-3-dev libwebkit2gtk-4.0-dev`
+
+## 🎯 How It Works
+
+SpotiFLAC uses **Spotify metadata only** for track information (track names, artists, album info). The actual audio files are downloaded from:
+- **Tidal** - High-quality FLAC files
+- **Qobuz** - Lossless audio
+- **Amazon Music** - Additional source
+
+> **Important:** Spotify API is used only for metadata retrieval (track information, album art URLs, etc.). If Spotify's API becomes unavailable, the search functionality may be affected, but downloads from Tidal/Qobuz/Amazon will continue to work if you have direct URLs.
+
+## 🔧 Troubleshooting
+
+### Spotify API Issues
+If Spotify search is not working:
+- The app can still download tracks if you have direct Spotify URLs
+- Alternative: Use the CSV import feature to bulk download tracks
+- Downloads from Tidal/Qobuz/Amazon are not affected by Spotify API issues
+
+### Build Issues
+- Make sure all prerequisites are installed (Go 1.21+, Node 18+, Wails)
+- Clear `node_modules` and `build` folders, then rebuild:
+  ```bash
+  rm -rf frontend/node_modules build
+  cd frontend && pnpm install && cd ..
+  wails build
+  ```
+- Verify Go version: `go version` (needs 1.21+)
+- Verify Node version: `node --version` (needs 18+)
+- Verify Wails: `wails doctor`
+
+### Runtime Issues
+- **FFmpeg not found**: The app will download FFmpeg automatically on first run
+- **WebView2 missing (Windows)**: Download from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/)
+- **Permission denied (Linux)**: Make the binary executable with `chmod +x SpotiFLAC`
+
+### Performance Tips
+- Enable parallel downloads in settings for faster cover/lyrics fetching
+- Use CSV import for large playlists (better performance than UI)
+- Close other applications if downloads are slow
 
 ## Other projects
 
@@ -27,6 +156,20 @@ Mobile port of SpotiFLAC for Android & iOS — maintained by [@zarzet](https://g
 
 ### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader) 
 Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is open source and available under the terms specified in the LICENSE file.
 
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
 

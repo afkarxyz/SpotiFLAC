@@ -11,11 +11,11 @@ export function cn(...inputs: ClassValue[]) {
 export function sanitizePath(input: string, os: string): string {
   let sanitized = input.trim(); // it will trim whitespace
   if (os === "Windows") {
-    return input.replace(/[<>:"/\\|?*]/g, "_");
+    return sanitized.replace(/[<>:"/\\|?*]/g, "_");
   }
 
   // unix-based OS
-  return input.replace(/\//g, "_");
+  return sanitized.replace(/\//g, "_");
 }
 
 export function joinPath(os: string, ...parts: string[]): string {
