@@ -22,10 +22,32 @@ interface FileExistenceResult {
 }
 
 // These functions will be available after Wails regenerates bindings
-const CheckFilesExistence = (outputDir: string, tracks: CheckFileExistenceRequest[]): Promise<FileExistenceResult[]> =>
-  (window as any)["go"]["main"]["App"]["CheckFilesExistence"](outputDir, tracks);
-const SkipDownloadItem = (itemID: string, filePath: string): Promise<void> =>
-  (window as any)["go"]["main"]["App"]["SkipDownloadItem"](itemID, filePath);
+type DownloadManagerAPI = {
+  CheckFilesExistence: (outputDir: string, tracks: CheckFileExistenceRequest[]) => Promise<FileExistenceResult[]>;
+  SkipDownloadItem: (itemID: string, filePath: string) => Promise<void>;
+};
+
+type DownloadWindow = Window &
+  typeof globalThis & {
+    go?: {
+      main?: {
+        App?: Partial<DownloadManagerAPI>;
+      };
+    };
+  };
+
+const getDownloadManagerAPI = (): DownloadManagerAPI => {
+  const api = (window as DownloadWindow).go?.main?.App;
+  if (!api?.CheckFilesExistence || !api.SkipDownloadItem) {
+    throw new Error("Download manager API is unavailable");
+  }
+  return api as DownloadManagerAPI;
+};
+
+const CheckFilesExistence = (outputDir: string, tracks: CheckFileExistenceRequest[]) =>
+  getDownloadManagerAPI().CheckFilesExistence(outputDir, tracks);
+const SkipDownloadItem = (itemID: string, filePath: string) =>
+  getDownloadManagerAPI().SkipDownloadItem(itemID, filePath);
 
 export function useDownload() {
   const [downloadProgress, setDownloadProgress] = useState<number>(0);

@@ -19,6 +19,15 @@ const InputWithContext = React.forwardRef<HTMLInputElement, InputWithContextProp
     const inputRef = React.useRef<HTMLInputElement>(null);
     const [hasSelection, setHasSelection] = React.useState(false);
     const [canPaste, setCanPaste] = React.useState(false);
+    const [hasValue, setHasValue] = React.useState(() => {
+      if (props.value !== undefined && props.value !== null) {
+        return String(props.value).length > 0;
+      }
+      if (props.defaultValue !== undefined && props.defaultValue !== null) {
+        return String(props.defaultValue).length > 0;
+      }
+      return false;
+    });
 
     // Combine refs
     React.useImperativeHandle(ref, () => inputRef.current as HTMLInputElement);
@@ -143,6 +152,7 @@ const InputWithContext = React.forwardRef<HTMLInputElement, InputWithContextProp
     };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setHasValue(e.target.value.length > 0);
       if (onChange) {
         onChange(e);
       }
@@ -150,6 +160,18 @@ const InputWithContext = React.forwardRef<HTMLInputElement, InputWithContextProp
         onValueChange(e.target.value);
       }
     };
+
+    React.useEffect(() => {
+      if (props.value !== undefined && props.value !== null) {
+        setHasValue(String(props.value).length > 0);
+      }
+    }, [props.value]);
+
+    React.useEffect(() => {
+      if ((props.value === undefined || props.value === null) && props.defaultValue !== undefined && props.defaultValue !== null) {
+        setHasValue(String(props.defaultValue).length > 0);
+      }
+    }, [props.defaultValue, props.value]);
 
     return (
       <ContextMenu
@@ -199,7 +221,7 @@ const InputWithContext = React.forwardRef<HTMLInputElement, InputWithContextProp
           <ContextMenuSeparator />
           <ContextMenuItem
             onSelect={handleSelectAll}
-            disabled={!inputRef.current?.value || props.disabled}
+            disabled={!hasValue || props.disabled}
           >
             <Type className="mr-2 h-4 w-4" />
             Select All

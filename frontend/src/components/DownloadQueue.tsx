@@ -31,6 +31,7 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
       skipped_count: 0,
     })
   );
+  const [currentSeconds, setCurrentSeconds] = useState(() => Math.floor(Date.now() / 1000));
 
   useEffect(() => {
     if (!isOpen) return;
@@ -50,6 +51,14 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
     // Poll every 500ms when dialog is open
     const interval = setInterval(fetchQueue, 500);
 
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const updateNow = () => setCurrentSeconds(Math.floor(Date.now() / 1000));
+    updateNow();
+    const interval = setInterval(updateNow, 1000);
     return () => clearInterval(interval);
   }, [isOpen]);
 
@@ -100,8 +109,7 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
   // Format session duration
   const formatDuration = (startTimestamp: number) => {
     if (startTimestamp === 0) return "—";
-    const now = Math.floor(Date.now() / 1000);
-    const durationSeconds = now - startTimestamp;
+    const durationSeconds = currentSeconds - startTimestamp;
     
     const hours = Math.floor(durationSeconds / 3600);
     const minutes = Math.floor((durationSeconds % 3600) / 60);

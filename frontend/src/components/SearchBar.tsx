@@ -1,7 +1,20 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { InputWithContext } from "@/components/ui/input-with-context";
-import { CloudDownload, Info, XCircle, Link, Search, X, ChevronDown } from "lucide-react";
+import {
+  CloudDownload,
+  Info,
+  XCircle,
+  Link,
+  Search,
+  X,
+  ChevronDown,
+  ListChecks,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+} from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Tooltip,
@@ -13,12 +26,19 @@ import type { HistoryItem } from "@/components/FetchHistory";
 import { SearchSpotify, SearchSpotifyByType } from "../../wailsjs/go/main/App";
 import { backend } from "../../wailsjs/go/models";
 import { cn } from "@/lib/utils";
+import type { InputMode, BatchJobItem, BatchJobStatus } from "@/types/batch";
 
 type ResultTab = "tracks" | "albums" | "artists" | "playlists";
 
 const RECENT_SEARCHES_KEY = "spotiflac_recent_searches";
 const MAX_RECENT_SEARCHES = 8;
 const SEARCH_LIMIT = 50;
+
+interface BatchStats {
+  total: number;
+  processed: number;
+  current?: string;
+}
 
 interface SearchBarProps {
   url: string;
@@ -30,8 +50,15 @@ interface SearchBarProps {
   onHistorySelect: (item: HistoryItem) => void;
   onHistoryRemove: (id: string) => void;
   hasResult: boolean;
-  searchMode: boolean;
-  onSearchModeChange: (isSearch: boolean) => void;
+  mode: InputMode;
+  onModeChange: (mode: InputMode) => void;
+  batchInput: string;
+  onBatchInputChange: (value: string) => void;
+  onBatchStart: () => void;
+  onBatchStop: () => void;
+  batchItems: BatchJobItem[];
+  isBatchRunning: boolean;
+  batchStats: BatchStats;
 }
 
 export function SearchBar({
@@ -44,8 +71,15 @@ export function SearchBar({
   onHistorySelect,
   onHistoryRemove,
   hasResult,
-  searchMode,
-  onSearchModeChange,
+  mode,
+  onModeChange,
+  batchInput,
+  onBatchInputChange,
+  onBatchStart,
+  onBatchStop,
+  batchItems,
+  isBatchRunning,
+  batchStats,
 }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<backend.SearchResponse | null>(null);
@@ -61,6 +95,9 @@ export function SearchBar({
     playlists: false,
   });
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUrlMode = mode === "url";
+  const isSearchMode = mode === "search";
+  const isBatchMode = mode === "batch";
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -104,7 +141,7 @@ export function SearchBar({
 
   // Debounced search - only search if query changed
   useEffect(() => {
-    if (!searchMode || !searchQuery.trim()) {
+    if (!isSearchMode || !searchQuery.trim()) {
       return;
     }
 
@@ -151,7 +188,7 @@ export function SearchBar({
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchQuery, searchMode, lastSearchedQuery]);
+  }, [searchQuery, isSearchMode, lastSearchedQuery]);
 
   const handleLoadMore = async () => {
     if (!searchResults || !lastSearchedQuery || isLoadingMore) return;
@@ -201,7 +238,7 @@ export function SearchBar({
   };
 
   const handleResultClick = (externalUrl: string) => {
-    onSearchModeChange(false);
+    onModeChange("url");
     onFetchUrl(externalUrl);
   };
 
@@ -234,6 +271,14 @@ export function SearchBar({
     { key: "artists", label: "Artists" },
     { key: "playlists", label: "Playlists" },
   ];
+  const batchStatusMeta: Record<BatchJobStatus, { label: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
+    pending: { label: "Pending", color: "text-muted-foreground", icon: Clock },
+    processing: { label: "Processing", color: "text-primary", icon: Loader2 },
+    success: { label: "Done", color: "text-emerald-500", icon: CheckCircle2 },
+    error: { label: "Error", color: "text-destructive", icon: AlertTriangle },
+  };
+  const totalSuccess = batchItems.filter((item) => item.status === "success").length;
+  const totalErrors = batchItems.filter((item) => item.status === "error").length;
 
   return (
     <div className="space-y-4">
@@ -243,10 +288,10 @@ export function SearchBar({
           <div className="flex items-center bg-muted rounded-md p-1">
             <button
               type="button"
-              onClick={() => onSearchModeChange(false)}
+              onClick={() => onModeChange("url")}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium transition-colors cursor-pointer",
-                !searchMode
+                isUrlMode
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
@@ -256,16 +301,29 @@ export function SearchBar({
             </button>
             <button
               type="button"
-              onClick={() => onSearchModeChange(true)}
+              onClick={() => onModeChange("search")}
               className={cn(
                 "flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium transition-colors cursor-pointer",
-                searchMode
+                isSearchMode
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
               <Search className="h-3.5 w-3.5" />
               Search
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange("batch")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded text-sm font-medium transition-colors cursor-pointer",
+                isBatchMode
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+              Batch
             </button>
           </div>
           
@@ -274,85 +332,92 @@ export function SearchBar({
               <Info className="h-4 w-4 text-muted-foreground cursor-help" />
             </TooltipTrigger>
             <TooltipContent side="right">
-              {!searchMode ? (
+              {isUrlMode && (
                 <>
                   <p>Supports track, album, playlist, and artist URLs</p>
                   <p className="mt-1">Note: Playlist must be public (not private)</p>
                 </>
-              ) : (
-                <p>Search for tracks, albums, artists, or playlists</p>
+              )}
+              {isSearchMode && <p>Search for tracks, albums, artists, or playlists</p>}
+              {isBatchMode && (
+                <>
+                  <p>Paste multiple Spotify album links, one per line.</p>
+                  <p className="mt-1">Each entry fetches metadata, downloads tracks, then covers.</p>
+                </>
               )}
             </TooltipContent>
           </Tooltip>
         </div>
 
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            {!searchMode ? (
-              <>
-                <InputWithContext
-                  id="spotify-url"
-                  placeholder="https://open.spotify.com/..."
-                  value={url}
-                  onChange={(e) => onUrlChange(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && onFetch()}
-                  className="pr-8"
-                />
-                {url && (
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    onClick={() => onUrlChange("")}
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <InputWithContext
-                  id="spotify-search"
-                  placeholder="Search tracks, albums, artists..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pr-8"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setSearchResults(null);
-                      setLastSearchedQuery("");
-                    }}
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-
-          {!searchMode && (
-            <Button onClick={onFetch} disabled={loading}>
-              {loading ? (
+        {(isUrlMode || isSearchMode) && (
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              {isUrlMode ? (
                 <>
-                  <Spinner />
-                  Fetching...
+                  <InputWithContext
+                    id="spotify-url"
+                    placeholder="https://open.spotify.com/..."
+                    value={url}
+                    onChange={(e) => onUrlChange(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && onFetch()}
+                    className="pr-8"
+                  />
+                  {url && (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      onClick={() => onUrlChange("")}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
-                  <CloudDownload className="h-4 w-4" />
-                  Fetch
+                  <InputWithContext
+                    id="spotify-search"
+                    placeholder="Search tracks, albums, artists..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pr-8"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSearchResults(null);
+                        setLastSearchedQuery("");
+                      }}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  )}
                 </>
               )}
-            </Button>
-          )}
-        </div>
+            </div>
+
+            {isUrlMode && (
+              <Button onClick={onFetch} disabled={loading}>
+                {loading ? (
+                  <>
+                    <Spinner />
+                    Fetching...
+                  </>
+                ) : (
+                  <>
+                    <CloudDownload className="h-4 w-4" />
+                    Fetch
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      {!searchMode && !hasResult && (
+      {isUrlMode && !hasResult && (
         <FetchHistory
           history={history}
           onSelect={onHistorySelect}
@@ -360,8 +425,99 @@ export function SearchBar({
         />
       )}
 
+      {isBatchMode && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">
+              Paste one Spotify album URL per line. Blank lines are ignored.
+            </p>
+            <textarea
+              className="w-full min-h-[220px] rounded-md border bg-background/70 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              placeholder="https://open.spotify.com/album/..."
+              value={batchInput}
+              onChange={(e) => onBatchInputChange(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={onBatchStart}
+              disabled={isBatchRunning || !batchInput.trim()}
+            >
+              {isBatchRunning ? (
+                <>
+                  <Spinner />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <ListChecks className="h-4 w-4" />
+                  Start Batch
+                </>
+              )}
+            </Button>
+            {isBatchRunning && (
+              <Button variant="outline" onClick={onBatchStop}>
+                <X className="h-4 w-4" />
+                Stop Batch
+              </Button>
+            )}
+            <div className="text-sm text-muted-foreground ml-auto flex flex-wrap gap-4">
+              {batchStats.total > 0 && (
+                <>
+                  <span>
+                    {batchStats.processed}/{batchStats.total} processed
+                  </span>
+                  {batchStats.current && <span>Current: {batchStats.current}</span>}
+                </>
+              )}
+              {totalSuccess > 0 && <span>{totalSuccess} done</span>}
+              {totalErrors > 0 && <span>{totalErrors} failed</span>}
+            </div>
+          </div>
+          <div className="border rounded-md divide-y max-h-72 overflow-y-auto">
+            {batchItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                Batch queue is empty. Paste links above to get started.
+              </p>
+            ) : (
+              batchItems.map((item) => {
+                const meta = batchStatusMeta[item.status];
+                const StatusIcon = meta.icon;
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-start justify-between gap-3 px-3 py-3"
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {item.title || `Entry ${item.id + 1}`}
+                      </p>
+                      <p className="text-xs text-muted-foreground break-all">
+                        {item.url}
+                      </p>
+                      {item.message && (
+                        <p className="text-xs text-muted-foreground mt-1">{item.message}</p>
+                      )}
+                    </div>
+                    <div className={cn("flex items-center gap-1 text-sm", meta.color)}>
+                      <StatusIcon
+                        className={cn(
+                          "h-4 w-4",
+                          item.status === "processing" ? "animate-spin" : ""
+                        )}
+                      />
+                      {meta.label}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Search Results with Tabs */}
-      {searchMode && (
+      {isSearchMode && (
         <div className="space-y-4">
           {/* Recent Searches - show when no query or no results yet */}
           {!searchQuery && !searchResults && recentSearches.length > 0 && (

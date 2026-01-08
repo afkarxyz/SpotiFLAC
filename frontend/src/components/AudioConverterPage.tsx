@@ -35,6 +35,17 @@ interface AudioFile {
   outputPath?: string;
 }
 
+type WailsAppWindow = Window &
+  typeof globalThis & {
+    go?: {
+      main?: {
+        App?: {
+          GetFileSizes?: (files: string[]) => Promise<Record<string, number>>;
+        };
+      };
+    };
+  };
+
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;
@@ -84,8 +95,8 @@ export function AudioConverterPage() {
           return parsed.outputFormat;
         }
       }
-    } catch (err) {
-      // Ignore
+    } catch {
+      // Ignore parse failures
     }
     return "mp3";
   });
@@ -98,8 +109,8 @@ export function AudioConverterPage() {
           return parsed.bitrate;
         }
       }
-    } catch (err) {
-      // Ignore
+    } catch {
+      // Ignore parse failures
     }
     return "320k";
   });
@@ -112,8 +123,8 @@ export function AudioConverterPage() {
           return parsed.m4aCodec;
         }
       }
-    } catch (err) {
-      // Ignore
+    } catch {
+      // Ignore parse failures
     }
     return "aac";
   });
@@ -244,16 +255,22 @@ export function AudioConverterPage() {
       });
     }
 
-    // Get file sizes from backend
-    const GetFileSizes = (files: string[]): Promise<Record<string, number>> =>
-      (window as any)["go"]["main"]["App"]["GetFileSizes"](files);
-    
     const validPaths = paths.filter((path) => {
       const ext = path.toLowerCase().slice(path.lastIndexOf("."));
       return validExtensions.includes(ext);
     });
 
-    const fileSizes = validPaths.length > 0 ? await GetFileSizes(validPaths) : {};
+    let fileSizes: Record<string, number> = {};
+    if (validPaths.length > 0) {
+      const wailsApp = (window as WailsAppWindow).go?.main?.App;
+      if (!wailsApp?.GetFileSizes) {
+        toast.error("File size helper unavailable", {
+          description: "Unable to contact the backend to inspect files.",
+        });
+        return;
+      }
+      fileSizes = await wailsApp.GetFileSizes(validPaths);
+    }
 
     setFiles((prev) => {
       const newFiles: AudioFile[] = validPaths
@@ -666,6 +683,3 @@ export function AudioConverterPage() {
     </div>
   );
 }
-
-
-

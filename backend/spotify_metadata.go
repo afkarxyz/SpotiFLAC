@@ -47,13 +47,13 @@ func NewSpotifyMetadataClient() *SpotifyMetadataClient {
 
 	// Decode client ID from base64
 	clientID := ""
-	if decoded, err := base64.StdEncoding.DecodeString("NWY1NzNjOTYyMDQ5NGJhZTg3ODkwYzBmMDhhNjAyOTM="); err == nil {
+	if decoded, err := base64.StdEncoding.DecodeString("NWZjNmZkNDEwOTUxNGM1NWFmMGY1ZjA5NDk5MDNiNmE="); err == nil {
 		clientID = string(decoded)
 	}
 
 	// Decode client secret from base64
 	clientSecret := ""
-	if decoded, err := base64.StdEncoding.DecodeString("MjEyNDc2ZDliMGYzNDcyZWFhNzYyZDkwYjE5YjBiYTg="); err == nil {
+	if decoded, err := base64.StdEncoding.DecodeString("N2FjZTNhZDk2MWZjNGNiMzkzMDFjYTVkNzU5YzdkM2I="); err == nil {
 		clientSecret = string(decoded)
 	}
 

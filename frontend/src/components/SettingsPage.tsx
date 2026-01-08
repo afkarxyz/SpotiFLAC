@@ -90,7 +90,7 @@ export function SettingsPage() {
       }
     };
     loadDefaults();
-  }, []);
+  }, [savedSettings.downloadPath]);
 
   const handleSave = () => {
     saveSettings(tempSettings);

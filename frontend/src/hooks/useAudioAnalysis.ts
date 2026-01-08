@@ -36,7 +36,7 @@ export function useAudioAnalysis() {
         const parsed = JSON.parse(saved);
         return parsed.filePath || "";
       }
-    } catch (err) {
+    } catch {
       // Ignore
     }
     return "";
@@ -53,7 +53,7 @@ export function useAudioAnalysis() {
           return true;
         }
       }
-    } catch (err) {
+    } catch {
       // Ignore
     }
     return false;
@@ -86,7 +86,8 @@ export function useAudioAnalysis() {
       }
 
       // Save detail (without spectrum) to sessionStorage
-      const { spectrum, ...detailResult } = analysisResult;
+      const { spectrum: _spectrum, ...detailResult } = analysisResult;
+      void _spectrum;
       try {
         sessionStorage.setItem(STORAGE_KEY, JSON.stringify({
           filePath,
@@ -119,7 +120,7 @@ export function useAudioAnalysis() {
     setSelectedFilePath("");
     try {
       sessionStorage.removeItem(STORAGE_KEY);
-    } catch (err) {
+    } catch {
       // Ignore
     }
     clearSpectrumCache();

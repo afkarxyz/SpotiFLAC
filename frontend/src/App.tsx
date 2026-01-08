@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,6 +41,9 @@ import { useLyrics } from "@/hooks/useLyrics";
 import { useCover } from "@/hooks/useCover";
 import { useAvailability } from "@/hooks/useAvailability";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
+import { fetchSpotifyMetadata } from "@/lib/api";
+import type { InputMode, BatchJobItem } from "@/types/batch";
+import type { TrackMetadata } from "@/types/api";
 
 const HISTORY_KEY = "spotiflac_fetch_history";
 const MAX_HISTORY = 5;
@@ -55,7 +58,15 @@ function App() {
   const [hasUpdate, setHasUpdate] = useState(false);
   const [releaseDate, setReleaseDate] = useState<string | null>(null);
   const [fetchHistory, setFetchHistory] = useState<HistoryItem[]>([]);
-  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [inputMode, setInputMode] = useState<InputMode>("url");
+  const [batchInput, setBatchInput] = useState("");
+  const [batchItems, setBatchItems] = useState<BatchJobItem[]>([]);
+  const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [batchStats, setBatchStats] = useState<{ total: number; processed: number; current?: string }>({
+    total: 0,
+    processed: 0,
+  });
+  const batchCancelRef = useRef(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   const ITEMS_PER_PAGE = 50;
@@ -67,6 +78,10 @@ function App() {
   const cover = useCover();
   const availability = useAvailability();
   const downloadQueue = useDownloadQueueDialog();
+  const downloadRef = useRef(download);
+  const lyricsRef = useRef(lyrics);
+  const coverRef = useRef(cover);
+  const availabilityRef = useRef(availability);
 
 
   useEffect(() => {
@@ -116,13 +131,29 @@ function App() {
   useEffect(() => {
     setSelectedTracks([]);
     setSearchQuery("");
-    download.resetDownloadedTracks();
-    lyrics.resetLyricsState();
-    cover.resetCoverState();
-    availability.clearAvailability();
+    downloadRef.current.resetDownloadedTracks();
+    lyricsRef.current.resetLyricsState();
+    coverRef.current.resetCoverState();
+    availabilityRef.current.clearAvailability();
     setSortBy("default");
     setCurrentListPage(1);
   }, [metadata.metadata]);
+
+  useEffect(() => {
+    downloadRef.current = download;
+  }, [download]);
+
+  useEffect(() => {
+    lyricsRef.current = lyrics;
+  }, [lyrics]);
+
+  useEffect(() => {
+    coverRef.current = cover;
+  }, [cover]);
+
+  useEffect(() => {
+    availabilityRef.current = availability;
+  }, [availability]);
 
   const checkForUpdates = async () => {
     try {
@@ -155,15 +186,15 @@ function App() {
     }
   };
 
-  const saveHistory = (history: HistoryItem[]) => {
+  const saveHistory = useCallback((history: HistoryItem[]) => {
     try {
       localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
     } catch (err) {
       console.error("Failed to save history:", err);
     }
-  };
+  }, []);
 
-  const addToHistory = (item: Omit<HistoryItem, "id" | "timestamp">) => {
+  const addToHistory = useCallback((item: Omit<HistoryItem, "id" | "timestamp">) => {
     setFetchHistory((prev) => {
       const filtered = prev.filter((h) => h.url !== item.url);
       const newItem: HistoryItem = {
@@ -175,7 +206,7 @@ function App() {
       saveHistory(updated);
       return updated;
     });
-  };
+  }, [saveHistory]);
 
   const removeFromHistory = (id: string) => {
     setFetchHistory((prev) => {
@@ -193,11 +224,159 @@ function App() {
     }
   };
 
+  const updateBatchItem = (index: number, updates: Partial<BatchJobItem>) => {
+    setBatchItems((prev) =>
+      prev.map((item, idx) => (idx === index ? { ...item, ...updates } : item))
+    );
+  };
+
+  const handleStartBatchDownloads = async () => {
+    if (isBatchRunning) {
+      return;
+    }
+
+    const urls = batchInput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    if (urls.length === 0) {
+      toast.error("Add at least one Spotify album URL");
+      return;
+    }
+
+    if (download.isDownloading || cover.isBulkDownloadingCovers) {
+      toast.error("Finish or stop the current download before starting batch mode");
+      return;
+    }
+
+    const initialItems: BatchJobItem[] = urls.map((url, index) => ({
+      id: index,
+      url,
+      status: "pending",
+    }));
+
+    setBatchItems(initialItems);
+    setBatchStats({ total: initialItems.length, processed: 0 });
+    batchCancelRef.current = false;
+    setIsBatchRunning(true);
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    for (let i = 0; i < initialItems.length; i++) {
+      if (batchCancelRef.current) {
+        break;
+      }
+
+      const entryUrl = initialItems[i].url;
+      updateBatchItem(i, { status: "processing", message: undefined, title: undefined });
+      setBatchStats((prev) => ({ ...prev, current: entryUrl, processed: i }));
+
+      if (!entryUrl.includes("open.spotify.com/album/")) {
+        failureCount++;
+        updateBatchItem(i, {
+          status: "error",
+          message: "Batch mode currently supports album URLs only.",
+        });
+        setBatchStats((prev) => ({ ...prev, processed: i + 1 }));
+        continue;
+      }
+
+      try {
+        setSpotifyUrl(entryUrl);
+        const data = await fetchSpotifyMetadata(entryUrl);
+        if (!("album_info" in data) || !("track_list" in data)) {
+          throw new Error("Batch mode currently supports album URLs only.");
+        }
+
+        const albumName = data.album_info.name || `Album ${i + 1}`;
+        updateBatchItem(i, { title: albumName });
+        setBatchStats((prev) => ({ ...prev, current: albumName }));
+
+        if (!data.track_list || data.track_list.length === 0) {
+          throw new Error("Album has no tracks to download.");
+        }
+
+        await download.handleDownloadAll(data.track_list, undefined, true);
+        if (batchCancelRef.current) {
+          throw new Error("Batch cancelled");
+        }
+
+        await cover.handleDownloadAllCovers(data.track_list, albumName, true);
+        if (batchCancelRef.current) {
+          throw new Error("Batch cancelled");
+        }
+
+        successCount++;
+        updateBatchItem(i, {
+          status: "success",
+          message: `Processed ${data.track_list.length} tracks`,
+        });
+      } catch (err) {
+        failureCount++;
+        const message =
+          err instanceof Error ? err.message : "Failed to process this album";
+        updateBatchItem(i, {
+          status: "error",
+          message,
+        });
+
+        if (batchCancelRef.current) {
+          break;
+        }
+      } finally {
+        setBatchStats((prev) => ({ ...prev, processed: i + 1 }));
+      }
+    }
+
+    setIsBatchRunning(false);
+    setBatchStats((prev) => ({ ...prev, current: "" }));
+
+    if (batchCancelRef.current) {
+      batchCancelRef.current = false;
+      setBatchItems((prev) =>
+        prev.map((item) =>
+          item.status === "pending" || item.status === "processing"
+            ? { ...item, status: "error", message: "Cancelled" }
+            : item
+        )
+      );
+      toast.info("Batch cancelled");
+      return;
+    }
+
+    if (successCount > 0 && failureCount === 0) {
+      toast.success(`Batch complete: ${successCount} album(s) downloaded`);
+    } else if (successCount > 0 && failureCount > 0) {
+      toast.warning(`${successCount} album(s) downloaded, ${failureCount} failed`);
+    } else {
+      toast.error("All batch entries failed");
+    }
+  };
+
+  const handleStopBatchDownloads = () => {
+    if (!isBatchRunning) return;
+    batchCancelRef.current = true;
+    download.handleStopDownload();
+    cover.handleStopCoverDownload();
+    toast.info("Stopping batch after the current album...");
+  };
+
   const handleFetchMetadata = async () => {
     const updatedUrl = await metadata.handleFetchMetadata(spotifyUrl);
     if (updatedUrl) {
       setSpotifyUrl(updatedUrl);
     }
+  };
+
+  const handleInputModeChange = (mode: InputMode) => {
+    if (isBatchRunning && mode !== "batch") {
+      toast.warning("Batch mode is running. Stop it before switching.");
+      return;
+    }
+
+    setInputMode(mode);
   };
 
   useEffect(() => {
@@ -246,7 +425,7 @@ function App() {
     if (historyItem) {
       addToHistory(historyItem);
     }
-  }, [metadata.metadata]);
+  }, [metadata.metadata, spotifyUrl, addToHistory]);
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
@@ -259,7 +438,7 @@ function App() {
     );
   };
 
-  const toggleSelectAll = (tracks: any[]) => {
+  const toggleSelectAll = (tracks: TrackMetadata[]) => {
     const tracksWithIsrc = tracks.filter((track) => track.isrc).map((track) => track.isrc);
     if (selectedTracks.length === tracksWithIsrc.length) {
       setSelectedTracks([]);
@@ -669,11 +848,18 @@ function App() {
               onHistorySelect={handleHistorySelect}
               onHistoryRemove={removeFromHistory}
               hasResult={!!metadata.metadata}
-              searchMode={isSearchMode}
-              onSearchModeChange={setIsSearchMode}
+              mode={inputMode}
+              onModeChange={handleInputModeChange}
+              batchInput={batchInput}
+              onBatchInputChange={setBatchInput}
+              onBatchStart={handleStartBatchDownloads}
+              onBatchStop={handleStopBatchDownloads}
+              batchItems={batchItems}
+              isBatchRunning={isBatchRunning}
+              batchStats={batchStats}
             />
 
-            {!isSearchMode && metadata.metadata && renderMetadata()}
+            {inputMode === "url" && metadata.metadata && renderMetadata()}
           </>
         );
     }

@@ -9,13 +9,13 @@ export function cn(...inputs: ClassValue[]) {
 
 
 export function sanitizePath(input: string, os: string): string {
-  let sanitized = input.trim(); // it will trim whitespace
+  const trimmed = input.trim();
   if (os === "Windows") {
-    return input.replace(/[<>:"/\\|?*]/g, "_");
+    return trimmed.replace(/[<>:"/\\|?*]/g, "_");
   }
 
   // unix-based OS
-  return input.replace(/\//g, "_");
+  return trimmed.replace(/\//g, "_");
 }
 
 export function joinPath(os: string, ...parts: string[]): string {
@@ -52,7 +52,7 @@ export function openExternal(url: string) {
   if (!url) return;
   try {
     BrowserOpenURL(url);
-  } catch (error) {
+  } catch {
     if (typeof window !== "undefined") {
       window.open(url, "_blank", "noopener,noreferrer");
     }

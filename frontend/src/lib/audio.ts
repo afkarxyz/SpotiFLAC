@@ -1,11 +1,21 @@
 // Audio utility for toast notifications using Web Audio API
 
+type AudioContextWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+
 class AudioManager {
   private audioContext: AudioContext | null = null;
 
   private getAudioContext(): AudioContext {
     if (!this.audioContext) {
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const BrowserAudioContext =
+        window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
+      if (!BrowserAudioContext) {
+        throw new Error("Web Audio API is not supported in this environment");
+      }
+      this.audioContext = new BrowserAudioContext();
     }
     return this.audioContext;
   }

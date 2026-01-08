@@ -41,24 +41,47 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const ListDirectoryFiles = (path: string): Promise<backend.FileInfo[]> => 
-  (window as any)['go']['main']['App']['ListDirectoryFiles'](path);
-const PreviewRenameFiles = (files: string[], format: string): Promise<backend.RenamePreview[]> => 
-  (window as any)['go']['main']['App']['PreviewRenameFiles'](files, format);
-const RenameFilesByMetadata = (files: string[], format: string): Promise<backend.RenameResult[]> => 
-  (window as any)['go']['main']['App']['RenameFilesByMetadata'](files, format);
-const ReadFileMetadata = (path: string): Promise<backend.AudioMetadata> => 
-  (window as any)['go']['main']['App']['ReadFileMetadata'](path);
-const IsFFprobeInstalled = (): Promise<boolean> => 
-  (window as any)['go']['main']['App']['IsFFprobeInstalled']();
-const DownloadFFmpeg = (): Promise<{ success: boolean; message: string; error?: string }> => 
-  (window as any)['go']['main']['App']['DownloadFFmpeg']();
-const ReadTextFile = (path: string): Promise<string> => 
-  (window as any)['go']['main']['App']['ReadTextFile'](path);
-const RenameFileTo = (oldPath: string, newName: string): Promise<void> => 
-  (window as any)['go']['main']['App']['RenameFileTo'](oldPath, newName);
-const ReadImageAsBase64 = (path: string): Promise<string> => 
-  (window as any)['go']['main']['App']['ReadImageAsBase64'](path);
+interface FileManagerAPI {
+  ListDirectoryFiles(path: string): Promise<backend.FileInfo[]>;
+  PreviewRenameFiles(files: string[], format: string): Promise<backend.RenamePreview[]>;
+  RenameFilesByMetadata(files: string[], format: string): Promise<backend.RenameResult[]>;
+  ReadFileMetadata(path: string): Promise<backend.AudioMetadata>;
+  IsFFprobeInstalled(): Promise<boolean>;
+  DownloadFFmpeg(): Promise<{ success: boolean; message: string; error?: string }>;
+  ReadTextFile(path: string): Promise<string>;
+  RenameFileTo(oldPath: string, newName: string): Promise<void>;
+  ReadImageAsBase64(path: string): Promise<string>;
+}
+
+type FileManagerWindow = Window &
+  typeof globalThis & {
+    go?: {
+      main?: {
+        App?: Partial<FileManagerAPI>;
+      };
+    };
+  };
+
+const getFileManagerAPI = (): FileManagerAPI => {
+  const api = (window as FileManagerWindow).go?.main?.App;
+  if (!api) {
+    throw new Error("Wails file manager API is unavailable");
+  }
+  return api as FileManagerAPI;
+};
+
+const ListDirectoryFiles = (path: string) => getFileManagerAPI().ListDirectoryFiles(path);
+const PreviewRenameFiles = (files: string[], format: string) =>
+  getFileManagerAPI().PreviewRenameFiles(files, format);
+const RenameFilesByMetadata = (files: string[], format: string) =>
+  getFileManagerAPI().RenameFilesByMetadata(files, format);
+const ReadFileMetadata = (path: string) => getFileManagerAPI().ReadFileMetadata(path);
+const IsFFprobeInstalled = () => getFileManagerAPI().IsFFprobeInstalled();
+const DownloadFFmpeg = () => getFileManagerAPI().DownloadFFmpeg();
+const ReadTextFile = (path: string) => getFileManagerAPI().ReadTextFile(path);
+const RenameFileTo = (oldPath: string, newName: string) =>
+  getFileManagerAPI().RenameFileTo(oldPath, newName);
+const ReadImageAsBase64 = (path: string) => getFileManagerAPI().ReadImageAsBase64(path);
 
 interface FileNode {
   name: string;
