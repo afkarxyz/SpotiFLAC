@@ -317,6 +317,7 @@ func VerifyLibrary(req LibraryVerificationRequest) (*LibraryVerificationResponse
 		lyricsClient := NewLyricsClient()
 
 		// Parallel download with worker pool
+		const maxWorkers = 10
 		var wg sync.WaitGroup
 		var mu sync.Mutex
 		downloadedCount := int32(0)
