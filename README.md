@@ -49,3 +49,7 @@ You are solely responsible for:
 3. Any legal consequences resulting from the misuse of this tool.
 
 The software is provided "as is", without warranty of any kind. The author assumes no liability for any bans, damages, or legal issues arising from its use.
+
+> [!TIP]
+>
+> **Star Us**, You will receive all release notifications from GitHub without any delay ~
