@@ -12,6 +12,8 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 ![macOS](https://img.shields.io/badge/macOS-10.13%2B-000000?style=for-the-badge&logo=apple&logoColor=white)
 ![Linux](https://img.shields.io/badge/Linux-Any-FCC624?style=for-the-badge&logo=linux&logoColor=white)
 
+<a href="https://trendshift.io/repositories/15737" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15737" alt="afkarxyz%2FSpotiFLAC | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
 </div>
 
 ### [Download](https://github.com/afkarxyz/SpotiFLAC/releases)
@@ -28,7 +30,12 @@ Mobile port of SpotiFLAC for Android & iOS — maintained by [@zarzet](https://g
 ### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader) 
 Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API
 
+### [SpotubeDL](https://spotubedl.com)
+Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality
+
 [![Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/afkarxyz)
+
+> Every coffee helps me keep going
 
 ## Disclaimer
 
