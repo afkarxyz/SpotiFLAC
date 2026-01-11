@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// DownloadStatus represents the status of a download item
 type DownloadStatus string
 
 const (
@@ -18,7 +17,6 @@ const (
 	StatusSkipped     DownloadStatus = "skipped"
 )
 
-// DownloadItem represents a single item in the download queue
 type DownloadItem struct {
 	ID           string         `json:"id"`
 	TrackName    string         `json:"track_name"`
@@ -26,16 +24,15 @@ type DownloadItem struct {
 	AlbumName    string         `json:"album_name"`
 	ISRC         string         `json:"isrc"`
 	Status       DownloadStatus `json:"status"`
-	Progress     float64        `json:"progress"`      // MB downloaded
-	TotalSize    float64        `json:"total_size"`    // MB total (if known)
-	Speed        float64        `json:"speed"`         // MB/s
-	StartTime    int64          `json:"start_time"`    // Unix timestamp
-	EndTime      int64          `json:"end_time"`      // Unix timestamp
-	ErrorMessage string         `json:"error_message"` // If failed
-	FilePath     string         `json:"file_path"`     // Final file path
+	Progress     float64        `json:"progress"`
+	TotalSize    float64        `json:"total_size"`
+	Speed        float64        `json:"speed"`
+	StartTime    int64          `json:"start_time"`
+	EndTime      int64          `json:"end_time"`
+	ErrorMessage string         `json:"error_message"`
+	FilePath     string         `json:"file_path"`
 }
 
-// Global progress tracker
 var (
 	currentProgress     float64
 	currentProgressLock sync.RWMutex
@@ -44,7 +41,6 @@ var (
 	currentSpeed        float64
 	speedLock           sync.RWMutex
 
-	// Download queue tracking
 	downloadQueue       []DownloadItem
 	downloadQueueLock   sync.RWMutex
 	currentItemID       string
@@ -55,27 +51,24 @@ var (
 	sessionStartLock    sync.RWMutex
 )
 
-// ProgressInfo represents download progress information
 type ProgressInfo struct {
 	IsDownloading bool    `json:"is_downloading"`
 	MBDownloaded  float64 `json:"mb_downloaded"`
 	SpeedMBps     float64 `json:"speed_mbps"`
 }
 
-// DownloadQueueInfo represents the complete download queue state
 type DownloadQueueInfo struct {
 	IsDownloading    bool           `json:"is_downloading"`
 	Queue            []DownloadItem `json:"queue"`
-	CurrentSpeed     float64        `json:"current_speed"`      // MB/s
-	TotalDownloaded  float64        `json:"total_downloaded"`   // MB this session
-	SessionStartTime int64          `json:"session_start_time"` // Unix timestamp
+	CurrentSpeed     float64        `json:"current_speed"`
+	TotalDownloaded  float64        `json:"total_downloaded"`
+	SessionStartTime int64          `json:"session_start_time"`
 	QueuedCount      int            `json:"queued_count"`
 	CompletedCount   int            `json:"completed_count"`
 	FailedCount      int            `json:"failed_count"`
 	SkippedCount     int            `json:"skipped_count"`
 }
 
-// GetDownloadProgress returns current download progress
 func GetDownloadProgress() ProgressInfo {
 	downloadingLock.RLock()
 	downloading := isDownloading
@@ -96,34 +89,30 @@ func GetDownloadProgress() ProgressInfo {
 	}
 }
 
-// SetDownloadSpeed updates the current download speed
 func SetDownloadSpeed(mbps float64) {
 	speedLock.Lock()
 	currentSpeed = mbps
 	speedLock.Unlock()
 }
 
-// SetDownloadProgress updates the current download progress
 func SetDownloadProgress(mbDownloaded float64) {
 	currentProgressLock.Lock()
 	currentProgress = mbDownloaded
 	currentProgressLock.Unlock()
 }
 
-// SetDownloading sets the downloading state
 func SetDownloading(downloading bool) {
 	downloadingLock.Lock()
 	isDownloading = downloading
 	downloadingLock.Unlock()
 
 	if !downloading {
-		// Reset progress when download completes
+
 		SetDownloadProgress(0)
 		SetDownloadSpeed(0)
 	}
 }
 
-// ProgressWriter wraps an io.Writer and reports download progress
 type ProgressWriter struct {
 	writer      io.Writer
 	total       int64
@@ -131,7 +120,7 @@ type ProgressWriter struct {
 	startTime   int64
 	lastTime    int64
 	lastBytes   int64
-	itemID      string // Track which download item this belongs to
+	itemID      string
 }
 
 func NewProgressWriter(writer io.Writer) *ProgressWriter {
@@ -147,7 +136,6 @@ func NewProgressWriter(writer io.Writer) *ProgressWriter {
 	}
 }
 
-// NewProgressWriterWithID creates a progress writer with an item ID for queue tracking
 func NewProgressWriterWithID(writer io.Writer, itemID string) *ProgressWriter {
 	pw := NewProgressWriter(writer)
 	pw.itemID = itemID
@@ -162,13 +150,11 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 	n, err := pw.writer.Write(p)
 	pw.total += int64(n)
 
-	// Report progress every 256KB for smoother updates
 	if pw.total-pw.lastPrinted >= 256*1024 {
 		mbDownloaded := float64(pw.total) / (1024 * 1024)
 
-		// Calculate speed (MB/s)
 		now := getCurrentTimeMillis()
-		timeDiff := float64(now-pw.lastTime) / 1000.0 // seconds
+		timeDiff := float64(now-pw.lastTime) / 1000.0
 		bytesDiff := float64(pw.total - pw.lastBytes)
 
 		var speedMBps float64
@@ -180,10 +166,8 @@ func (pw *ProgressWriter) Write(p []byte) (int, error) {
 			fmt.Printf("\rDownloaded: %.2f MB", mbDownloaded)
 		}
 
-		// Update global progress
 		SetDownloadProgress(mbDownloaded)
 
-		// Update individual item progress if we have an item ID
 		if pw.itemID != "" {
 			UpdateItemProgress(pw.itemID, mbDownloaded, speedMBps)
 		}
@@ -200,9 +184,6 @@ func (pw *ProgressWriter) GetTotal() int64 {
 	return pw.total
 }
 
-// Queue management functions
-
-// AddToQueue adds a new item to the download queue
 func AddToQueue(id, trackName, artistName, albumName, isrc string) {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
@@ -223,7 +204,6 @@ func AddToQueue(id, trackName, artistName, albumName, isrc string) {
 
 	downloadQueue = append(downloadQueue, item)
 
-	// Initialize session start time if this is the first item
 	sessionStartLock.Lock()
 	if sessionStartTime == 0 {
 		sessionStartTime = time.Now().Unix()
@@ -231,7 +211,6 @@ func AddToQueue(id, trackName, artistName, albumName, isrc string) {
 	sessionStartLock.Unlock()
 }
 
-// StartDownloadItem marks an item as currently downloading
 func StartDownloadItem(id string) {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
@@ -250,7 +229,6 @@ func StartDownloadItem(id string) {
 	currentItemLock.Unlock()
 }
 
-// UpdateItemProgress updates the progress of the current download item
 func UpdateItemProgress(id string, progress, speed float64) {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
@@ -264,14 +242,12 @@ func UpdateItemProgress(id string, progress, speed float64) {
 	}
 }
 
-// GetCurrentItemID returns the ID of the currently downloading item
 func GetCurrentItemID() string {
 	currentItemLock.RLock()
 	defer currentItemLock.RUnlock()
 	return currentItemID
 }
 
-// CompleteDownloadItem marks an item as completed
 func CompleteDownloadItem(id, filePath string, finalSize float64) {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
@@ -284,7 +260,6 @@ func CompleteDownloadItem(id, filePath string, finalSize float64) {
 			downloadQueue[i].Progress = finalSize
 			downloadQueue[i].TotalSize = finalSize
 
-			// Add to total downloaded
 			totalDownloadedLock.Lock()
 			totalDownloaded += finalSize
 			totalDownloadedLock.Unlock()
@@ -293,7 +268,6 @@ func CompleteDownloadItem(id, filePath string, finalSize float64) {
 	}
 }
 
-// FailDownloadItem marks an item as failed
 func FailDownloadItem(id, errorMsg string) {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
@@ -308,7 +282,6 @@ func FailDownloadItem(id, errorMsg string) {
 	}
 }
 
-// SkipDownloadItem marks an item as skipped (already exists)
 func SkipDownloadItem(id, filePath string) {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
@@ -323,9 +296,8 @@ func SkipDownloadItem(id, filePath string) {
 	}
 }
 
-// GetDownloadQueue returns the complete download queue state
 func GetDownloadQueue() DownloadQueueInfo {
-	// Auto-reset session if all downloads are complete
+
 	ResetSessionIfComplete()
 
 	downloadQueueLock.RLock()
@@ -347,7 +319,6 @@ func GetDownloadQueue() DownloadQueueInfo {
 	sessionStart := sessionStartTime
 	sessionStartLock.RUnlock()
 
-	// Count statuses
 	var queued, completed, failed, skipped int
 	for _, item := range downloadQueue {
 		switch item.Status {
@@ -362,7 +333,6 @@ func GetDownloadQueue() DownloadQueueInfo {
 		}
 	}
 
-	// Create a copy of the queue
 	queueCopy := make([]DownloadItem, len(downloadQueue))
 	copy(queueCopy, downloadQueue)
 
@@ -379,12 +349,10 @@ func GetDownloadQueue() DownloadQueueInfo {
 	}
 }
 
-// ClearDownloadQueue clears all completed, failed, and skipped items from the queue
 func ClearDownloadQueue() {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
 
-	// Keep only queued and downloading items
 	newQueue := make([]DownloadItem, 0)
 	for _, item := range downloadQueue {
 		if item.Status == StatusQueued || item.Status == StatusDownloading {
@@ -394,7 +362,6 @@ func ClearDownloadQueue() {
 	downloadQueue = newQueue
 }
 
-// ClearAllDownloads clears the entire queue and resets session stats
 func ClearAllDownloads() {
 	downloadQueueLock.Lock()
 	downloadQueue = []DownloadItem{}
@@ -412,13 +379,10 @@ func ClearAllDownloads() {
 	currentItemID = ""
 	currentItemLock.Unlock()
 
-	// Reset current progress and speed
 	SetDownloadProgress(0)
 	SetDownloadSpeed(0)
 }
 
-// CancelAllQueuedItems marks all queued items as skipped (cancelled)
-// This is called when user stops a download or when batch download completes
 func CancelAllQueuedItems() {
 	downloadQueueLock.Lock()
 	defer downloadQueueLock.Unlock()
@@ -432,8 +396,6 @@ func CancelAllQueuedItems() {
 	}
 }
 
-// ResetSessionIfComplete resets session stats if no active or queued downloads
-// Note: Does NOT clear the queue - items remain visible for history
 func ResetSessionIfComplete() {
 	downloadQueueLock.RLock()
 	hasActiveOrQueued := false
@@ -445,8 +407,6 @@ func ResetSessionIfComplete() {
 	}
 	downloadQueueLock.RUnlock()
 
-	// If no active or queued items, reset session stats
-	// But keep the queue items for history visibility
 	if !hasActiveOrQueued {
 		sessionStartLock.Lock()
 		sessionStartTime = 0

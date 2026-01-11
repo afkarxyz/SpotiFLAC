@@ -8,7 +8,6 @@ import (
 	"github.com/mewkiz/flac"
 )
 
-// SpectrumData contains frequency spectrum information
 type SpectrumData struct {
 	TimeSlices []TimeSlice `json:"time_slices"`
 	SampleRate int         `json:"sample_rate"`
@@ -17,15 +16,13 @@ type SpectrumData struct {
 	MaxFreq    float64     `json:"max_freq"`
 }
 
-// TimeSlice represents spectrum data at a point in time
 type TimeSlice struct {
 	Time       float64   `json:"time"`
 	Magnitudes []float64 `json:"magnitudes"`
 }
 
-// AnalyzeSpectrum decodes FLAC file and performs FFT analysis
 func AnalyzeSpectrum(filepath string) (*SpectrumData, error) {
-	// Open FLAC file
+
 	stream, err := flac.ParseFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse FLAC: %w", err)
@@ -36,7 +33,6 @@ func AnalyzeSpectrum(filepath string) (*SpectrumData, error) {
 	sampleRate := int(info.SampleRate)
 	channels := int(info.NChannels)
 
-	// Read audio samples
 	samples, err := readSamples(stream, channels)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read samples: %w", err)
@@ -46,28 +42,23 @@ func AnalyzeSpectrum(filepath string) (*SpectrumData, error) {
 		return nil, fmt.Errorf("no audio samples found")
 	}
 
-	// Calculate spectrum
 	return calculateSpectrum(samples, sampleRate), nil
 }
 
-// readSamples reads and decodes audio samples from FLAC stream
 func readSamples(stream *flac.Stream, channels int) ([]float64, error) {
 	var allSamples []float64
-	maxSamples := 10 * 1024 * 1024 // Limit to ~10 million samples to avoid memory issues
+	maxSamples := 10 * 1024 * 1024
 
-	// Decode frames
 	for {
 		frame, err := stream.ParseNext()
 		if err != nil {
-			// End of stream
+
 			break
 		}
 
-		// Convert samples to float64 and mix channels to mono
 		for i := 0; i < frame.Subframes[0].NSamples; i++ {
 			var sample float64
 
-			// Mix all channels to mono by averaging
 			for ch := 0; ch < channels; ch++ {
 				sample += float64(frame.Subframes[ch].Samples[i])
 			}
@@ -75,7 +66,6 @@ func readSamples(stream *flac.Stream, channels int) ([]float64, error) {
 
 			allSamples = append(allSamples, sample)
 
-			// Limit sample count
 			if len(allSamples) >= maxSamples {
 				return allSamples, nil
 			}
@@ -85,7 +75,6 @@ func readSamples(stream *flac.Stream, channels int) ([]float64, error) {
 	return allSamples, nil
 }
 
-// calculateSpectrum performs FFT analysis on audio samples
 func calculateSpectrum(samples []float64, sampleRate int) *SpectrumData {
 	fftSize := 8192
 	numTimeSlices := 300
@@ -140,7 +129,6 @@ func calculateSpectrum(samples []float64, sampleRate int) *SpectrumData {
 	}
 }
 
-// applyHannWindow applies Hann window to reduce spectral leakage
 func applyHannWindow(samples []float64) []float64 {
 	n := len(samples)
 	windowed := make([]float64, n)
@@ -153,7 +141,6 @@ func applyHannWindow(samples []float64) []float64 {
 	return windowed
 }
 
-// fft performs Fast Fourier Transform using Cooley-Tukey algorithm
 func fft(samples []float64) []complex128 {
 	n := len(samples)
 
@@ -165,7 +152,6 @@ func fft(samples []float64) []complex128 {
 	return fftRecursive(x)
 }
 
-// fftRecursive performs recursive FFT
 func fftRecursive(x []complex128) []complex128 {
 	n := len(x)
 

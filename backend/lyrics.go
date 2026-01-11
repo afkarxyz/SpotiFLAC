@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-// LRCLibResponse represents the LRCLIB API response
 type LRCLibResponse struct {
 	ID           int     `json:"id"`
 	Name         string  `json:"name"`
@@ -27,21 +26,18 @@ type LRCLibResponse struct {
 	SyncedLyrics string  `json:"syncedLyrics"`
 }
 
-// LyricsLine represents a single line of lyrics
 type LyricsLine struct {
 	StartTimeMs string `json:"startTimeMs"`
 	Words       string `json:"words"`
 	EndTimeMs   string `json:"endTimeMs"`
 }
 
-// LyricsResponse represents the API response
 type LyricsResponse struct {
 	Error    bool         `json:"error"`
 	SyncType string       `json:"syncType"`
 	Lines    []LyricsLine `json:"lines"`
 }
 
-// LyricsDownloadRequest represents a request to download lyrics
 type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
@@ -57,7 +53,6 @@ type LyricsDownloadRequest struct {
 	DiscNumber          int    `json:"disc_number"`
 }
 
-// LyricsDownloadResponse represents the response from lyrics download
 type LyricsDownloadResponse struct {
 	Success       bool   `json:"success"`
 	Message       string `json:"message"`
@@ -66,26 +61,27 @@ type LyricsDownloadResponse struct {
 	AlreadyExists bool   `json:"already_exists,omitempty"`
 }
 
-// LyricsClient handles lyrics fetching
 type LyricsClient struct {
 	httpClient *http.Client
 }
 
-// NewLyricsClient creates a new lyrics client
 func NewLyricsClient() *LyricsClient {
 	return &LyricsClient{
 		httpClient: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-// FetchLyricsWithMetadata fetches lyrics using track name and artist from LRCLIB
-func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName string) (*LyricsResponse, error) {
-	// Try LRCLIB API
+func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName string, duration int) (*LyricsResponse, error) {
+
 	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9scmNsaWIubmV0L2FwaS9nZXQ/YXJ0aXN0X25hbWU9")
 	apiURL := fmt.Sprintf("%s%s&track_name=%s",
 		string(apiBase),
 		url.QueryEscape(artistName),
 		url.QueryEscape(trackName))
+
+	if duration > 0 {
+		apiURL = fmt.Sprintf("%s&duration=%d", apiURL, duration)
+	}
 
 	resp, err := c.httpClient.Get(apiURL)
 	if err != nil {
@@ -107,11 +103,9 @@ func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName string) (*L
 		return nil, fmt.Errorf("failed to parse LRCLIB response: %v", err)
 	}
 
-	// Convert LRCLIB response to our LyricsResponse format
 	return c.convertLRCLibToLyricsResponse(&lrcLibResp), nil
 }
 
-// convertLRCLibToLyricsResponse converts LRCLIB response to our standard format
 func (c *LyricsClient) convertLRCLibToLyricsResponse(lrcLib *LRCLibResponse) *LyricsResponse {
 	resp := &LyricsResponse{
 		Error:    false,
@@ -119,7 +113,6 @@ func (c *LyricsClient) convertLRCLibToLyricsResponse(lrcLib *LRCLibResponse) *Ly
 		Lines:    []LyricsLine{},
 	}
 
-	// Prefer synced lyrics, fall back to plain
 	lyricsText := lrcLib.SyncedLyrics
 	if lyricsText == "" {
 		lyricsText = lrcLib.PlainLyrics
@@ -131,7 +124,6 @@ func (c *LyricsClient) convertLRCLibToLyricsResponse(lrcLib *LRCLibResponse) *Ly
 		return resp
 	}
 
-	// Parse synced lyrics format [mm:ss.xx] text
 	lines := strings.Split(lyricsText, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -139,14 +131,12 @@ func (c *LyricsClient) convertLRCLibToLyricsResponse(lrcLib *LRCLibResponse) *Ly
 			continue
 		}
 
-		// Check if line has timestamp [mm:ss.xx]
 		if strings.HasPrefix(line, "[") && len(line) > 10 {
 			closeBracket := strings.Index(line, "]")
 			if closeBracket > 0 {
 				timestamp := line[1:closeBracket]
 				words := strings.TrimSpace(line[closeBracket+1:])
 
-				// Convert [mm:ss.xx] to milliseconds
 				ms := lrcTimestampToMs(timestamp)
 				resp.Lines = append(resp.Lines, LyricsLine{
 					StartTimeMs: fmt.Sprintf("%d", ms),
@@ -156,9 +146,8 @@ func (c *LyricsClient) convertLRCLibToLyricsResponse(lrcLib *LRCLibResponse) *Ly
 			}
 		}
 
-		// Plain lyrics line (no timestamp)
 		resp.Lines = append(resp.Lines, LyricsLine{
-			StartTimeMs: "0",
+			StartTimeMs: "",
 			Words:       line,
 		})
 	}
@@ -166,10 +155,9 @@ func (c *LyricsClient) convertLRCLibToLyricsResponse(lrcLib *LRCLibResponse) *Ly
 	return resp
 }
 
-// lrcTimestampToMs converts LRC timestamp [mm:ss.xx] to milliseconds
 func lrcTimestampToMs(timestamp string) int64 {
 	var minutes, seconds, centiseconds int64
-	// Try parsing mm:ss.xx format
+
 	n, _ := fmt.Sscanf(timestamp, "%d:%d.%d", &minutes, &seconds, &centiseconds)
 	if n >= 2 {
 		return minutes*60*1000 + seconds*1000 + centiseconds*10
@@ -177,7 +165,6 @@ func lrcTimestampToMs(timestamp string) int64 {
 	return 0
 }
 
-// FetchLyricsFromLRCLibSearch fetches lyrics using LRCLIB search API
 func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string) (*LyricsResponse, error) {
 	query := fmt.Sprintf("%s %s", artistName, trackName)
 	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9scmNsaWIubmV0L2FwaS9zZWFyY2g/cT0=")
@@ -207,7 +194,6 @@ func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string)
 		return nil, fmt.Errorf("no results found")
 	}
 
-	// Find best match - prefer one with synced lyrics
 	var best *LRCLibResponse
 	for i := range results {
 		if results[i].SyncedLyrics != "" {
@@ -226,41 +212,37 @@ func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string)
 	return c.convertLRCLibToLyricsResponse(best), nil
 }
 
-// simplifyTrackName removes common suffixes like "(feat. X)", "(Remastered)", etc.
 func simplifyTrackName(name string) string {
-	// Remove content in parentheses
+
 	if idx := strings.Index(name, "("); idx > 0 {
 		name = strings.TrimSpace(name[:idx])
 	}
-	// Remove content after " - " (like "From the Motion Picture")
+
 	if idx := strings.Index(name, " - "); idx > 0 {
 		name = strings.TrimSpace(name[:idx])
 	}
 	return name
 }
 
-// FetchLyricsAllSources tries all LRCLIB sources to get lyrics
-func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName string) (*LyricsResponse, string, error) {
-	// 1. Try LRCLIB exact match
-	resp, err := c.FetchLyricsWithMetadata(trackName, artistName)
+func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName string, duration int) (*LyricsResponse, string, error) {
+
+	resp, err := c.FetchLyricsWithMetadata(trackName, artistName, duration)
 	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
 		return resp, "LRCLIB", nil
 	}
 	fmt.Printf("   LRCLIB exact: %v\n", err)
 
-	// 2. Try LRCLIB search
 	resp, err = c.FetchLyricsFromLRCLibSearch(trackName, artistName)
 	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
 		return resp, "LRCLIB Search", nil
 	}
 	fmt.Printf("   LRCLIB search: %v\n", err)
 
-	// 3. Try with simplified track name (remove parentheses, subtitles)
 	simplifiedTrack := simplifyTrackName(trackName)
 	if simplifiedTrack != trackName {
 		fmt.Printf("   Trying simplified name: %s\n", simplifiedTrack)
 
-		resp, err = c.FetchLyricsWithMetadata(simplifiedTrack, artistName)
+		resp, err = c.FetchLyricsWithMetadata(simplifiedTrack, artistName, duration)
 		if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
 			return resp, "LRCLIB (simplified)", nil
 		}
@@ -274,31 +256,31 @@ func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName st
 	return nil, "", fmt.Errorf("lyrics not found in any source")
 }
 
-// ConvertToLRC converts lyrics response to LRC format
 func (c *LyricsClient) ConvertToLRC(lyrics *LyricsResponse, trackName, artistName string) string {
 	var sb strings.Builder
 
-	// Add metadata
 	sb.WriteString(fmt.Sprintf("[ti:%s]\n", trackName))
 	sb.WriteString(fmt.Sprintf("[ar:%s]\n", artistName))
 	sb.WriteString("[by:SpotiFlac]\n")
 	sb.WriteString("\n")
 
-	// Add lyrics lines
 	for _, line := range lyrics.Lines {
 		if line.Words == "" {
 			continue
 		}
 
-		// Convert milliseconds to LRC timestamp format [mm:ss.xx]
-		timestamp := msToLRCTimestamp(line.StartTimeMs)
-		sb.WriteString(fmt.Sprintf("%s%s\n", timestamp, line.Words))
+		if line.StartTimeMs == "" {
+			sb.WriteString(fmt.Sprintf("%s\n", line.Words))
+		} else {
+
+			timestamp := msToLRCTimestamp(line.StartTimeMs)
+			sb.WriteString(fmt.Sprintf("%s%s\n", timestamp, line.Words))
+		}
 	}
 
 	return sb.String()
 }
 
-// msToLRCTimestamp converts milliseconds string to LRC timestamp format [mm:ss.xx]
 func msToLRCTimestamp(msStr string) string {
 	var ms int64
 	fmt.Sscanf(msStr, "%d", &ms)
@@ -311,14 +293,12 @@ func msToLRCTimestamp(msStr string) string {
 	return fmt.Sprintf("[%02d:%02d.%02d]", minutes, seconds, centiseconds)
 }
 
-// buildLyricsFilename builds the lyrics filename based on settings (same as track filename)
 func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat string, includeTrackNumber bool, position, discNumber int) string {
 	safeTitle := sanitizeFilename(trackName)
 	safeArtist := sanitizeFilename(artistName)
 	safeAlbum := sanitizeFilename(albumName)
 	safeAlbumArtist := sanitizeFilename(albumArtist)
 
-	// Extract year from release date (format: YYYY-MM-DD or YYYY)
 	year := ""
 	if len(releaseDate) >= 4 {
 		year = releaseDate[:4]
@@ -326,7 +306,6 @@ func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseD
 
 	var filename string
 
-	// Check if format is a template (contains {})
 	if strings.Contains(filenameFormat, "{") {
 		filename = filenameFormat
 		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
@@ -335,34 +314,31 @@ func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseD
 		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
 		filename = strings.ReplaceAll(filename, "{year}", year)
 
-		// Handle disc number
 		if discNumber > 0 {
 			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
 		} else {
 			filename = strings.ReplaceAll(filename, "{disc}", "")
 		}
 
-		// Handle track number - if position is 0, remove {track} and surrounding separators
 		if position > 0 {
 			filename = strings.ReplaceAll(filename, "{track}", fmt.Sprintf("%02d", position))
 		} else {
-			// Remove {track} with common separators
+
 			filename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(filename, "")
 			filename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(filename, "")
 			filename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(filename, "")
 		}
 	} else {
-		// Legacy format support
+
 		switch filenameFormat {
 		case "artist-title":
 			filename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
 		case "title":
 			filename = safeTitle
-		default: // "title-artist"
+		default:
 			filename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
 		}
 
-		// Add track number prefix if enabled (legacy behavior)
 		if includeTrackNumber && position > 0 {
 			filename = fmt.Sprintf("%02d. %s", position, filename)
 		}
@@ -371,7 +347,47 @@ func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseD
 	return filename + ".lrc"
 }
 
-// DownloadLyrics downloads lyrics for a single track
+func findAudioFileForLyrics(dir, trackName, artistName string) string {
+
+	safeTitle := sanitizeFilename(trackName)
+	safeArtist := sanitizeFilename(artistName)
+
+	audioExts := []string{".flac", ".mp3", ".m4a", ".FLAC", ".MP3", ".M4A"}
+
+	patterns := []string{
+		fmt.Sprintf("%s - %s", safeTitle, safeArtist),
+		fmt.Sprintf("%s - %s", safeArtist, safeTitle),
+		safeTitle,
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		filename := entry.Name()
+		baseName := strings.TrimSuffix(filename, filepath.Ext(filename))
+
+		for _, pattern := range patterns {
+			if strings.HasPrefix(baseName, pattern) || strings.Contains(baseName, pattern) {
+				ext := strings.ToLower(filepath.Ext(filename))
+				for _, audioExt := range audioExts {
+					if ext == strings.ToLower(audioExt) {
+						return filepath.Join(dir, filename)
+					}
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
 func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloadResponse, error) {
 	if req.SpotifyID == "" {
 		return &LyricsDownloadResponse{
@@ -380,7 +396,6 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		}, fmt.Errorf("spotify ID is required")
 	}
 
-	// Create output directory if it doesn't exist
 	outputDir := req.OutputDir
 	if outputDir == "" {
 		outputDir = GetDefaultMusicPath()
@@ -395,15 +410,13 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		}, err
 	}
 
-	// Generate filename using same format as track
 	filenameFormat := req.FilenameFormat
 	if filenameFormat == "" {
-		filenameFormat = "title-artist" // default
+		filenameFormat = "title-artist"
 	}
 	filename := buildLyricsFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, filenameFormat, req.TrackNumber, req.Position, req.DiscNumber)
 	filePath := filepath.Join(outputDir, filename)
 
-	// Check if file already exists
 	if fileInfo, err := os.Stat(filePath); err == nil && fileInfo.Size() > 0 {
 		return &LyricsDownloadResponse{
 			Success:       true,
@@ -413,8 +426,17 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		}, nil
 	}
 
-	// Fetch lyrics from LRCLIB
-	lyrics, _, err := c.FetchLyricsAllSources(req.SpotifyID, req.TrackName, req.ArtistName)
+	audioDuration := 0
+	audioFile := findAudioFileForLyrics(outputDir, req.TrackName, req.ArtistName)
+	if audioFile != "" {
+		duration, err := GetAudioDuration(audioFile)
+		if err == nil && duration > 0 {
+			audioDuration = int(duration)
+			fmt.Printf("[DownloadLyrics] Found audio file, duration: %d seconds\n", audioDuration)
+		}
+	}
+
+	lyrics, _, err := c.FetchLyricsAllSources(req.SpotifyID, req.TrackName, req.ArtistName, audioDuration)
 	if err != nil {
 		return &LyricsDownloadResponse{
 			Success: false,
@@ -422,10 +444,8 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		}, err
 	}
 
-	// Convert to LRC format
 	lrcContent := c.ConvertToLRC(lyrics, req.TrackName, req.ArtistName)
 
-	// Write LRC file
 	if err := os.WriteFile(filePath, []byte(lrcContent), 0644); err != nil {
 		return &LyricsDownloadResponse{
 			Success: false,

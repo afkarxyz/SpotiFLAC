@@ -1,13 +1,13 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	pathfilepath "path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 
 	id3v2 "github.com/bogem/id3v2/v2"
 	"github.com/go-flac/flacpicture"
@@ -20,12 +20,15 @@ type Metadata struct {
 	Artist      string
 	Album       string
 	AlbumArtist string
-	Date        string // Recorded date (full date YYYY-MM-DD)
-	ReleaseDate string // Release date (full date) - kept for compatibility
+	Date        string
+	ReleaseDate string
 	TrackNumber int
-	TotalTracks int // Total tracks in album
+	TotalTracks int
 	DiscNumber  int
-	ISRC        string
+	TotalDiscs  int
+	URL         string
+	Copyright   string
+	Publisher   string
 	Lyrics      string
 	Description string
 }
@@ -70,15 +73,21 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	if metadata.DiscNumber > 0 {
 		_ = cmt.Add("DISCNUMBER", strconv.Itoa(metadata.DiscNumber))
 	}
-	if metadata.ISRC != "" {
-		_ = cmt.Add(flacvorbis.FIELD_ISRC, metadata.ISRC)
+	if metadata.TotalDiscs > 0 {
+		_ = cmt.Add("TOTALDISCS", strconv.Itoa(metadata.TotalDiscs))
+	}
+	if metadata.Copyright != "" {
+		_ = cmt.Add("COPYRIGHT", metadata.Copyright)
+	}
+	if metadata.Publisher != "" {
+		_ = cmt.Add("PUBLISHER", metadata.Publisher)
 	}
 	if metadata.Description != "" {
 		_ = cmt.Add("DESCRIPTION", metadata.Description)
 	}
-	// Lyrics is added last to keep it at the bottom
+
 	if metadata.Lyrics != "" {
-		_ = cmt.Add("LYRICS", metadata.Lyrics) // Or "UNSYNCEDLYRICS" for unsynced
+		_ = cmt.Add("LYRICS", metadata.Lyrics)
 	}
 
 	cmtBlock := cmt.Marshal()
@@ -135,20 +144,17 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-// extractYear extracts the year from a release date string
-// Handles formats: "YYYY-MM-DD", "YYYY-MM", "YYYY"
 func extractYear(releaseDate string) string {
 	if releaseDate == "" {
 		return ""
 	}
-	// Try to extract year (first 4 digits)
+
 	if len(releaseDate) >= 4 {
 		return releaseDate[:4]
 	}
 	return releaseDate
 }
 
-// EmbedLyricsOnly adds lyrics to a FLAC file while preserving existing metadata
 func EmbedLyricsOnly(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil
@@ -171,10 +177,8 @@ func EmbedLyricsOnly(filepath string, lyrics string) error {
 		}
 	}
 
-	// Create new comment block, preserving existing comments
 	cmt := flacvorbis.New()
 
-	// Copy existing comments except LYRICS
 	if existingCmt != nil {
 		for _, comment := range existingCmt.Comments {
 			parts := strings.SplitN(comment, "=", 2)
@@ -187,7 +191,6 @@ func EmbedLyricsOnly(filepath string, lyrics string) error {
 		}
 	}
 
-	// Add lyrics
 	_ = cmt.Add("LYRICS", lyrics)
 
 	cmtBlock := cmt.Marshal()
@@ -204,82 +207,6 @@ func EmbedLyricsOnly(filepath string, lyrics string) error {
 	return nil
 }
 
-// ReadISRCFromFile reads ISRC metadata from a FLAC file
-func ReadISRCFromFile(filepath string) (string, error) {
-	if !fileExists(filepath) {
-		return "", fmt.Errorf("file does not exist")
-	}
-
-	f, err := flac.ParseFile(filepath)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse FLAC file: %w", err)
-	}
-
-	// Find VorbisComment block
-	for _, block := range f.Meta {
-		if block.Type == flac.VorbisComment {
-			cmt, err := flacvorbis.ParseFromMetaDataBlock(*block)
-			if err != nil {
-				continue
-			}
-
-			// Get ISRC field
-			isrcValues, err := cmt.Get(flacvorbis.FIELD_ISRC)
-			if err == nil && len(isrcValues) > 0 {
-				return isrcValues[0], nil
-			}
-		}
-	}
-
-	return "", nil // No ISRC found
-}
-
-// CheckISRCExists checks if a file with the given ISRC already exists in the directory
-func CheckISRCExists(outputDir string, targetISRC string) (string, bool) {
-	if targetISRC == "" {
-		return "", false
-	}
-
-	// Read all .flac files in directory
-	entries, err := os.ReadDir(outputDir)
-	if err != nil {
-		return "", false
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-
-		// Check only .flac files
-		filename := entry.Name()
-		if len(filename) < 5 || filename[len(filename)-5:] != ".flac" {
-			continue
-		}
-
-		filepath := fmt.Sprintf("%s/%s", outputDir, filename)
-
-		// Read ISRC from file (this will fail for corrupted files)
-		isrc, err := ReadISRCFromFile(filepath)
-		if err != nil {
-			// File is corrupted or unreadable, delete it
-			fmt.Printf("Removing corrupted/unreadable file: %s (error: %v)\n", filepath, err)
-			if removeErr := os.Remove(filepath); removeErr != nil {
-				fmt.Printf("Warning: Failed to remove corrupted file %s: %v\n", filepath, removeErr)
-			}
-			continue
-		}
-
-		// Compare ISRC (case-insensitive)
-		if isrc != "" && strings.EqualFold(isrc, targetISRC) {
-			return filepath, true
-		}
-	}
-
-	return "", false
-}
-
-// ExtractCoverArt extracts cover art from an audio file and saves it to a temporary file
 func ExtractCoverArt(filePath string) (string, error) {
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
 
@@ -293,7 +220,6 @@ func ExtractCoverArt(filePath string) (string, error) {
 	}
 }
 
-// extractCoverFromMp3 extracts cover art from MP3 file
 func extractCoverFromMp3(filePath string) (string, error) {
 	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
 	if err != nil {
@@ -311,7 +237,6 @@ func extractCoverFromMp3(filePath string) (string, error) {
 		return "", fmt.Errorf("invalid picture frame")
 	}
 
-	// Create temporary file
 	tmpFile, err := os.CreateTemp("", "cover-*.jpg")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
@@ -326,7 +251,6 @@ func extractCoverFromMp3(filePath string) (string, error) {
 	return tmpFile.Name(), nil
 }
 
-// extractCoverFromM4AOrFlac extracts cover art from M4A or FLAC file
 func extractCoverFromM4AOrFlac(filePath string) (string, error) {
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
 
@@ -343,7 +267,6 @@ func extractCoverFromM4AOrFlac(filePath string) (string, error) {
 					continue
 				}
 
-				// Create temporary file
 				tmpFile, err := os.CreateTemp("", "cover-*.jpg")
 				if err != nil {
 					return "", fmt.Errorf("failed to create temp file: %w", err)
@@ -361,12 +284,9 @@ func extractCoverFromM4AOrFlac(filePath string) (string, error) {
 		return "", fmt.Errorf("no cover art found")
 	}
 
-	// For M4A, try to extract using ffmpeg or return empty
-	// M4A cover art should be preserved by ffmpeg during conversion
 	return "", nil
 }
 
-// ExtractLyrics extracts lyrics from an audio file
 func ExtractLyrics(filePath string) (string, error) {
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
 
@@ -376,14 +296,13 @@ func ExtractLyrics(filePath string) (string, error) {
 	case ".flac":
 		return extractLyricsFromFlac(filePath)
 	case ".m4a":
-		// M4A lyrics extraction would need different approach
+
 		return "", nil
 	default:
 		return "", fmt.Errorf("unsupported file format: %s", ext)
 	}
 }
 
-// extractLyricsFromMp3 extracts lyrics from MP3 file
 func extractLyricsFromMp3(filePath string) (string, error) {
 	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
 	if err != nil {
@@ -412,7 +331,6 @@ func extractLyricsFromMp3(filePath string) (string, error) {
 	return uslt.Lyrics, nil
 }
 
-// extractLyricsFromFlac extracts lyrics from FLAC file
 func extractLyricsFromFlac(filePath string) (string, error) {
 	f, err := flac.ParseFile(filePath)
 	if err != nil {
@@ -426,7 +344,6 @@ func extractLyricsFromFlac(filePath string) (string, error) {
 				continue
 			}
 
-			// Search through comments for lyrics
 			for _, comment := range cmt.Comments {
 				parts := strings.SplitN(comment, "=", 2)
 				if len(parts) == 2 {
@@ -445,7 +362,6 @@ func extractLyricsFromFlac(filePath string) (string, error) {
 	return "", nil
 }
 
-// EmbedCoverArtOnly embeds cover art into an audio file
 func EmbedCoverArtOnly(filePath string, coverPath string) error {
 	if coverPath == "" || !fileExists(coverPath) {
 		return nil
@@ -457,16 +373,13 @@ func EmbedCoverArtOnly(filePath string, coverPath string) error {
 	case ".mp3":
 		return embedCoverToMp3(filePath, coverPath)
 	case ".m4a":
-		// M4A cover art should be handled by ffmpeg during conversion
-		// If not, we can try to embed using atomicparsley or similar tool
-		// For now, return nil as ffmpeg should handle it
+
 		return nil
 	default:
 		return fmt.Errorf("unsupported file format: %s", ext)
 	}
 }
 
-// embedCoverToMp3 embeds cover art into MP3 file
 func embedCoverToMp3(filePath string, coverPath string) error {
 	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
 	if err != nil {
@@ -474,16 +387,13 @@ func embedCoverToMp3(filePath string, coverPath string) error {
 	}
 	defer tag.Close()
 
-	// Remove existing cover art
 	tag.DeleteFrames(tag.CommonID("Attached picture"))
 
-	// Read cover art
 	artwork, err := os.ReadFile(coverPath)
 	if err != nil {
 		return fmt.Errorf("failed to read cover art: %w", err)
 	}
 
-	// Add new cover art
 	pic := id3v2.PictureFrame{
 		Encoding:    id3v2.EncodingUTF8,
 		MimeType:    "image/jpeg",
@@ -500,11 +410,17 @@ func embedCoverToMp3(filePath string, coverPath string) error {
 	return nil
 }
 
-// EmbedLyricsOnlyMP3 adds lyrics to an MP3 file using ID3v2 USLT frame
 func EmbedLyricsOnlyMP3(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil
 	}
+
+	validatedLyrics, err := validateLyricsDuration(lyrics, filepath)
+	if err != nil {
+		fmt.Printf("[EmbedLyricsOnlyMP3] Warning: Failed to validate lyrics duration: %v, using original lyrics\n", err)
+		validatedLyrics = lyrics
+	}
+	lyrics = validatedLyrics
 
 	tag, err := id3v2.Open(filepath, id3v2.Options{Parse: true})
 	if err != nil {
@@ -512,15 +428,12 @@ func EmbedLyricsOnlyMP3(filepath string, lyrics string) error {
 	}
 	defer tag.Close()
 
-	// Remove existing USLT frames
 	tag.DeleteFrames(tag.CommonID("Unsynchronised lyrics/text transcription"))
 
-	// Add new USLT frame with lyrics
-	// Use UTF-8 encoding for better compatibility with AIMP and other players
 	usltFrame := id3v2.UnsynchronisedLyricsFrame{
-		Encoding:          id3v2.EncodingUTF8, // Use UTF-8 instead of default encoding
+		Encoding:          id3v2.EncodingUTF8,
 		Language:          "eng",
-		ContentDescriptor: "", // Empty descriptor for better compatibility
+		ContentDescriptor: "",
 		Lyrics:            lyrics,
 	}
 	tag.AddUnsynchronisedLyricsFrame(usltFrame)
@@ -532,10 +445,15 @@ func EmbedLyricsOnlyMP3(filepath string, lyrics string) error {
 	return nil
 }
 
-// embedLyricsToM4A adds lyrics to an M4A file using ffmpeg
 func embedLyricsToM4A(filepath string, lyrics string) error {
-	// Use ffmpeg to embed lyrics into M4A file
-	// M4A uses iTunes metadata format with atom '©lyr' for lyrics
+
+	validatedLyrics, err := validateLyricsDuration(lyrics, filepath)
+	if err != nil {
+		fmt.Printf("[embedLyricsToM4A] Warning: Failed to validate lyrics duration: %v, using original lyrics\n", err)
+		validatedLyrics = lyrics
+	}
+	lyrics = validatedLyrics
+
 	ffmpegPath, err := GetFFmpegPath()
 	if err != nil {
 		return fmt.Errorf("ffmpeg not found: %w", err)
@@ -545,18 +463,14 @@ func embedLyricsToM4A(filepath string, lyrics string) error {
 		return fmt.Errorf("invalid ffmpeg executable: %w", err)
 	}
 
-	// Create temporary output file with proper extension so ffmpeg can detect format
 	tmpOutputFile := strings.TrimSuffix(filepath, pathfilepath.Ext(filepath)) + ".tmp" + pathfilepath.Ext(filepath)
 	defer func() {
-		// Only remove if file still exists (rename might have failed)
+
 		if _, err := os.Stat(tmpOutputFile); err == nil {
 			os.Remove(tmpOutputFile)
 		}
 	}()
 
-	// Use ffmpeg to copy file and add lyrics metadata
-	// For M4A, we need to use the correct metadata tag format and specify output format
-	// Use -f ipod for M4A format (iPod format is compatible with M4A)
 	cmd := exec.Command(ffmpegPath,
 		"-i", filepath,
 		"-map", "0",
@@ -564,12 +478,11 @@ func embedLyricsToM4A(filepath string, lyrics string) error {
 		"-metadata", "lyrics-eng="+lyrics,
 		"-metadata", "lyrics="+lyrics,
 		"-codec", "copy",
-		"-f", "ipod", // Explicitly specify M4A/iPod format
-		"-y", // Overwrite
+		"-f", "ipod",
+		"-y",
 		tmpOutputFile,
 	)
 
-	// Hide console window on Windows
 	setHideWindow(cmd)
 
 	output, err := cmd.CombinedOutput()
@@ -578,7 +491,6 @@ func embedLyricsToM4A(filepath string, lyrics string) error {
 		return fmt.Errorf("ffmpeg failed to embed lyrics: %s - %w", string(output), err)
 	}
 
-	// Replace original file with new file
 	if err := os.Rename(tmpOutputFile, filepath); err != nil {
 		return fmt.Errorf("failed to replace original file: %w", err)
 	}
@@ -587,7 +499,6 @@ func embedLyricsToM4A(filepath string, lyrics string) error {
 	return nil
 }
 
-// EmbedLyricsOnlyUniversal embeds lyrics to MP3, FLAC, or M4A file
 func EmbedLyricsOnlyUniversal(filepath string, lyrics string) error {
 	if lyrics == "" {
 		return nil
@@ -606,85 +517,451 @@ func EmbedLyricsOnlyUniversal(filepath string, lyrics string) error {
 	}
 }
 
-// FileExistenceResult represents the result of checking if a file exists
-type FileExistenceResult struct {
-	ISRC       string `json:"isrc"`
-	Exists     bool   `json:"exists"`
-	FilePath   string `json:"file_path,omitempty"`
-	TrackName  string `json:"track_name,omitempty"`
-	ArtistName string `json:"artist_name,omitempty"`
-}
+func GetAudioDuration(filepath string) (float64, error) {
+	ext := strings.ToLower(pathfilepath.Ext(filepath))
 
-// CheckFilesExistParallel checks if multiple files exist in parallel
-// It builds an ISRC index from the output directory once, then checks all tracks against it
-func CheckFilesExistParallel(outputDir string, tracks []struct {
-	ISRC       string
-	TrackName  string
-	ArtistName string
-}) []FileExistenceResult {
-	results := make([]FileExistenceResult, len(tracks))
-
-	// Build ISRC index from output directory (scan once)
-	isrcIndex := buildISRCIndex(outputDir)
-
-	// Check each track against the index (parallel)
-	var wg sync.WaitGroup
-	for i, track := range tracks {
-		wg.Add(1)
-		go func(idx int, t struct {
-			ISRC       string
-			TrackName  string
-			ArtistName string
-		}) {
-			defer wg.Done()
-
-			result := FileExistenceResult{
-				ISRC:       t.ISRC,
-				TrackName:  t.TrackName,
-				ArtistName: t.ArtistName,
-				Exists:     false,
-			}
-
-			if t.ISRC != "" {
-				if filePath, exists := isrcIndex[strings.ToUpper(t.ISRC)]; exists {
-					result.Exists = true
-					result.FilePath = filePath
-				}
-			}
-
-			results[idx] = result
-		}(i, track)
+	if ext == ".flac" {
+		duration, err := getFlacDuration(filepath)
+		if err == nil && duration > 0 {
+			return duration, nil
+		}
 	}
 
-	wg.Wait()
-	return results
+	return getDurationWithFFprobe(filepath)
 }
 
-// buildISRCIndex scans a directory and builds a map of ISRC -> file path
-func buildISRCIndex(outputDir string) map[string]string {
-	index := make(map[string]string)
+func getFlacDuration(filepath string) (float64, error) {
+	f, err := flac.ParseFile(filepath)
+	if err != nil {
+		return 0, err
+	}
 
-	// Walk directory recursively - only check .flac files for SpotiFLAC
-	pathfilepath.Walk(outputDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
+	if len(f.Meta) > 0 {
+		streamInfo := f.Meta[0]
+		if streamInfo.Type == flac.StreamInfo {
+			data := streamInfo.Data
+			if len(data) >= 18 {
+
+				sampleRate := uint32(data[10])<<12 | uint32(data[11])<<4 | uint32(data[12])>>4
+
+				totalSamples := uint64(data[13]&0x0F)<<32 |
+					uint64(data[14])<<24 |
+					uint64(data[15])<<16 |
+					uint64(data[16])<<8 |
+					uint64(data[17])
+
+				if sampleRate > 0 {
+					return float64(totalSamples) / float64(sampleRate), nil
+				}
+			}
+		}
+	}
+
+	return 0, fmt.Errorf("could not extract duration from FLAC file")
+}
+
+func getDurationWithFFprobe(filepath string) (float64, error) {
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return 0, err
+	}
+
+	if err := ValidateExecutable(ffprobePath); err != nil {
+		return 0, fmt.Errorf("invalid ffprobe executable: %w", err)
+	}
+
+	cmd := exec.Command(ffprobePath,
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_format",
+		filepath,
+	)
+
+	setHideWindow(cmd)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, err
+	}
+
+	var result struct {
+		Format struct {
+			Duration string `json:"duration"`
+		} `json:"format"`
+	}
+
+	if err := json.Unmarshal(output, &result); err != nil {
+		return 0, err
+	}
+
+	if result.Format.Duration == "" {
+		return 0, fmt.Errorf("duration not found in ffprobe output")
+	}
+
+	duration, err := strconv.ParseFloat(result.Format.Duration, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return duration, nil
+}
+
+func validateLyricsDuration(lyrics string, filepath string) (string, error) {
+
+	duration, err := GetAudioDuration(filepath)
+	if err != nil {
+
+		fmt.Printf("[ValidateLyrics] Warning: Could not get audio duration: %v, skipping validation\n", err)
+		return lyrics, nil
+	}
+
+	if duration <= 0 {
+
+		fmt.Printf("[ValidateLyrics] Warning: Invalid duration (%f seconds), skipping validation\n", duration)
+		return lyrics, nil
+	}
+
+	durationMs := int64(duration * 1000)
+
+	lines := strings.Split(lyrics, "\n")
+	var validLines []string
+
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" {
+			validLines = append(validLines, line)
+			continue
 		}
 
-		ext := strings.ToLower(pathfilepath.Ext(path))
-		if ext != ".flac" {
-			return nil
+		if strings.HasPrefix(trimmedLine, "[") {
+
+			if strings.Index(trimmedLine, ":") > 0 {
+
+				validLines = append(validLines, line)
+				continue
+			}
+
+			closeBracket := strings.Index(trimmedLine, "]")
+			if closeBracket > 0 {
+				timestampStr := trimmedLine[1:closeBracket]
+
+				ms := parseLRCTimestamp(timestampStr)
+				if ms >= 0 && ms <= durationMs {
+
+					validLines = append(validLines, line)
+				} else {
+
+					fmt.Printf("[ValidateLyrics] Filtered out line with timestamp %s (exceeds duration %d ms): %s\n", timestampStr, durationMs, trimmedLine)
+				}
+			} else {
+
+				validLines = append(validLines, line)
+			}
+		} else {
+
+			validLines = append(validLines, line)
 		}
+	}
 
-		// Read ISRC from file
-		isrc, err := ReadISRCFromFile(path)
-		if err != nil || isrc == "" {
-			return nil
+	return strings.Join(validLines, "\n"), nil
+}
+
+func parseLRCTimestamp(timestamp string) int64 {
+	var minutes, seconds, centiseconds int64
+	n, _ := fmt.Sscanf(timestamp, "%d:%d.%d", &minutes, &seconds, &centiseconds)
+	if n >= 2 {
+		return minutes*60*1000 + seconds*1000 + centiseconds*10
+	}
+	return -1
+}
+
+func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
+	var metadata Metadata
+
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return metadata, err
+	}
+
+	if err := ValidateExecutable(ffprobePath); err != nil {
+		return metadata, fmt.Errorf("invalid ffprobe executable: %w", err)
+	}
+
+	cmd := exec.Command(ffprobePath,
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_format",
+		"-show_streams",
+		filePath,
+	)
+
+	setHideWindow(cmd)
+
+	output, err := cmd.Output()
+	if err != nil {
+		return metadata, err
+	}
+
+	var result struct {
+		Format struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"format"`
+		Streams []struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"streams"`
+	}
+
+	if err := json.Unmarshal(output, &result); err != nil {
+		return metadata, err
+	}
+
+	allTags := make(map[string]string)
+
+	for _, stream := range result.Streams {
+		for key, value := range stream.Tags {
+			allTags[strings.ToLower(key)] = value
 		}
+	}
 
-		// Store in index (uppercase for case-insensitive matching)
-		index[strings.ToUpper(isrc)] = path
-		return nil
-	})
+	for key, value := range result.Format.Tags {
+		allTags[strings.ToLower(key)] = value
+	}
 
-	return index
+	for key, value := range allTags {
+		switch key {
+		case "title":
+			metadata.Title = value
+		case "artist":
+			metadata.Artist = value
+		case "album":
+			metadata.Album = value
+		case "album_artist", "albumartist":
+			metadata.AlbumArtist = value
+		case "date", "year":
+			if metadata.Date == "" || len(value) > len(metadata.Date) {
+				metadata.Date = value
+			}
+		case "track":
+
+			parts := strings.Split(value, "/")
+			if len(parts) > 0 {
+				if num, err := strconv.Atoi(parts[0]); err == nil {
+					metadata.TrackNumber = num
+				}
+			}
+			if len(parts) > 1 {
+				if num, err := strconv.Atoi(parts[1]); err == nil {
+					metadata.TotalTracks = num
+				}
+			}
+		case "disc":
+
+			parts := strings.Split(value, "/")
+			if len(parts) > 0 {
+				if num, err := strconv.Atoi(parts[0]); err == nil {
+					metadata.DiscNumber = num
+				}
+			}
+			if len(parts) > 1 {
+				if num, err := strconv.Atoi(parts[1]); err == nil {
+					metadata.TotalDiscs = num
+				}
+			}
+		case "copyright", "tcop":
+			metadata.Copyright = value
+		case "publisher", "tpub", "label":
+			metadata.Publisher = value
+		case "url":
+			metadata.URL = value
+		case "description", "comment":
+			if metadata.Description == "" {
+				metadata.Description = value
+			}
+		}
+	}
+
+	return metadata, nil
+}
+
+func EmbedMetadataToConvertedFile(filePath string, metadata Metadata, coverPath string) error {
+	ext := strings.ToLower(pathfilepath.Ext(filePath))
+
+	switch ext {
+	case ".flac":
+
+		return EmbedMetadata(filePath, metadata, coverPath)
+	case ".mp3":
+		return embedMetadataToMP3(filePath, metadata, coverPath)
+	case ".m4a":
+		return embedMetadataToM4A(filePath, metadata, coverPath)
+	default:
+		return fmt.Errorf("unsupported file format: %s", ext)
+	}
+}
+
+func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) error {
+	tag, err := id3v2.Open(filePath, id3v2.Options{Parse: true})
+	if err != nil {
+		return fmt.Errorf("failed to open MP3 file: %w", err)
+	}
+	defer tag.Close()
+
+	tag.DeleteFrames("TXXX")
+
+	if metadata.Title != "" {
+		tag.SetTitle(metadata.Title)
+	}
+	if metadata.Artist != "" {
+		tag.SetArtist(metadata.Artist)
+	}
+	if metadata.Album != "" {
+		tag.SetAlbum(metadata.Album)
+	}
+	if metadata.Date != "" {
+		year := metadata.Date
+		if len(year) >= 4 {
+			year = year[:4]
+		}
+		tag.SetYear(year)
+	}
+
+	if metadata.AlbumArtist != "" {
+		tag.DeleteFrames("TPE2")
+		tag.AddTextFrame("TPE2", id3v2.EncodingUTF8, metadata.AlbumArtist)
+	}
+
+	if metadata.TrackNumber > 0 {
+		tag.DeleteFrames(tag.CommonID("Track number/Position in set"))
+		trackStr := strconv.Itoa(metadata.TrackNumber)
+		if metadata.TotalTracks > 0 {
+			trackStr = fmt.Sprintf("%d/%d", metadata.TrackNumber, metadata.TotalTracks)
+		}
+		tag.AddTextFrame(tag.CommonID("Track number/Position in set"), id3v2.EncodingUTF8, trackStr)
+	}
+
+	if metadata.DiscNumber > 0 {
+		tag.DeleteFrames(tag.CommonID("Part of a set"))
+		discStr := strconv.Itoa(metadata.DiscNumber)
+		if metadata.TotalDiscs > 0 {
+			discStr = fmt.Sprintf("%d/%d", metadata.DiscNumber, metadata.TotalDiscs)
+		}
+		tag.AddTextFrame(tag.CommonID("Part of a set"), id3v2.EncodingUTF8, discStr)
+	}
+
+	if metadata.Copyright != "" {
+		tag.DeleteFrames("TCOP")
+		tag.AddTextFrame("TCOP", id3v2.EncodingUTF8, metadata.Copyright)
+	}
+
+	if metadata.Publisher != "" {
+		tag.DeleteFrames("TPUB")
+		tag.AddTextFrame("TPUB", id3v2.EncodingUTF8, metadata.Publisher)
+	}
+
+	if coverPath != "" && fileExists(coverPath) {
+
+		tag.DeleteFrames(tag.CommonID("Attached picture"))
+
+		artwork, err := os.ReadFile(coverPath)
+		if err == nil {
+			pic := id3v2.PictureFrame{
+				Encoding:    id3v2.EncodingUTF8,
+				MimeType:    "image/jpeg",
+				PictureType: id3v2.PTFrontCover,
+				Description: "Cover",
+				Picture:     artwork,
+			}
+			tag.AddAttachedPicture(pic)
+		} else {
+			fmt.Printf("[EmbedMetadataToMP3] Warning: Failed to read cover art file: %v\n", err)
+		}
+	}
+
+	if err := tag.Save(); err != nil {
+		return fmt.Errorf("failed to save MP3 tags: %w", err)
+	}
+
+	return nil
+}
+
+func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) error {
+	ffmpegPath, err := GetFFmpegPath()
+	if err != nil {
+		return fmt.Errorf("ffmpeg not found: %w", err)
+	}
+
+	if err := ValidateExecutable(ffmpegPath); err != nil {
+		return fmt.Errorf("invalid ffmpeg executable: %w", err)
+	}
+
+	args := []string{
+		"-i", filePath,
+		"-y",
+	}
+
+	if coverPath != "" && fileExists(coverPath) {
+		args = append(args, "-i", coverPath)
+		args = append(args, "-map", "0:a", "-map", "1", "-c:a", "copy", "-c:v", "copy", "-disposition:v:0", "attached_pic")
+	} else {
+		args = append(args, "-map", "0", "-codec", "copy")
+	}
+
+	if metadata.Title != "" {
+		args = append(args, "-metadata", "title="+metadata.Title)
+	}
+	if metadata.Artist != "" {
+		args = append(args, "-metadata", "artist="+metadata.Artist)
+	}
+	if metadata.Album != "" {
+		args = append(args, "-metadata", "album="+metadata.Album)
+	}
+	if metadata.AlbumArtist != "" {
+		args = append(args, "-metadata", "album_artist="+metadata.AlbumArtist)
+	}
+	if metadata.Date != "" {
+		args = append(args, "-metadata", "date="+metadata.Date)
+	}
+	if metadata.TrackNumber > 0 {
+		trackStr := strconv.Itoa(metadata.TrackNumber)
+		if metadata.TotalTracks > 0 {
+			trackStr = fmt.Sprintf("%d/%d", metadata.TrackNumber, metadata.TotalTracks)
+		}
+		args = append(args, "-metadata", "track="+trackStr)
+	}
+	if metadata.DiscNumber > 0 {
+		discStr := strconv.Itoa(metadata.DiscNumber)
+		if metadata.TotalDiscs > 0 {
+			discStr = fmt.Sprintf("%d/%d", metadata.DiscNumber, metadata.TotalDiscs)
+		}
+		args = append(args, "-metadata", "disk="+discStr)
+	}
+	if metadata.Copyright != "" {
+		args = append(args, "-metadata", "copyright="+metadata.Copyright)
+	}
+	if metadata.Publisher != "" {
+		args = append(args, "-metadata", "publisher="+metadata.Publisher)
+	}
+
+	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)
+	defer func() {
+		if _, err := os.Stat(tmpOutputFile); err == nil {
+			os.Remove(tmpOutputFile)
+		}
+	}()
+
+	args = append(args, "-f", "ipod", tmpOutputFile)
+
+	cmd := exec.Command(ffmpegPath, args...)
+	setHideWindow(cmd)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ffmpeg failed to embed metadata: %s - %w", string(output), err)
+	}
+
+	if err := os.Rename(tmpOutputFile, filePath); err != nil {
+		return fmt.Errorf("failed to replace original file: %w", err)
+	}
+
+	return nil
 }

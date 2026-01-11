@@ -14,7 +14,7 @@ func OpenFolderInExplorer(path string) error {
 	switch runtime.GOOS {
 	case "windows":
 		cmd = exec.Command("explorer", path)
-	case "darwin": // macOS
+	case "darwin":
 		cmd = exec.Command("open", path)
 	case "linux":
 		cmd = exec.Command("xdg-open", path)
@@ -26,7 +26,7 @@ func OpenFolderInExplorer(path string) error {
 }
 
 func SelectFolderDialog(ctx context.Context, defaultPath string) (string, error) {
-	// If defaultPath is empty, use default music path
+
 	if defaultPath == "" {
 		defaultPath = GetDefaultMusicPath()
 	}
@@ -41,7 +41,6 @@ func SelectFolderDialog(ctx context.Context, defaultPath string) (string, error)
 		return "", err
 	}
 
-	// If user cancelled, selectedPath will be empty
 	if selectedPath == "" {
 		return "", nil
 	}
@@ -69,7 +68,6 @@ func SelectFileDialog(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	// If user cancelled, selectedFile will be empty
 	if selectedFile == "" {
 		return "", nil
 	}

@@ -12,7 +12,9 @@
   },
   "info": {
     "productName": "SpotiFLAC",
-    "productVersion": "7.0"
+    "productVersion": "7.0.1",
+    "copyright": "© 2026 afkarxyz",
+    "comments": "Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required."
   },
   "wailsjsdir": "./frontend",
   "assetdir": "./frontend/dist",

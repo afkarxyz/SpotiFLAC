@@ -6,7 +6,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// SelectMultipleFiles opens a file dialog to select multiple audio files
 func SelectMultipleFiles(ctx context.Context) ([]string, error) {
 	files, err := runtime.OpenMultipleFilesDialog(ctx, runtime.OpenDialogOptions{
 		Title: "Select Audio Files",
@@ -39,7 +38,6 @@ func SelectMultipleFiles(ctx context.Context) ([]string, error) {
 	return files, nil
 }
 
-// SelectOutputDirectory opens a directory dialog to select output folder
 func SelectOutputDirectory(ctx context.Context) (string, error) {
 	dir, err := runtime.OpenDirectoryDialog(ctx, runtime.OpenDialogOptions{
 		Title: "Select Output Directory",
@@ -49,4 +47,3 @@ func SelectOutputDirectory(ctx context.Context) (string, error) {
 	}
 	return dir, nil
 }
-
