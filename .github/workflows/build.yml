@@ -90,8 +90,89 @@ jobs:
           path: dist/SpotiFLAC.exe
           retention-days: 7
 
-  build-macos:
-    name: Build macOS
+  build-macos-intel:
+    name: Build macOS Intel
+    runs-on: macos-15-intel
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION="dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Get pnpm store directory
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        continue-on-error: true
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-intel-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-intel-pnpm-store-
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          pnpm install
+          pnpm run generate-icon
+
+      - name: Build application
+        run: wails build -platform darwin/amd64
+
+      - name: Create DMG
+        run: |
+          mkdir -p dist
+          brew install create-dmg || true
+
+          create-dmg \
+            --volname "SpotiFLAC" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "SpotiFLAC.app" 175 120 \
+            --hide-extension "SpotiFLAC.app" \
+            --app-drop-link 425 120 \
+            "dist/SpotiFLAC-Intel.dmg" \
+            "build/bin/SpotiFLAC.app" || \
+          hdiutil create -volname SpotiFLAC -srcfolder build/bin/SpotiFLAC.app -ov -format UDZO dist/SpotiFLAC-Intel.dmg
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-intel
+          path: dist/SpotiFLAC-Intel.dmg
+          retention-days: 7
+
+  build-macos-arm:
+    name: Build macOS Apple Silicon
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -131,9 +212,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-arm-pnpm-store-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+            ${{ runner.os }}-arm-pnpm-store-
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -145,15 +226,13 @@ jobs:
           pnpm run generate-icon
 
       - name: Build application
-        run: wails build -platform darwin/universal
+        run: wails build -platform darwin/arm64
 
       - name: Create DMG
         run: |
           mkdir -p dist
-          # Install create-dmg if not available
           brew install create-dmg || true
 
-          # Create DMG
           create-dmg \
             --volname "SpotiFLAC" \
             --window-pos 200 120 \
@@ -164,13 +243,12 @@ jobs:
             --app-drop-link 425 120 \
             "dist/SpotiFLAC.dmg" \
             "build/bin/SpotiFLAC.app" || \
-          # Fallback to hdiutil if create-dmg fails
           hdiutil create -volname SpotiFLAC -srcfolder build/bin/SpotiFLAC.app -ov -format UDZO dist/SpotiFLAC.dmg
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-portable
+          name: macos-arm
           path: dist/SpotiFLAC.dmg
           retention-days: 7
 
@@ -320,7 +398,7 @@ jobs:
 
   create-release:
     name: Create Release
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-macos-intel, build-macos-arm, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -355,7 +433,8 @@ jobs:
             ## Downloads
 
             - `SpotiFLAC.exe` - Windows
-            - `SpotiFLAC.dmg` - macOS
+            - `SpotiFLAC-Intel.dmg` - macOS Intel
+            - `SpotiFLAC.dmg` - macOS Apple Silicon
             - `SpotiFLAC.AppImage` - Linux
 
             <details>
@@ -387,7 +466,8 @@ jobs:
             </details>
           files: |
             artifacts/windows-portable/*.exe
-            artifacts/macos-portable/*.dmg
+            artifacts/macos-intel/*.dmg
+            artifacts/macos-arm/*.dmg
             artifacts/linux-portable/*.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
