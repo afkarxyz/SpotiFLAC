@@ -2,21 +2,14 @@ package backend
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
-)
-
-const (
-	apiBaseURL = "https://afkarxyz.web.id"
-	apiKey     = "NDAwNDAxNDAzNDA0NTAwNTAyNTAz"
 )
 
 var (
@@ -186,7 +179,6 @@ type apiTrackResponse struct {
 	Disc      int    `json:"disc"`
 	Discs     int    `json:"discs"`
 	Copyright string `json:"copyright"`
-	Label     string `json:"label"`
 	Plays     string `json:"plays"`
 	Album     struct {
 		ID       string `json:"id"`
@@ -386,39 +378,429 @@ func (c *SpotifyMetadataClient) processSpotifyData(ctx context.Context, raw inte
 }
 
 func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) (*apiTrackResponse, error) {
-	url := fmt.Sprintf("%s/track/%s", apiBaseURL, trackID)
-	var data apiTrackResponse
-	if err := c.getJSON(ctx, url, &data); err != nil {
-		return nil, err
+	client := NewSpotifyClient()
+	if err := client.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
 	}
-	return &data, nil
+
+	payload := map[string]interface{}{
+		"variables": map[string]interface{}{
+			"uri": fmt.Sprintf("spotify:track:%s", trackID),
+		},
+		"operationName": "getTrack",
+		"extensions": map[string]interface{}{
+			"persistedQuery": map[string]interface{}{
+				"version":    1,
+				"sha256Hash": "612585ae06ba435ad26369870deaae23b5c8800a256cd8a57e08eddc25a37294",
+			},
+		},
+	}
+
+	data, err := client.Query(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query track: %w", err)
+	}
+
+	var albumFetchData map[string]interface{}
+	if trackData, ok := data["data"].(map[string]interface{}); ok {
+		if trackUnion, ok := trackData["trackUnion"].(map[string]interface{}); ok {
+			if albumOfTrack, ok := trackUnion["albumOfTrack"].(map[string]interface{}); ok {
+				albumID := ""
+				if id, ok := albumOfTrack["id"].(string); ok && id != "" {
+					albumID = id
+				} else if uri, ok := albumOfTrack["uri"].(string); ok && uri != "" {
+					if strings.Contains(uri, ":") {
+						parts := strings.Split(uri, ":")
+						if len(parts) > 0 {
+							albumID = parts[len(parts)-1]
+						}
+					}
+				}
+
+				if albumID != "" {
+					albumPayload := map[string]interface{}{
+						"variables": map[string]interface{}{
+							"uri":    fmt.Sprintf("spotify:album:%s", albumID),
+							"locale": "",
+							"offset": 0,
+							"limit":  1,
+						},
+						"operationName": "getAlbum",
+						"extensions": map[string]interface{}{
+							"persistedQuery": map[string]interface{}{
+								"version":    1,
+								"sha256Hash": "b9bfabef66ed756e5e13f68a942deb60bd4125ec1f1be8cc42769dc0259b4b10",
+							},
+						},
+					}
+					albumFetchData, _ = client.Query(albumPayload)
+				}
+			}
+		}
+	}
+
+	filteredData := FilterTrack(data, albumFetchData)
+
+	jsonData, err := json.Marshal(filteredData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal filtered data: %w", err)
+	}
+
+	var result apiTrackResponse
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to apiTrackResponse: %w", err)
+	}
+
+	return &result, nil
 }
 
 func (c *SpotifyMetadataClient) fetchAlbum(ctx context.Context, albumID string) (*apiAlbumResponse, error) {
-	url := fmt.Sprintf("%s/album/%s", apiBaseURL, albumID)
-	var data apiAlbumResponse
-	if err := c.getJSON(ctx, url, &data); err != nil {
-		return nil, err
+	client := NewSpotifyClient()
+	if err := client.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
 	}
-	return &data, nil
+
+	allItems := []interface{}{}
+	offset := 0
+	limit := 1000
+	var totalCount interface{}
+	var data map[string]interface{}
+
+	for {
+		payload := map[string]interface{}{
+			"variables": map[string]interface{}{
+				"uri":    fmt.Sprintf("spotify:album:%s", albumID),
+				"locale": "",
+				"offset": offset,
+				"limit":  limit,
+			},
+			"operationName": "getAlbum",
+			"extensions": map[string]interface{}{
+				"persistedQuery": map[string]interface{}{
+					"version":    1,
+					"sha256Hash": "b9bfabef66ed756e5e13f68a942deb60bd4125ec1f1be8cc42769dc0259b4b10",
+				},
+			},
+		}
+
+		response, err := client.Query(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query album: %w", err)
+		}
+
+		if data == nil {
+			data = response
+		}
+
+		albumData := getMap(getMap(response, "data"), "albumUnion")
+		tracksData := getMap(albumData, "tracksV2")
+		items := getSlice(tracksData, "items")
+
+		if items == nil || len(items) == 0 {
+			break
+		}
+
+		allItems = append(allItems, items...)
+
+		if totalCount == nil {
+			if tc, ok := tracksData["totalCount"].(float64); ok {
+				totalCount = int(tc)
+			} else {
+				totalCount = len(items)
+			}
+		}
+
+		tcInt := 0
+		if tc, ok := totalCount.(int); ok {
+			tcInt = tc
+		} else if tc, ok := totalCount.(float64); ok {
+			tcInt = int(tc)
+		}
+
+		if len(allItems) >= tcInt || len(items) < limit {
+			break
+		}
+
+		offset += limit
+	}
+
+	if data != nil && len(allItems) > 0 {
+		dataMap := getMap(data, "data")
+		albumUnion := getMap(dataMap, "albumUnion")
+		tracksV2 := getMap(albumUnion, "tracksV2")
+		tracksV2["items"] = allItems
+		tracksV2["totalCount"] = len(allItems)
+	}
+
+	filteredData := FilterAlbum(data)
+
+	jsonData, err := json.Marshal(filteredData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal filtered data: %w", err)
+	}
+
+	var result apiAlbumResponse
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to apiAlbumResponse: %w", err)
+	}
+
+	return &result, nil
 }
 
 func (c *SpotifyMetadataClient) fetchPlaylist(ctx context.Context, playlistID string) (*apiPlaylistResponse, error) {
-	url := fmt.Sprintf("%s/playlist/%s", apiBaseURL, playlistID)
-	var data apiPlaylistResponse
-	if err := c.getJSON(ctx, url, &data); err != nil {
-		return nil, err
+	client := NewSpotifyClient()
+	if err := client.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
 	}
-	return &data, nil
+
+	allItems := []interface{}{}
+	offset := 0
+	limit := 1000
+	var totalCount interface{}
+	var data map[string]interface{}
+
+	for {
+		payload := map[string]interface{}{
+			"variables": map[string]interface{}{
+				"uri":                       fmt.Sprintf("spotify:playlist:%s", playlistID),
+				"offset":                    offset,
+				"limit":                     limit,
+				"enableWatchFeedEntrypoint": false,
+			},
+			"operationName": "fetchPlaylist",
+			"extensions": map[string]interface{}{
+				"persistedQuery": map[string]interface{}{
+					"version":    1,
+					"sha256Hash": "bb67e0af06e8d6f52b531f97468ee4acd44cd0f82b988e15c2ea47b1148efc77",
+				},
+			},
+		}
+
+		response, err := client.Query(payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query playlist: %w", err)
+		}
+
+		if data == nil {
+			data = response
+		}
+
+		playlistData := getMap(getMap(response, "data"), "playlistV2")
+		content := getMap(playlistData, "content")
+		items := getSlice(content, "items")
+
+		if items == nil || len(items) == 0 {
+			break
+		}
+
+		allItems = append(allItems, items...)
+
+		if totalCount == nil {
+			if tc, ok := content["totalCount"].(float64); ok {
+				totalCount = int(tc)
+			} else {
+				totalCount = len(items)
+			}
+		}
+
+		tcInt := 0
+		if tc, ok := totalCount.(int); ok {
+			tcInt = tc
+		} else if tc, ok := totalCount.(float64); ok {
+			tcInt = int(tc)
+		}
+
+		if len(allItems) >= tcInt || len(items) < limit {
+			break
+		}
+
+		offset += limit
+	}
+
+	if data != nil && len(allItems) > 0 {
+		dataMap := getMap(data, "data")
+		playlistV2 := getMap(dataMap, "playlistV2")
+		content := getMap(playlistV2, "content")
+		content["items"] = allItems
+		content["totalCount"] = len(allItems)
+	}
+
+	filteredData := FilterPlaylist(data)
+
+	jsonData, err := json.Marshal(filteredData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal filtered data: %w", err)
+	}
+
+	var result apiPlaylistResponse
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to apiPlaylistResponse: %w", err)
+	}
+
+	return &result, nil
 }
 
 func (c *SpotifyMetadataClient) fetchArtistDiscography(ctx context.Context, parsed spotifyURI) (*apiArtistResponse, error) {
-	url := fmt.Sprintf("%s/artist/%s", apiBaseURL, parsed.ID)
-	var data apiArtistResponse
-	if err := c.getJSON(ctx, url, &data); err != nil {
-		return nil, err
+	client := NewSpotifyClient()
+	if err := client.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
 	}
-	return &data, nil
+
+	overviewPayload := map[string]interface{}{
+		"variables": map[string]interface{}{
+			"uri":    fmt.Sprintf("spotify:artist:%s", parsed.ID),
+			"locale": "",
+		},
+		"operationName": "queryArtistOverview",
+		"extensions": map[string]interface{}{
+			"persistedQuery": map[string]interface{}{
+				"version":    1,
+				"sha256Hash": "446130b4a0aa6522a686aafccddb0ae849165b5e0436fd802f96e0243617b5d8",
+			},
+		},
+	}
+
+	data, err := client.Query(overviewPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query artist overview: %w", err)
+	}
+
+	allDiscographyItems := []interface{}{}
+	offset := 0
+	limit := 50
+	var totalCount interface{}
+
+	for {
+		discographyPayload := map[string]interface{}{
+			"variables": map[string]interface{}{
+				"uri":    fmt.Sprintf("spotify:artist:%s", parsed.ID),
+				"offset": offset,
+				"limit":  limit,
+				"order":  "DATE_DESC",
+			},
+			"operationName": "queryArtistDiscographyAll",
+			"extensions": map[string]interface{}{
+				"persistedQuery": map[string]interface{}{
+					"version":    1,
+					"sha256Hash": "5e07d323febb57b4a56a42abbf781490e58764aa45feb6e3dc0591564fc56599",
+				},
+			},
+		}
+
+		response, err := client.Query(discographyPayload)
+		if err != nil {
+			break
+		}
+
+		discographyData := getMap(getMap(getMap(response, "data"), "artistUnion"), "discography")
+		allData := getMap(discographyData, "all")
+		items := getSlice(allData, "items")
+
+		if items == nil || len(items) == 0 {
+			break
+		}
+
+		allDiscographyItems = append(allDiscographyItems, items...)
+
+		if totalCount == nil {
+			if tc, ok := allData["totalCount"].(float64); ok {
+				totalCount = int(tc)
+			} else {
+				totalCount = len(items)
+			}
+		}
+
+		tcInt := 0
+		if tc, ok := totalCount.(int); ok {
+			tcInt = tc
+		} else if tc, ok := totalCount.(float64); ok {
+			tcInt = int(tc)
+		}
+
+		if len(allDiscographyItems) >= tcInt || len(items) < limit {
+			break
+		}
+
+		offset += limit
+	}
+
+	albumsItems := []interface{}{}
+	compilationsItems := []interface{}{}
+	singlesItems := []interface{}{}
+
+	for _, item := range allDiscographyItems {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		releases := getMap(itemMap, "releases")
+		releaseItems := getSlice(releases, "items")
+		var release map[string]interface{}
+		if len(releaseItems) > 0 {
+			if r, ok := releaseItems[0].(map[string]interface{}); ok {
+				release = r
+			}
+		}
+
+		if release != nil {
+			releaseType := getString(release, "type")
+			switch releaseType {
+			case "ALBUM":
+				albumsItems = append(albumsItems, item)
+			case "COMPILATION":
+				compilationsItems = append(compilationsItems, item)
+			case "SINGLE":
+				singlesItems = append(singlesItems, item)
+			default:
+				singlesItems = append(singlesItems, item)
+			}
+		}
+	}
+
+	if len(allDiscographyItems) > 0 {
+		dataMap := getMap(data, "data")
+		artistUnion := getMap(dataMap, "artistUnion")
+		discographyMap := getMap(artistUnion, "discography")
+
+		if len(albumsItems) > 0 {
+			discographyMap["albums"] = map[string]interface{}{
+				"items":      albumsItems,
+				"totalCount": len(albumsItems),
+			}
+		}
+		if len(compilationsItems) > 0 {
+			discographyMap["compilations"] = map[string]interface{}{
+				"items":      compilationsItems,
+				"totalCount": len(compilationsItems),
+			}
+		}
+		if len(singlesItems) > 0 {
+			discographyMap["singles"] = map[string]interface{}{
+				"items":      singlesItems,
+				"totalCount": len(singlesItems),
+			}
+		}
+
+		discographyMap["all"] = map[string]interface{}{
+			"items":      allDiscographyItems,
+			"totalCount": len(allDiscographyItems),
+		}
+	}
+
+	filteredData := FilterArtist(data)
+
+	jsonData, err := json.Marshal(filteredData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal filtered data: %w", err)
+	}
+
+	var result apiArtistResponse
+	if err := json.Unmarshal(jsonData, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to apiArtistResponse: %w", err)
+	}
+
+	return &result, nil
 }
 
 func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResponse {
@@ -690,39 +1072,6 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 	}, nil
 }
 
-func (c *SpotifyMetadataClient) getJSON(ctx context.Context, endpoint string, dst interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return err
-	}
-
-	decodedKey, err := base64.StdEncoding.DecodeString(apiKey)
-	if err != nil {
-		return fmt.Errorf("failed to decode API key: %w", err)
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	req.Header.Set("X-API-Key", string(decodedKey))
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d for %s: %s", resp.StatusCode, endpoint, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	return json.Unmarshal(body, dst)
-}
-
 func parseDuration(durationStr string) int {
 	if durationStr == "" {
 		return 0
@@ -821,7 +1170,6 @@ func cleanPathParts(path string) []string {
 }
 
 func parseArtistIDsFromString(artists string) []string {
-
 	return []string{}
 }
 
@@ -834,12 +1182,46 @@ func (c *SpotifyMetadataClient) Search(ctx context.Context, query string, limit 
 		limit = 50
 	}
 
-	encodedQuery := url.QueryEscape(query)
-	searchURL := fmt.Sprintf("%s/search?q=%s&limit=%d&offset=0", apiBaseURL, encodedQuery, limit)
+	client := NewSpotifyClient()
+	if err := client.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
+	}
+
+	payload := map[string]interface{}{
+		"variables": map[string]interface{}{
+			"searchTerm":                    query,
+			"offset":                        0,
+			"limit":                         limit,
+			"numberOfTopResults":            5,
+			"includeAudiobooks":             true,
+			"includeArtistHasConcertsField": false,
+			"includePreReleases":            true,
+			"includeAuthors":                false,
+		},
+		"operationName": "searchDesktop",
+		"extensions": map[string]interface{}{
+			"persistedQuery": map[string]interface{}{
+				"version":    1,
+				"sha256Hash": "fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c",
+			},
+		},
+	}
+
+	data, err := client.Query(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query search: %w", err)
+	}
+
+	filteredData := FilterSearch(data)
+
+	jsonData, err := json.Marshal(filteredData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal filtered data: %w", err)
+	}
 
 	var apiResp apiSearchResponse
-	if err := c.getJSON(ctx, searchURL, &apiResp); err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
+	if err := json.Unmarshal(jsonData, &apiResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to apiSearchResponse: %w", err)
 	}
 
 	response := &SearchResponse{
@@ -916,12 +1298,46 @@ func (c *SpotifyMetadataClient) SearchByType(ctx context.Context, query string, 
 		offset = 0
 	}
 
-	encodedQuery := url.QueryEscape(query)
-	searchURL := fmt.Sprintf("%s/search?q=%s&limit=%d&offset=%d", apiBaseURL, encodedQuery, limit, offset)
+	client := NewSpotifyClient()
+	if err := client.Initialize(); err != nil {
+		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
+	}
+
+	payload := map[string]interface{}{
+		"variables": map[string]interface{}{
+			"searchTerm":                    query,
+			"offset":                        offset,
+			"limit":                         limit,
+			"numberOfTopResults":            5,
+			"includeAudiobooks":             true,
+			"includeArtistHasConcertsField": false,
+			"includePreReleases":            true,
+			"includeAuthors":                false,
+		},
+		"operationName": "searchDesktop",
+		"extensions": map[string]interface{}{
+			"persistedQuery": map[string]interface{}{
+				"version":    1,
+				"sha256Hash": "fcad5a3e0d5af727fb76966f06971c19cfa2275e6ff7671196753e008611873c",
+			},
+		},
+	}
+
+	data, err := client.Query(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query search: %w", err)
+	}
+
+	filteredData := FilterSearch(data)
+
+	jsonData, err := json.Marshal(filteredData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal filtered data: %w", err)
+	}
 
 	var apiResp apiSearchResponse
-	if err := c.getJSON(ctx, searchURL, &apiResp); err != nil {
-		return nil, fmt.Errorf("search failed: %w", err)
+	if err := json.Unmarshal(jsonData, &apiResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal to apiSearchResponse: %w", err)
 	}
 
 	results := make([]SearchResult, 0)

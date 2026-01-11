@@ -50,7 +50,7 @@ function App() {
     const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
     const [resetSettingsFn, setResetSettingsFn] = useState<(() => void) | null>(null);
     const ITEMS_PER_PAGE = 50;
-    const CURRENT_VERSION = "7.0.1";
+    const CURRENT_VERSION = "7.0.2";
     const download = useDownload();
     const metadata = useMetadata();
     const lyrics = useLyrics();
