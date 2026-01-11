@@ -12,6 +12,7 @@ import (
 )
 
 const (
+	spotifySize300 = "ab67616d00001e02"
 	spotifySize640 = "ab67616d0000b273"
 	spotifySizeMax = "ab67616d000082c1"
 )
@@ -118,11 +119,20 @@ func buildCoverFilename(trackName, artistName, albumName, albumArtist, releaseDa
 	return filename + ".cover.jpg"
 }
 
-func (c *CoverClient) getMaxResolutionURL(imageURL string) string {
-	if strings.Contains(imageURL, spotifySize640) {
-		return strings.Replace(imageURL, spotifySize640, spotifySizeMax, 1)
+func convertSmallToMedium(imageURL string) string {
+	if strings.Contains(imageURL, spotifySize300) {
+		return strings.Replace(imageURL, spotifySize300, spotifySize640, 1)
 	}
 	return imageURL
+}
+
+func (c *CoverClient) getMaxResolutionURL(imageURL string) string {
+
+	mediumURL := convertSmallToMedium(imageURL)
+	if strings.Contains(mediumURL, spotifySize640) {
+		return strings.Replace(mediumURL, spotifySize640, spotifySizeMax, 1)
+	}
+	return mediumURL
 }
 
 func (c *CoverClient) DownloadCoverToPath(coverURL, outputPath string, embedMaxQualityCover bool) error {
@@ -130,9 +140,9 @@ func (c *CoverClient) DownloadCoverToPath(coverURL, outputPath string, embedMaxQ
 		return fmt.Errorf("cover URL is required")
 	}
 
-	downloadURL := coverURL
+	downloadURL := convertSmallToMedium(coverURL)
 	if embedMaxQualityCover {
-		downloadURL = c.getMaxResolutionURL(coverURL)
+		downloadURL = c.getMaxResolutionURL(downloadURL)
 	}
 
 	resp, err := c.httpClient.Get(downloadURL)

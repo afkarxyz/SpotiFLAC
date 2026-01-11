@@ -95,12 +95,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
       <div className="mt-auto flex flex-col gap-2">
         <Tooltip delayDuration={0}>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-primary/10 hover:text-primary" onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC/issues/new?labels=bug&body=%23%23%23%20Problem%0AExplain%20the%20issue%20briefly.%0A%0A%23%23%23%20Type%0ATrack%20/%20Album%20/%20Playlist%20/%20Artist%0A%0A%23%23%23%20Spotify%20URL%0APaste%20the%20link%20here.%0A%0A%23%23%23%20OS%0AWindows%20/%20Linux%20/%20macOS")}>
+            <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-primary/10 hover:text-primary" onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC/issues/new?title=%5BBug%20Report%5D%20/%20%5BFeature%20Request%5D&body=%3C%21--%20WARNING%3A%20Issues%20that%20do%20not%20follow%20this%20template%20will%20be%20closed%20without%20review.%20Fill%20out%20the%20relevant%20section%20and%20delete%20the%20other.%20--%3E%0A%0A%23%23%23%20%5BBug%20Report%5D%0A%0A%23%23%23%23%20Problem%0A%3E%20Type%20here%0A%0A%23%23%23%23%20Type%0ATrack%20/%20Album%20/%20Playlist%20/%20Artist%0A%0A%23%23%23%23%20Spotify%20URL%0A%3E%20Type%20here%0A%0A%23%23%23%23%20Version%0ASpotiFLAC%20v%0A%0A%23%23%23%23%20OS%0AWindows%20/%20Linux%20/%20macOS%0A%0A%23%23%23%23%20Additional%20Context%0A%3E%20Type%20here%20or%20send%20screenshot%0A%0A---%0A%0A%23%23%23%20%5BFeature%20Request%5D%0A%0A%23%23%23%23%20Description%0A%3E%20Type%20here%0A%0A%23%23%23%23%20Use%20Case%0A%3E%20Type%20here%0A%0A%23%23%23%23%20Additional%20Context%0A%3E%20Type%20here%20or%20send%20screenshot")}>
               <GithubIcon size={20}/>
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">
-            <p>Report Bug</p>
+            <p>Report Bug or Feature Request</p>
           </TooltipContent>
         </Tooltip>
         <Tooltip delayDuration={0}>

@@ -808,12 +808,12 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 
 	externalURL := fmt.Sprintf("https://open.spotify.com/track/%s", raw.ID)
 
-	coverURL := raw.Cover.Medium
+	coverURL := raw.Cover.Small
 	if coverURL == "" {
-		coverURL = raw.Cover.Large
+		coverURL = raw.Cover.Medium
 	}
 	if coverURL == "" {
-		coverURL = raw.Cover.Small
+		coverURL = raw.Cover.Large
 	}
 
 	releaseDate := raw.Album.Released
@@ -834,7 +834,7 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 		DiscNumber:  raw.Disc,
 		TotalDiscs:  raw.Discs,
 		ExternalURL: externalURL,
-		ISRC:        raw.ID,
+		ISRC:        "",
 		Copyright:   raw.Copyright,
 		Publisher:   raw.Album.Label,
 		Plays:       raw.Plays,
@@ -892,7 +892,7 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 			DiscNumber:  1,
 			TotalDiscs:  0,
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", item.ID),
-			ISRC:        item.ID,
+			ISRC:        "",
 			AlbumID:     raw.ID,
 			AlbumURL:    fmt.Sprintf("https://open.spotify.com/album/%s", raw.ID),
 			ArtistID:    artistID,
@@ -951,7 +951,7 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) Pla
 			DiscNumber:  1,
 			TotalDiscs:  0,
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", item.ID),
-			ISRC:        item.ID,
+			ISRC:        "",
 			AlbumID:     item.AlbumID,
 			AlbumURL:    fmt.Sprintf("https://open.spotify.com/album/%s", item.AlbumID),
 			ArtistID:    artistID,

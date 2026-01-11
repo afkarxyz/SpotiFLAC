@@ -795,7 +795,14 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 	coverObj := extractCoverImage(getMap(albumData, "coverArt"))
 	var cover interface{}
 	if coverObj != nil {
-		cover = getString(coverObj, "medium")
+
+		cover = getString(coverObj, "small")
+		if cover == "" {
+			cover = getString(coverObj, "medium")
+		}
+		if cover == "" {
+			cover = getString(coverObj, "large")
+		}
 	}
 
 	tracks := []map[string]interface{}{}
@@ -1053,7 +1060,14 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 				}
 				coverObj := extractCoverImage(getMap(albumData, "coverArt"))
 				if coverObj != nil {
+
 					trackCover = getString(coverObj, "small")
+					if trackCover == "" {
+						trackCover = getString(coverObj, "medium")
+					}
+					if trackCover == "" {
+						trackCover = getString(coverObj, "large")
+					}
 				}
 			}
 
