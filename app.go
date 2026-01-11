@@ -336,12 +336,6 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 		deezerISRC := req.ISRC
-		if deezerISRC != "" {
-			isrcValid := len(deezerISRC) == 12 && strings.Contains(deezerISRC, "-")
-			if !isrcValid {
-				deezerISRC = ""
-			}
-		}
 		if deezerISRC == "" && req.SpotifyID != "" {
 
 			songlinkClient := backend.NewSongLinkClient()
