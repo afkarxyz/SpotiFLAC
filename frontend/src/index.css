@@ -26,6 +26,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --font-sans: "Bricolage Grotesque", "Google Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 :root {
@@ -75,11 +76,15 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
-    font-family: "Google Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-sans);
   }
-  code, pre, .font-mono {
+
+  code,
+  pre,
+  .font-mono {
     font-family: "Google Sans Code", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
   }
 }
@@ -134,43 +139,51 @@
 /* Specific color for each toast type - match icon color */
 [data-sonner-toast][data-type="success"] [data-description],
 [data-sonner-toast][data-type="success"] [data-description] * {
-  color: rgb(22 163 74) !important; /* green-600 - same as icon */
+  color: rgb(22 163 74) !important;
+  /* green-600 - same as icon */
 }
 
 [data-sonner-toast][data-type="error"] [data-description],
 [data-sonner-toast][data-type="error"] [data-description] * {
-  color: rgb(220 38 38) !important; /* red-600 - same as icon */
+  color: rgb(220 38 38) !important;
+  /* red-600 - same as icon */
 }
 
 [data-sonner-toast][data-type="warning"] [data-description],
 [data-sonner-toast][data-type="warning"] [data-description] * {
-  color: rgb(202 138 4) !important; /* yellow-600 - same as icon */
+  color: rgb(202 138 4) !important;
+  /* yellow-600 - same as icon */
 }
 
 [data-sonner-toast][data-type="info"] [data-description],
 [data-sonner-toast][data-type="info"] [data-description] * {
-  color: rgb(37 99 235) !important; /* blue-600 - same as icon */
+  color: rgb(37 99 235) !important;
+  /* blue-600 - same as icon */
 }
 
 /* Dark mode - use same icon colors */
 .dark [data-sonner-toast][data-type="success"] [data-description],
 .dark [data-sonner-toast][data-type="success"] [data-description] * {
-  color: rgb(22 163 74) !important; /* green-600 */
+  color: rgb(22 163 74) !important;
+  /* green-600 */
 }
 
 .dark [data-sonner-toast][data-type="error"] [data-description],
 .dark [data-sonner-toast][data-type="error"] [data-description] * {
-  color: rgb(220 38 38) !important; /* red-600 */
+  color: rgb(220 38 38) !important;
+  /* red-600 */
 }
 
 .dark [data-sonner-toast][data-type="warning"] [data-description],
 .dark [data-sonner-toast][data-type="warning"] [data-description] * {
-  color: rgb(202 138 4) !important; /* yellow-600 */
+  color: rgb(202 138 4) !important;
+  /* yellow-600 */
 }
 
 .dark [data-sonner-toast][data-type="info"] [data-description],
 .dark [data-sonner-toast][data-type="info"] [data-description] * {
-  color: rgb(37 99 235) !important; /* blue-600 */
+  color: rgb(37 99 235) !important;
+  /* blue-600 */
 }
 
 /* Dark mode toast styling */

@@ -1,5 +1,5 @@
-import { GetDefaults } from "../../wailsjs/go/main/App";
-export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans";
+import { GetDefaults, LoadSettings, SaveSettings as SaveToBackend } from "../../wailsjs/go/main/App";
+export type FontFamily = "google-sans" | "inter" | "poppins" | "roboto" | "dm-sans" | "plus-jakarta-sans" | "manrope" | "space-grotesk" | "noto-sans" | "nunito-sans" | "figtree" | "raleway" | "public-sans" | "outfit" | "jetbrains-mono" | "geist-sans" | "bricolage-grotesque";
 export type FolderPreset = "none" | "artist" | "album" | "year-album" | "year-artist-album" | "artist-album" | "artist-year-album" | "artist-year-nested-album" | "album-artist" | "album-artist-album" | "album-artist-year-album" | "album-artist-year-nested-album" | "year" | "year-artist" | "custom";
 export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "artist-album-title" | "track-dash-title" | "disc-track-title" | "disc-track-title-artist" | "custom";
 export interface Settings {
@@ -102,6 +102,7 @@ export const FONT_OPTIONS: {
     label: string;
     fontFamily: string;
 }[] = [
+    { value: "bricolage-grotesque", label: "Bricolage Grotesque", fontFamily: '"Bricolage Grotesque", system-ui, sans-serif' },
     { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
     { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
     { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
@@ -137,7 +138,8 @@ async function fetchDefaultPath(): Promise<string> {
     }
 }
 const SETTINGS_KEY = "spotiflac-settings";
-export function getSettings(): Settings {
+let cachedSettings: Settings | null = null;
+function getSettingsFromLocalStorage(): Settings {
     try {
         const stored = localStorage.getItem(SETTINGS_KEY);
         if (stored) {
@@ -195,9 +197,85 @@ export function getSettings(): Settings {
         }
     }
     catch (error) {
-        console.error("Failed to load settings:", error);
+        console.error("Failed to load settings from local storage:", error);
     }
     return DEFAULT_SETTINGS;
+}
+export function getSettings(): Settings {
+    if (cachedSettings)
+        return cachedSettings;
+    return getSettingsFromLocalStorage();
+}
+export async function loadSettings(): Promise<Settings> {
+    try {
+        const backendSettings = await LoadSettings();
+        if (backendSettings) {
+            const parsed = backendSettings as any;
+            if ('darkMode' in parsed && !('themeMode' in parsed)) {
+                parsed.themeMode = parsed.darkMode ? 'dark' : 'light';
+                delete parsed.darkMode;
+            }
+            if (!('folderPreset' in parsed) && ('artistSubfolder' in parsed || 'albumSubfolder' in parsed)) {
+                const hasArtist = parsed.artistSubfolder;
+                const hasAlbum = parsed.albumSubfolder;
+                if (hasArtist && hasAlbum) {
+                    parsed.folderPreset = "artist-album";
+                    parsed.folderTemplate = "{artist}/{album}";
+                }
+                else if (hasArtist) {
+                    parsed.folderPreset = "artist";
+                    parsed.folderTemplate = "{artist}";
+                }
+                else if (hasAlbum) {
+                    parsed.folderPreset = "album";
+                    parsed.folderTemplate = "{album}";
+                }
+                else {
+                    parsed.folderPreset = "none";
+                    parsed.folderTemplate = "";
+                }
+            }
+            if (!('filenamePreset' in parsed) && 'filenameFormat' in parsed) {
+                const format = parsed.filenameFormat;
+                if (format === "title-artist") {
+                    parsed.filenamePreset = "artist-title";
+                    parsed.filenameTemplate = "{artist} - {title}";
+                }
+                else if (format === "artist-title") {
+                    parsed.filenamePreset = "artist-title";
+                    parsed.filenameTemplate = "{artist} - {title}";
+                }
+                else {
+                    parsed.filenamePreset = "title";
+                    parsed.filenameTemplate = "{title}";
+                }
+            }
+            parsed.operatingSystem = detectOS();
+            if (!('tidalQuality' in parsed)) {
+                parsed.tidalQuality = "LOSSLESS";
+            }
+            if (!('qobuzQuality' in parsed)) {
+                parsed.qobuzQuality = "6";
+            }
+            if (!('amazonQuality' in parsed)) {
+                parsed.amazonQuality = "HI_RES";
+            }
+            cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
+            return cachedSettings!;
+        }
+    }
+    catch (error) {
+        console.error("Failed to load settings from backend:", error);
+    }
+    const local = getSettingsFromLocalStorage();
+    try {
+        await SaveToBackend(local as any);
+        cachedSettings = local;
+    }
+    catch (error) {
+        console.error("Failed to migrate settings to backend:", error);
+    }
+    return local;
 }
 export interface TemplateData {
     artist?: string;
@@ -224,30 +302,33 @@ export function parseTemplate(template: string, data: TemplateData): string {
     return result;
 }
 export async function getSettingsWithDefaults(): Promise<Settings> {
-    const settings = getSettings();
+    const settings = await loadSettings();
     if (!settings.downloadPath) {
         settings.downloadPath = await fetchDefaultPath();
+        await saveSettings(settings);
     }
     return settings;
 }
-export function saveSettings(settings: Settings): void {
+export async function saveSettings(settings: Settings): Promise<void> {
     try {
+        cachedSettings = settings;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        await SaveToBackend(settings as any);
     }
     catch (error) {
         console.error("Failed to save settings:", error);
     }
 }
-export function updateSettings(partial: Partial<Settings>): Settings {
+export async function updateSettings(partial: Partial<Settings>): Promise<Settings> {
     const current = getSettings();
     const updated = { ...current, ...partial };
-    saveSettings(updated);
+    await saveSettings(updated);
     return updated;
 }
 export async function resetToDefaultSettings(): Promise<Settings> {
     const defaultPath = await fetchDefaultPath();
     const defaultSettings = { ...DEFAULT_SETTINGS, downloadPath: defaultPath };
-    saveSettings(defaultSettings);
+    await saveSettings(defaultSettings);
     return defaultSettings;
 }
 export function applyThemeMode(mode: "auto" | "light" | "dark"): void {

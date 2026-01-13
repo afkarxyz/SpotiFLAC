@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Search, X, ArrowUp } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getSettings, getSettingsWithDefaults, saveSettings, applyThemeMode, applyFont } from "@/lib/settings";
+import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
 import { OpenFolder } from "../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
@@ -59,13 +59,13 @@ function App() {
     const downloadQueue = useDownloadQueueDialog();
     useEffect(() => {
         const initSettings = async () => {
-            const settings = getSettings();
+            const settings = await loadSettings();
             applyThemeMode(settings.themeMode);
             applyTheme(settings.theme);
             applyFont(settings.fontFamily);
             if (!settings.downloadPath) {
                 const settingsWithDefaults = await getSettingsWithDefaults();
-                saveSettings(settingsWithDefaults);
+                await saveSettings(settingsWithDefaults);
             }
         };
         initSettings();
@@ -339,79 +339,79 @@ function App() {
                 return <FileManagerPage />;
             default:
                 return (<>
-            <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} releaseDate={releaseDate}/>
+                    <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} releaseDate={releaseDate}/>
 
-            
-            <Dialog open={metadata.showTimeoutDialog} onOpenChange={metadata.setShowTimeoutDialog}>
-              <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
-                <div className="absolute right-4 top-4">
-                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-70 hover:opacity-100" onClick={() => metadata.setShowTimeoutDialog(false)}>
-                    <X className="h-4 w-4"/>
-                  </Button>
-                </div>
-                <DialogTitle className="text-sm font-medium">Fetch Artist</DialogTitle>
-                <DialogDescription>
-                  Set timeout for fetching metadata. Longer timeout is recommended for artists
-                  with large discography.
-                </DialogDescription>
-                {metadata.pendingArtistName && (<div className="py-2">
-                    <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.pendingArtistName}</p>
-                  </div>)}
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="timeout">Timeout (seconds)</Label>
-                    <Input id="timeout" type="number" min="10" max="600" value={metadata.timeoutValue} onChange={(e) => metadata.setTimeoutValue(Number(e.target.value))}/>
-                    <p className="text-xs text-muted-foreground">
-                      Default: 60 seconds. For large discographies, try 300-600 seconds (5-10
-                      minutes).
-                    </p>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => metadata.setShowTimeoutDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={metadata.handleConfirmFetch}>
-                    <Search className="h-4 w-4"/>
-                    Fetch
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
 
-            
-            <Dialog open={metadata.showAlbumDialog} onOpenChange={metadata.setShowAlbumDialog}>
-              <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
-                <div className="absolute right-4 top-4">
-                  <Button variant="ghost" size="icon" className="h-6 w-6 opacity-70 hover:opacity-100" onClick={() => metadata.setShowAlbumDialog(false)}>
-                    <X className="h-4 w-4"/>
-                  </Button>
-                </div>
-                <DialogTitle className="text-sm font-medium">Fetch Album</DialogTitle>
-                <DialogDescription>
-                  Do you want to fetch metadata for this album?
-                </DialogDescription>
-                {metadata.selectedAlbum && (<div className="py-2">
-                    <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.selectedAlbum.name}</p>
-                  </div>)}
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => metadata.setShowAlbumDialog(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={async () => {
+                    <Dialog open={metadata.showTimeoutDialog} onOpenChange={metadata.setShowTimeoutDialog}>
+                        <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
+                            <div className="absolute right-4 top-4">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-70 hover:opacity-100" onClick={() => metadata.setShowTimeoutDialog(false)}>
+                                    <X className="h-4 w-4"/>
+                                </Button>
+                            </div>
+                            <DialogTitle className="text-sm font-medium">Fetch Artist</DialogTitle>
+                            <DialogDescription>
+                                Set timeout for fetching metadata. Longer timeout is recommended for artists
+                                with large discography.
+                            </DialogDescription>
+                            {metadata.pendingArtistName && (<div className="py-2">
+                                <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.pendingArtistName}</p>
+                            </div>)}
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="timeout">Timeout (seconds)</Label>
+                                    <Input id="timeout" type="number" min="10" max="600" value={metadata.timeoutValue} onChange={(e) => metadata.setTimeoutValue(Number(e.target.value))}/>
+                                    <p className="text-xs text-muted-foreground">
+                                        Default: 60 seconds. For large discographies, try 300-600 seconds (5-10
+                                        minutes).
+                                    </p>
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => metadata.setShowTimeoutDialog(false)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={metadata.handleConfirmFetch}>
+                                    <Search className="h-4 w-4"/>
+                                    Fetch
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+
+                    <Dialog open={metadata.showAlbumDialog} onOpenChange={metadata.setShowAlbumDialog}>
+                        <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
+                            <div className="absolute right-4 top-4">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-70 hover:opacity-100" onClick={() => metadata.setShowAlbumDialog(false)}>
+                                    <X className="h-4 w-4"/>
+                                </Button>
+                            </div>
+                            <DialogTitle className="text-sm font-medium">Fetch Album</DialogTitle>
+                            <DialogDescription>
+                                Do you want to fetch metadata for this album?
+                            </DialogDescription>
+                            {metadata.selectedAlbum && (<div className="py-2">
+                                <p className="font-medium bg-muted/50 rounded-md px-3 py-2">{metadata.selectedAlbum.name}</p>
+                            </div>)}
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => metadata.setShowAlbumDialog(false)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={async () => {
                         const albumUrl = await metadata.handleConfirmAlbumFetch();
                         if (albumUrl) {
                             setSpotifyUrl(albumUrl);
                         }
                     }}>
-                    <Search className="h-4 w-4"/>
-                    Fetch Album
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                                    <Search className="h-4 w-4"/>
+                                    Fetch Album
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
 
-            <SearchBar url={spotifyUrl} loading={metadata.loading} onUrlChange={setSpotifyUrl} onFetch={handleFetchMetadata} onFetchUrl={async (url) => {
+                    <SearchBar url={spotifyUrl} loading={metadata.loading} onUrlChange={setSpotifyUrl} onFetch={handleFetchMetadata} onFetchUrl={async (url) => {
                         setSpotifyUrl(url);
                         const updatedUrl = await metadata.handleFetchMetadata(url);
                         if (updatedUrl) {
@@ -419,53 +419,53 @@ function App() {
                         }
                     }} history={fetchHistory} onHistorySelect={handleHistorySelect} onHistoryRemove={removeFromHistory} hasResult={!!metadata.metadata} searchMode={isSearchMode} onSearchModeChange={setIsSearchMode}/>
 
-            {!isSearchMode && metadata.metadata && renderMetadata()}
-          </>);
+                    {!isSearchMode && metadata.metadata && renderMetadata()}
+                </>);
         }
     };
     return (<TooltipProvider>
-      <div className="min-h-screen bg-background flex flex-col">
-        <TitleBar />
-        <Sidebar currentPage={currentPage} onPageChange={handlePageChange}/>
+        <div className="min-h-screen bg-background flex flex-col">
+            <TitleBar />
+            <Sidebar currentPage={currentPage} onPageChange={handlePageChange}/>
 
-        
-        <div className="flex-1 ml-14 mt-10 p-4 md:p-8">
-          <div className="max-w-4xl mx-auto space-y-6">
-            {renderPage()}
-          </div>
+
+            <div className="flex-1 ml-14 mt-10 p-4 md:p-8">
+                <div className="max-w-4xl mx-auto space-y-6">
+                    {renderPage()}
+                </div>
+            </div>
+
+
+            <DownloadProgressToast onClick={downloadQueue.openQueue}/>
+
+
+            <DownloadQueue isOpen={downloadQueue.isOpen} onClose={downloadQueue.closeQueue}/>
+
+
+            {showScrollTop && (<Button onClick={scrollToTop} className="fixed bottom-6 right-6 z-50 h-10 w-10 rounded-full shadow-lg" size="icon">
+                <ArrowUp className="h-5 w-5"/>
+            </Button>)}
+
+
+            <Dialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
+                <DialogContent className="sm:max-w-[425px] [&>button]:hidden">
+                    <DialogHeader>
+                        <DialogTitle>Unsaved Changes</DialogTitle>
+                        <DialogDescription>
+                            You have unsaved changes in Settings. Are you sure you want to leave? Your changes will be lost.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={handleCancelNavigation}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleDiscardChanges}>
+                            Discard Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
-
-        
-        <DownloadProgressToast onClick={downloadQueue.openQueue}/>
-
-        
-        <DownloadQueue isOpen={downloadQueue.isOpen} onClose={downloadQueue.closeQueue}/>
-
-        
-        {showScrollTop && (<Button onClick={scrollToTop} className="fixed bottom-6 right-6 z-50 h-10 w-10 rounded-full shadow-lg" size="icon">
-            <ArrowUp className="h-5 w-5"/>
-          </Button>)}
-
-        
-        <Dialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
-          <DialogContent className="sm:max-w-[425px] [&>button]:hidden">
-            <DialogHeader>
-              <DialogTitle>Unsaved Changes</DialogTitle>
-              <DialogDescription>
-                You have unsaved changes in Settings. Are you sure you want to leave? Your changes will be lost.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button variant="outline" onClick={handleCancelNavigation}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleDiscardChanges}>
-                Discard Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
     </TooltipProvider>);
 }
 export default App;

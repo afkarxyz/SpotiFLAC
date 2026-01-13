@@ -1053,3 +1053,55 @@ func (a *App) SkipDownloadItem(itemID, filePath string) {
 func (a *App) GetPreviewURL(trackID string) (string, error) {
 	return backend.GetPreviewURL(trackID)
 }
+
+func (a *App) GetConfigPath() (string, error) {
+	dir, err := backend.GetFFmpegDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "config.json"), nil
+}
+
+func (a *App) SaveSettings(settings map[string]interface{}) error {
+	configPath, err := a.GetConfigPath()
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(configPath)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+
+	data, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configPath, data, 0644)
+}
+
+func (a *App) LoadSettings() (map[string]interface{}, error) {
+	configPath, err := a.GetConfigPath()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var settings map[string]interface{}
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
