@@ -21,7 +21,7 @@ export interface Settings {
     embedMaxQualityCover: boolean;
     operatingSystem: "Windows" | "linux/MacOS";
     tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
-    qobuzQuality: "6" | "7" | "27";
+    qobuzQuality: "6" | "7";
     amazonQuality: "HI_RES";
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
@@ -190,6 +190,9 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('qobuzQuality' in parsed)) {
                 parsed.qobuzQuality = "6";
             }
+            if (parsed.qobuzQuality === "27") {
+                parsed.qobuzQuality = "6";
+            }
             if (!('amazonQuality' in parsed)) {
                 parsed.amazonQuality = "HI_RES";
             }
@@ -255,6 +258,9 @@ export async function loadSettings(): Promise<Settings> {
                 parsed.tidalQuality = "LOSSLESS";
             }
             if (!('qobuzQuality' in parsed)) {
+                parsed.qobuzQuality = "6";
+            }
+            if (parsed.qobuzQuality === "27") {
                 parsed.qobuzQuality = "6";
             }
             if (!('amazonQuality' in parsed)) {

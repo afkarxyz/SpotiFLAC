@@ -7,10 +7,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"spotiflac/backend"
 	"strings"
 	"time"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
+
+var isrcRegex = regexp.MustCompile(`^[A-Z]{2}[A-Z0-9]{3}\d{2}\d{5}$`)
+
+func isValidISRC(isrc string) bool {
+	return isrcRegex.MatchString(isrc)
+}
 
 type App struct {
 	ctx context.Context
@@ -336,6 +345,11 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 		deezerISRC := req.ISRC
+
+		if len(deezerISRC) != 12 || !isValidISRC(deezerISRC) {
+			deezerISRC = ""
+		}
+
 		if deezerISRC == "" && req.SpotifyID != "" {
 
 			songlinkClient := backend.NewSongLinkClient()
@@ -370,6 +384,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	}
 
 	if err != nil {
+		backend.FailDownloadItem(itemID, fmt.Sprintf("Download failed: %v", err))
 
 		if filename != "" && !strings.HasPrefix(filename, "EXISTS:") {
 
@@ -828,16 +843,19 @@ type DownloadFFmpegResponse struct {
 }
 
 func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "starting")
 	err := backend.DownloadFFmpeg(func(progress int) {
-		fmt.Printf("[FFmpeg] Download progress: %d%%\n", progress)
+		runtime.EventsEmit(a.ctx, "ffmpeg:progress", progress)
 	})
 	if err != nil {
+		runtime.EventsEmit(a.ctx, "ffmpeg:status", "failed")
 		return DownloadFFmpegResponse{
 			Success: false,
 			Error:   err.Error(),
 		}
 	}
 
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "completed")
 	return DownloadFFmpegResponse{
 		Success: true,
 		Message: "FFmpeg installed successfully",
@@ -1104,4 +1122,8 @@ func (a *App) LoadSettings() (map[string]interface{}, error) {
 	}
 
 	return settings, nil
+}
+
+func (a *App) CheckFFmpegInstalled() (bool, error) {
+	return backend.IsFFmpegInstalled()
 }

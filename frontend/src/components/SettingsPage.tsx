@@ -8,10 +8,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { FolderOpen, Save, RotateCcw, Info } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { Progress } from "@/components/ui/progress";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
+import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 const TidalIcon = () => (<svg viewBox="0 0 24 24" className="inline-block w-[1.1em] h-[1.1em] mr-2 fill-muted-foreground">
   <path d="M4.022 4.5 0 8.516l3.997 3.99 3.997-3.984L4.022 4.5Zm7.956 0L7.994 8.522l4.003 3.984L16 8.484 11.978 4.5Zm8.007 0L24 8.528l-4.003 3.978L16 8.484 19.985 4.5Z"></path>
   <path d="m8.012 16.534 3.991 3.966L16 16.49l-4.003-3.984-3.985 4.028Z"></path>
@@ -33,6 +35,10 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
     const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
     const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
     const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [showFFmpegWarning, setShowFFmpegWarning] = useState(false);
+    const [isInstallingFFmpeg, setIsInstallingFFmpeg] = useState(false);
+    const [installProgress, setInstallProgress] = useState(0);
+    const downloadProgress = useDownloadProgress();
     const hasUnsavedChanges = JSON.stringify(savedSettings) !== JSON.stringify(tempSettings);
     const resetToSaved = useCallback(() => {
         const freshSavedSettings = getSettings();
@@ -107,6 +113,51 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         catch (error) {
             console.error("Error selecting folder:", error);
             toast.error(`Error selecting folder: ${error}`);
+        }
+    };
+    const handleTidalQualityChange = async (value: "LOSSLESS" | "HI_RES_LOSSLESS") => {
+        if (value === "HI_RES_LOSSLESS") {
+            try {
+                const { CheckFFmpegInstalled } = await import("../../wailsjs/go/main/App");
+                const isInstalled = await CheckFFmpegInstalled();
+                if (!isInstalled) {
+                    setShowFFmpegWarning(true);
+                    return;
+                }
+            }
+            catch (error) {
+                console.error("Error checking FFmpeg:", error);
+            }
+        }
+        setTempSettings((prev) => ({ ...prev, tidalQuality: value }));
+    };
+    const handleInstallFFmpeg = async () => {
+        setIsInstallingFFmpeg(true);
+        setInstallProgress(0);
+        try {
+            const { DownloadFFmpeg } = await import("../../wailsjs/go/main/App");
+            const { EventsOn, EventsOff } = await import("../../wailsjs/runtime/runtime");
+            EventsOn("ffmpeg:progress", (progress: number) => {
+                setInstallProgress(progress);
+            });
+            const response = await DownloadFFmpeg();
+            EventsOff("ffmpeg:progress");
+            if (response.success) {
+                toast.success("FFmpeg installed successfully!");
+                setShowFFmpegWarning(false);
+                setTempSettings((prev) => ({ ...prev, tidalQuality: "HI_RES_LOSSLESS" }));
+            }
+            else {
+                toast.error(`Failed to install FFmpeg: ${response.error}`);
+            }
+        }
+        catch (error) {
+            console.error("Error installing FFmpeg:", error);
+            toast.error(`Error during FFmpeg installation: ${error}`);
+        }
+        finally {
+            setIsInstallingFFmpeg(false);
+            setInstallProgress(0);
         }
     };
     return (<div className="space-y-6">
@@ -208,7 +259,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
               </SelectContent>
             </Select>
 
-            {tempSettings.downloader === "tidal" && (<Select value={tempSettings.tidalQuality} onValueChange={(value: "LOSSLESS" | "HI_RES_LOSSLESS") => setTempSettings((prev) => ({ ...prev, tidalQuality: value }))}>
+            {tempSettings.downloader === "tidal" && (<Select value={tempSettings.tidalQuality} onValueChange={handleTidalQualityChange}>
               <SelectTrigger className="h-9 w-fit">
                 <SelectValue />
               </SelectTrigger>
@@ -218,14 +269,13 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
               </SelectContent>
             </Select>)}
 
-            {tempSettings.downloader === "qobuz" && (<Select value={tempSettings.qobuzQuality} onValueChange={(value: "6" | "7" | "27") => setTempSettings((prev) => ({ ...prev, qobuzQuality: value }))}>
+            {tempSettings.downloader === "qobuz" && (<Select value={tempSettings.qobuzQuality} onValueChange={(value: "6" | "7") => setTempSettings((prev) => ({ ...prev, qobuzQuality: value }))}>
               <SelectTrigger className="h-9 w-fit">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="6">FLAC 16-bit (CD Quality)</SelectItem>
-                <SelectItem value="7">FLAC 24-bit</SelectItem>
-                <SelectItem value="27">Hi-Res (24-bit/96kHz+)</SelectItem>
+                <SelectItem value="7">FLAC 24-bit (Studio Quality)</SelectItem>
               </SelectContent>
             </Select>)}
 
@@ -234,7 +284,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="HI_RES">Hi-Res (24-bit/96kHz+)</SelectItem>
+                <SelectItem value="HI_RES">Hi-Res (24-bit/48kHz+)</SelectItem>
               </SelectContent>
             </Select>)}
           </div>
@@ -355,6 +405,38 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           <Button variant="outline" onClick={() => setShowResetConfirm(false)}>Cancel</Button>
           <Button onClick={handleReset}>Reset</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={showFFmpegWarning} onOpenChange={(open) => !isInstallingFFmpeg && setShowFFmpegWarning(open)}>
+      <DialogContent className="max-w-md [&>button]:hidden">
+        <DialogHeader>
+          <DialogTitle>FFmpeg Required</DialogTitle>
+          <DialogDescription className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <p>Tidal 24-bit (Hi-Res Lossless) downloads audio in segmented files that need to be merged into a single FLAC file.</p>
+              <p>FFmpeg is required to merge these segments. {isInstallingFFmpeg ? "Installing FFmpeg..." : "Would you like to install FFmpeg now?"}</p>
+            </div>
+
+            {isInstallingFFmpeg && (<div className="space-y-2 py-2">
+                <div className="flex justify-between text-xs font-medium">
+                  <div className="flex flex-col gap-1">
+                    <span>Downloading & Extracting...</span>
+                    {downloadProgress.is_downloading && downloadProgress.mb_downloaded > 0 && (<span className="text-muted-foreground font-normal">
+                        {downloadProgress.mb_downloaded.toFixed(2)} MB
+                        {downloadProgress.speed_mbps > 0 && ` @ ${downloadProgress.speed_mbps.toFixed(2)} MB/s`}
+                      </span>)}
+                  </div>
+                  <span>{installProgress}%</span>
+                </div>
+                <Progress value={installProgress} className="h-2"/>
+              </div>)}
+          </DialogDescription>
+        </DialogHeader>
+        {!isInstallingFFmpeg && (<DialogFooter>
+            <Button variant="outline" onClick={() => setShowFFmpegWarning(false)}>Cancel</Button>
+            <Button onClick={handleInstallFFmpeg}>Install FFmpeg</Button>
+          </DialogFooter>)}
       </DialogContent>
     </Dialog>
   </div>);

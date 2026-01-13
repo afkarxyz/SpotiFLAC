@@ -3,7 +3,8 @@ import { X, Download, CheckCircle2, XCircle, Clock, FileCheck, Trash2, HardDrive
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { GetDownloadQueue, ClearCompletedDownloads } from "../../wailsjs/go/main/App";
+import { GetDownloadQueue, ClearCompletedDownloads, ClearAllDownloads } from "../../wailsjs/go/main/App";
+import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { backend } from "../../wailsjs/go/models";
 interface DownloadQueueProps {
     isOpen: boolean;
@@ -47,6 +48,17 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
             console.error("Failed to clear history:", error);
         }
     };
+    const handleReset = async () => {
+        try {
+            await ClearAllDownloads();
+            const info = await GetDownloadQueue();
+            setQueueInfo(info);
+            toast.success("Download queue reset");
+        }
+        catch (error) {
+            console.error("Failed to reset queue:", error);
+        }
+    };
     const getStatusIcon = (status: string) => {
         switch (status) {
             case "downloading":
@@ -72,8 +84,8 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
             queued: "outline",
         };
         return (<Badge variant={variants[status] || "outline"} className="text-xs">
-        {status}
-      </Badge>);
+      {status}
+    </Badge>);
     };
     const formatDuration = (startTimestamp: number) => {
         if (startTimestamp === 0)
@@ -94,138 +106,138 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
         }
     };
     return (<Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[1200px] w-[95vw] max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 border-b space-y-0">
-          <div className="flex items-center justify-between mb-4">
-            <DialogTitle className="text-lg font-semibold">Download Queue</DialogTitle>
-            <div className="flex items-center gap-2">
-              {(queueInfo.completed_count > 0 || queueInfo.failed_count > 0 || queueInfo.skipped_count > 0) && (<Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={handleClearHistory}>
-                  <Trash2 className="h-3 w-3"/>
-                  Clear History
-                </Button>)}
-              <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-muted" onClick={onClose}>
-                <X className="h-4 w-4"/>
-              </Button>
-            </div>
+    <DialogContent className="max-w-[1200px] w-[95vw] max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
+      <DialogHeader className="px-6 pt-6 pb-4 border-b space-y-0">
+        <div className="flex items-center justify-between mb-4">
+          <DialogTitle className="text-lg font-semibold hover:text-primary transition-colors cursor-pointer" onClick={handleReset}>Download Queue</DialogTitle>
+          <div className="flex items-center gap-2">
+            {(queueInfo.completed_count > 0 || queueInfo.failed_count > 0 || queueInfo.skipped_count > 0) && (<Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={handleClearHistory}>
+              <Trash2 className="h-3 w-3"/>
+              Clear History
+            </Button>)}
+            <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-muted" onClick={onClose}>
+              <X className="h-4 w-4"/>
+            </Button>
           </div>
+        </div>
 
-          
-          <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-muted-foreground"/>
-              <span className="text-muted-foreground">Queued:</span>
-              <span className="font-semibold">{queueInfo.queued_count}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 text-green-500"/>
-              <span className="text-muted-foreground">Completed:</span>
-              <span className="font-semibold">{queueInfo.completed_count}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <FileCheck className="h-3.5 w-3.5 text-yellow-500"/>
-              <span className="text-muted-foreground">Skipped:</span>
-              <span className="font-semibold">{queueInfo.skipped_count}</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <XCircle className="h-3.5 w-3.5 text-red-500"/>
-              <span className="text-muted-foreground">Failed:</span>
-              <span className="font-semibold">{queueInfo.failed_count}</span>
-            </div>
+
+        <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 text-muted-foreground"/>
+            <span className="text-muted-foreground">Queued:</span>
+            <span className="font-semibold">{queueInfo.queued_count}</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-green-500"/>
+            <span className="text-muted-foreground">Completed:</span>
+            <span className="font-semibold">{queueInfo.completed_count}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <FileCheck className="h-3.5 w-3.5 text-yellow-500"/>
+            <span className="text-muted-foreground">Skipped:</span>
+            <span className="font-semibold">{queueInfo.skipped_count}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <XCircle className="h-3.5 w-3.5 text-red-500"/>
+            <span className="text-muted-foreground">Failed:</span>
+            <span className="font-semibold">{queueInfo.failed_count}</span>
+          </div>
+        </div>
 
-          
-          <div className="flex items-center gap-4 text-sm pt-3 mt-3 border-t">
-            <div className="flex items-center gap-1.5">
-              <HardDrive className="h-3.5 w-3.5 text-muted-foreground"/>
-              <span className="text-muted-foreground">Downloaded:</span>
-              <span className="font-semibold font-mono">
-                {queueInfo.total_downloaded > 0 ? `${queueInfo.total_downloaded.toFixed(2)} MB` : "0.00 MB"}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-muted-foreground"/>
-              <span className="text-muted-foreground">Speed:</span>
-              <span className="font-semibold font-mono">
-                {queueInfo.current_speed > 0 && queueInfo.is_downloading
+
+        <div className="flex items-center gap-4 text-sm pt-3 mt-3 border-t">
+          <div className="flex items-center gap-1.5">
+            <HardDrive className="h-3.5 w-3.5 text-muted-foreground"/>
+            <span className="text-muted-foreground">Downloaded:</span>
+            <span className="font-semibold font-mono">
+              {queueInfo.total_downloaded > 0 ? `${queueInfo.total_downloaded.toFixed(2)} MB` : "0.00 MB"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Zap className="h-3.5 w-3.5 text-muted-foreground"/>
+            <span className="text-muted-foreground">Speed:</span>
+            <span className="font-semibold font-mono">
+              {queueInfo.current_speed > 0 && queueInfo.is_downloading
             ? `${queueInfo.current_speed.toFixed(2)} MB/s`
             : "—"}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Timer className="h-3.5 w-3.5 text-muted-foreground"/>
-              <span className="text-muted-foreground">Duration:</span>
-              <span className="font-semibold font-mono">
-                {queueInfo.session_start_time > 0 ? formatDuration(queueInfo.session_start_time) : "—"}
-              </span>
-            </div>
+            </span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <Timer className="h-3.5 w-3.5 text-muted-foreground"/>
+            <span className="text-muted-foreground">Duration:</span>
+            <span className="font-semibold font-mono">
+              {queueInfo.session_start_time > 0 ? formatDuration(queueInfo.session_start_time) : "—"}
+            </span>
+          </div>
+        </div>
 
-        </DialogHeader>
+      </DialogHeader>
 
-        
-        <div className="flex-1 overflow-y-auto px-6 custom-scrollbar">
-          <div className="space-y-2 py-4">
-            {queueInfo.queue.length === 0 ? (<div className="text-center py-12 text-muted-foreground">
-                <Download className="h-12 w-12 mx-auto mb-3 opacity-20"/>
-                <p>No downloads in queue</p>
-              </div>) : (queueInfo.queue.map((item) => (<div key={item.id} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1">{getStatusIcon(item.status)}</div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium truncate">{item.track_name}</p>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {item.artist_name}
-                            {item.album_name && ` • ${item.album_name}`}
-                          </p>
-                        </div>
-                        {getStatusBadge(item.status)}
-                      </div>
+      <div className="flex-1 overflow-y-auto px-6 custom-scrollbar">
+        <div className="space-y-2 py-4">
+          {queueInfo.queue.length === 0 ? (<div className="text-center py-12 text-muted-foreground">
+            <Download className="h-12 w-12 mx-auto mb-3 opacity-20"/>
+            <p>No downloads in queue</p>
+          </div>) : (queueInfo.queue.map((item) => (<div key={item.id} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
+            <div className="flex items-start gap-3">
+              <div className="mt-1">{getStatusIcon(item.status)}</div>
 
-                      
-                      {item.status === "downloading" && (<div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground font-mono">
-                          <span>
-                            {item.progress > 0
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{item.track_name}</p>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {item.artist_name}
+                      {item.album_name && ` • ${item.album_name}`}
+                    </p>
+                  </div>
+                  {getStatusBadge(item.status)}
+                </div>
+
+
+                {item.status === "downloading" && (<div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground font-mono">
+                  <span>
+                    {item.progress > 0
                     ? `${item.progress.toFixed(2)} MB`
                     : queueInfo.is_downloading && queueInfo.current_speed > 0
                         ? "Downloading..."
                         : "Starting..."}
-                          </span>
-                          <span>
-                            {item.speed > 0
+                  </span>
+                  <span>
+                    {item.speed > 0
                     ? `${item.speed.toFixed(2)} MB/s`
                     : queueInfo.current_speed > 0
                         ? `${queueInfo.current_speed.toFixed(2)} MB/s`
                         : "—"}
-                          </span>
-                        </div>)}
+                  </span>
+                </div>)}
 
-                      
-                      {item.status === "completed" && (<div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                          <span className="font-mono">{item.progress.toFixed(2)} MB</span>
-                        </div>)}
 
-                      
-                      {item.status === "skipped" && (<div className="mt-1.5 text-xs text-muted-foreground">
-                          File already exists
-                        </div>)}
+                {item.status === "completed" && (<div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                  <span className="font-mono">{item.progress.toFixed(2)} MB</span>
+                </div>)}
 
-                      
-                      {item.status === "failed" && item.error_message && (<div className="mt-1.5 text-xs text-red-500 bg-red-50 dark:bg-red-950/20 rounded px-2 py-1">
-                          {item.error_message}
-                        </div>)}
 
-                      
-                      {(item.status === "completed" || item.status === "skipped") && item.file_path && (<div className="mt-1.5 text-xs text-muted-foreground truncate font-mono">
-                          {item.file_path}
-                        </div>)}
-                    </div>
-                  </div>
-                </div>)))}
-          </div>
+                {item.status === "skipped" && (<div className="mt-1.5 text-xs text-muted-foreground">
+                  File already exists
+                </div>)}
+
+
+                {item.status === "failed" && item.error_message && (<div className="mt-1.5 text-xs text-red-500 bg-red-50 dark:bg-red-950/20 rounded px-2 py-1">
+                  {item.error_message}
+                </div>)}
+
+
+                {(item.status === "completed" || item.status === "skipped") && item.file_path && (<div className="mt-1.5 text-xs text-muted-foreground truncate font-mono">
+                  {item.file_path}
+                </div>)}
+              </div>
+            </div>
+          </div>)))}
         </div>
-      </DialogContent>
-    </Dialog>);
+      </div>
+    </DialogContent>
+  </Dialog>);
 }
