@@ -415,7 +415,7 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
               </Button>
               {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} size="sm" variant="secondary" disabled={isDownloading}>
                   {isDownloading && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
-                  Download Selected ({selectedTracks.length})
+                  Download Selected ({selectedTracks.length.toLocaleString()})
                 </Button>)}
               {onDownloadAllLyrics && (<Tooltip>
                   <TooltipTrigger asChild>

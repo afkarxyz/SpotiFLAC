@@ -97,7 +97,7 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                   </div>
                   <span>•</span>
                   <span>
-                    {playlistInfo.tracks.total} {playlistInfo.tracks.total === 1 ? "song" : "songs"}
+                    {playlistInfo.tracks.total.toLocaleString()} {playlistInfo.tracks.total === 1 ? "track" : "tracks"}
                   </span>
                   <span>•</span>
                   <span>{playlistInfo.followers.total.toLocaleString()} followers</span>
@@ -110,7 +110,7 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                 </Button>
                 {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} variant="secondary" disabled={isDownloading}>
                     {isDownloading && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
-                    Download Selected ({selectedTracks.length})
+                    Download Selected ({selectedTracks.length.toLocaleString()})
                   </Button>)}
                 {onDownloadAllLyrics && (<Tooltip>
                     <TooltipTrigger asChild>

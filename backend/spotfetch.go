@@ -1049,6 +1049,7 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 			albumData := getMap(trackData, "albumOfTrack")
 			albumName := ""
 			albumID := ""
+			albumArtistsString := ""
 			var trackCover interface{}
 
 			if len(albumData) > 0 {
@@ -1069,19 +1070,29 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 						trackCover = getString(coverObj, "large")
 					}
 				}
+
+				albumArtists := extractArtists(getMap(albumData, "artists"))
+				if len(albumArtists) > 0 {
+					albumArtistNames := []string{}
+					for _, artist := range albumArtists {
+						albumArtistNames = append(albumArtistNames, getString(artist, "name"))
+					}
+					albumArtistsString = strings.Join(albumArtistNames, ", ")
+				}
 			}
 
 			trackInfo := map[string]interface{}{
-				"id":        trackID,
-				"cover":     trackCover,
-				"title":     getString(trackData, "name"),
-				"artist":    artistsString,
-				"artistIds": artistIDs,
-				"plays":     rank,
-				"status":    status,
-				"album":     albumName,
-				"albumId":   albumID,
-				"duration":  durationString,
+				"id":          trackID,
+				"cover":       trackCover,
+				"title":       getString(trackData, "name"),
+				"artist":      artistsString,
+				"artistIds":   artistIDs,
+				"plays":       rank,
+				"status":      status,
+				"album":       albumName,
+				"albumArtist": albumArtistsString,
+				"albumId":     albumID,
+				"duration":    durationString,
 			}
 			tracks = append(tracks, trackInfo)
 		}

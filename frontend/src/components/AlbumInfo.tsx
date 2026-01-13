@@ -90,7 +90,7 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                   <span>{albumInfo.release_date}</span>
                   <span>•</span>
                   <span>
-                    {albumInfo.total_tracks} {albumInfo.total_tracks === 1 ? "song" : "songs"}
+                    {albumInfo.total_tracks.toLocaleString()} {albumInfo.total_tracks === 1 ? "track" : "tracks"}
                   </span>
                 </div>
               </div>
@@ -101,7 +101,7 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                 </Button>
                 {selectedTracks.length > 0 && (<Button onClick={onDownloadSelected} variant="secondary" disabled={isDownloading}>
                     {isDownloading && bulkDownloadType === "selected" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
-                    Download Selected ({selectedTracks.length})
+                    Download Selected ({selectedTracks.length.toLocaleString()})
                   </Button>)}
                 {onDownloadAllLyrics && (<Tooltip>
                     <TooltipTrigger asChild>

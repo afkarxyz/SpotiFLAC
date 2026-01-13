@@ -1049,3 +1049,7 @@ func (a *App) CheckFilesExistence(outputDir string, tracks []CheckFileExistenceR
 func (a *App) SkipDownloadItem(itemID, filePath string) {
 	backend.SkipDownloadItem(itemID, filePath)
 }
+
+func (a *App) GetPreviewURL(trackID string) (string, error) {
+	return backend.GetPreviewURL(trackID)
+}

@@ -403,6 +403,25 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		outputDir = NormalizePath(outputDir)
 	}
 
+	safeArtist := sanitizeFilename(req.AlbumArtist)
+	if safeArtist == "" {
+		safeArtist = sanitizeFilename(req.ArtistName)
+	}
+	safeAlbum := sanitizeFilename(req.AlbumName)
+
+	if safeArtist != "" && safeAlbum != "" {
+		artistAlbumPath := filepath.Join(outputDir, safeArtist, safeAlbum)
+		if info, err := os.Stat(artistAlbumPath); err == nil && info.IsDir() {
+			outputDir = artistAlbumPath
+		} else {
+
+			artistPath := filepath.Join(outputDir, safeArtist)
+			if info, err := os.Stat(artistPath); err == nil && info.IsDir() {
+				outputDir = artistPath
+			}
+		}
+	}
+
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return &LyricsDownloadResponse{
 			Success: false,
