@@ -740,28 +740,35 @@ func (t *TidalDownloader) Download(spotifyTrackID, outputDir, quality, filenameF
 	return t.DownloadByURLWithFallback(tidalURL, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyURL)
 }
 
+type SegmentTemplate struct {
+	Initialization string `xml:"initialization,attr"`
+	Media          string `xml:"media,attr"`
+	Timeline       struct {
+		Segments []struct {
+			Duration int64 `xml:"d,attr"`
+			Repeat   int   `xml:"r,attr"`
+		} `xml:"S"`
+	} `xml:"SegmentTimeline"`
+}
+
 type MPD struct {
 	XMLName xml.Name `xml:"MPD"`
 	Period  struct {
-		AdaptationSet struct {
-			Representation struct {
-				SegmentTemplate struct {
-					Initialization string `xml:"initialization,attr"`
-					Media          string `xml:"media,attr"`
-					Timeline       struct {
-						Segments []struct {
-							Duration int `xml:"d,attr"`
-							Repeat   int `xml:"r,attr"`
-						} `xml:"S"`
-					} `xml:"SegmentTimeline"`
-				} `xml:"SegmentTemplate"`
+		AdaptationSets []struct {
+			MimeType        string `xml:"mimeType,attr"`
+			Codecs          string `xml:"codecs,attr"`
+			Representations []struct {
+				ID              string           `xml:"id,attr"`
+				Codecs          string           `xml:"codecs,attr"`
+				Bandwidth       int              `xml:"bandwidth,attr"`
+				SegmentTemplate *SegmentTemplate `xml:"SegmentTemplate"`
 			} `xml:"Representation"`
+			SegmentTemplate *SegmentTemplate `xml:"SegmentTemplate"`
 		} `xml:"AdaptationSet"`
 	} `xml:"Period"`
 }
 
 func parseManifest(manifestB64 string) (directURL string, initURL string, mediaURLs []string, err error) {
-
 	manifestBytes, err := base64.StdEncoding.DecodeString(manifestB64)
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to decode manifest: %w", err)
@@ -769,8 +776,7 @@ func parseManifest(manifestB64 string) (directURL string, initURL string, mediaU
 
 	manifestStr := string(manifestBytes)
 
-	if strings.HasPrefix(manifestStr, "{") {
-
+	if strings.HasPrefix(strings.TrimSpace(manifestStr), "{") {
 		var btsManifest TidalBTSManifest
 		if err := json.Unmarshal(manifestBytes, &btsManifest); err != nil {
 			return "", "", nil, fmt.Errorf("failed to parse BTS manifest: %w", err)
@@ -787,25 +793,78 @@ func parseManifest(manifestB64 string) (directURL string, initURL string, mediaU
 	fmt.Println("Manifest: DASH format")
 
 	var mpd MPD
-	if err := xml.Unmarshal(manifestBytes, &mpd); err != nil {
-		return "", "", nil, fmt.Errorf("failed to parse manifest XML: %w", err)
+	var segTemplate *SegmentTemplate
+
+	if err := xml.Unmarshal(manifestBytes, &mpd); err == nil {
+		var selectedBandwidth int
+		var selectedCodecs string
+
+		for _, as := range mpd.Period.AdaptationSets {
+
+			if as.SegmentTemplate != nil {
+
+				if segTemplate == nil {
+					segTemplate = as.SegmentTemplate
+					selectedCodecs = as.Codecs
+				}
+			}
+
+			for _, rep := range as.Representations {
+				if rep.SegmentTemplate != nil {
+					if rep.Bandwidth > selectedBandwidth {
+						selectedBandwidth = rep.Bandwidth
+						segTemplate = rep.SegmentTemplate
+
+						if rep.Codecs != "" {
+							selectedCodecs = rep.Codecs
+						} else {
+							selectedCodecs = as.Codecs
+						}
+					}
+				}
+			}
+		}
+
+		if selectedBandwidth > 0 {
+			fmt.Printf("Selected stream: Codec=%s, Bandwidth=%d bps\n", selectedCodecs, selectedBandwidth)
+		}
 	}
 
-	segTemplate := mpd.Period.AdaptationSet.Representation.SegmentTemplate
-	initURL = segTemplate.Initialization
-	mediaTemplate := segTemplate.Media
+	var mediaTemplate string
+	segmentCount := 0
 
-	if initURL == "" || mediaTemplate == "" {
+	if segTemplate != nil {
+		initURL = segTemplate.Initialization
+		mediaTemplate = segTemplate.Media
 
-		initRe := regexp.MustCompile(`initialization="([^"]+)"`)
-		mediaRe := regexp.MustCompile(`media="([^"]+)"`)
-
-		if match := initRe.FindStringSubmatch(manifestStr); len(match) > 1 {
-			initURL = match[1]
+		for _, seg := range segTemplate.Timeline.Segments {
+			segmentCount += seg.Repeat + 1
 		}
-		if match := mediaRe.FindStringSubmatch(manifestStr); len(match) > 1 {
-			mediaTemplate = match[1]
+	}
+
+	if segmentCount > 0 && initURL != "" && mediaTemplate != "" {
+		initURL = strings.ReplaceAll(initURL, "&amp;", "&")
+		mediaTemplate = strings.ReplaceAll(mediaTemplate, "&amp;", "&")
+
+		fmt.Printf("Parsed manifest via XML: %d segments\n", segmentCount)
+
+		for i := 1; i <= segmentCount; i++ {
+			mediaURL := strings.ReplaceAll(mediaTemplate, "$Number$", fmt.Sprintf("%d", i))
+			mediaURLs = append(mediaURLs, mediaURL)
 		}
+		return "", initURL, mediaURLs, nil
+	}
+
+	fmt.Println("Using regex fallback for DASH manifest...")
+
+	initRe := regexp.MustCompile(`initialization="([^"]+)"`)
+	mediaRe := regexp.MustCompile(`media="([^"]+)"`)
+
+	if match := initRe.FindStringSubmatch(manifestStr); len(match) > 1 {
+		initURL = match[1]
+	}
+	if match := mediaRe.FindStringSubmatch(manifestStr); len(match) > 1 {
+		mediaTemplate = match[1]
 	}
 
 	if initURL == "" {
@@ -815,22 +874,25 @@ func parseManifest(manifestB64 string) (directURL string, initURL string, mediaU
 	initURL = strings.ReplaceAll(initURL, "&amp;", "&")
 	mediaTemplate = strings.ReplaceAll(mediaTemplate, "&amp;", "&")
 
-	segmentCount := 0
-	for _, seg := range segTemplate.Timeline.Segments {
-		segmentCount += seg.Repeat + 1
+	segmentCount = 0
+
+	segTagRe := regexp.MustCompile(`<S\s+[^>]*>`)
+	matches := segTagRe.FindAllString(manifestStr, -1)
+
+	for _, match := range matches {
+		repeat := 0
+		rRe := regexp.MustCompile(`r="(\d+)"`)
+		if rMatch := rRe.FindStringSubmatch(match); len(rMatch) > 1 {
+			fmt.Sscanf(rMatch[1], "%d", &repeat)
+		}
+		segmentCount += repeat + 1
 	}
 
 	if segmentCount == 0 {
-		segRe := regexp.MustCompile(`<S d="\d+"(?: r="(\d+)")?`)
-		matches := segRe.FindAllStringSubmatch(manifestStr, -1)
-		for _, match := range matches {
-			repeat := 0
-			if len(match) > 1 && match[1] != "" {
-				fmt.Sscanf(match[1], "%d", &repeat)
-			}
-			segmentCount += repeat + 1
-		}
+		return "", "", nil, fmt.Errorf("no segments found in manifest (XML: %d, Regex: 0)", len(matches))
 	}
+
+	fmt.Printf("Parsed manifest via Regex: %d segments\n", segmentCount)
 
 	for i := 1; i <= segmentCount; i++ {
 		mediaURL := strings.ReplaceAll(mediaTemplate, "$Number$", fmt.Sprintf("%d", i))
