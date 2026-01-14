@@ -27,140 +27,140 @@ const AmazonIcon = () => (<svg viewBox="0 0 24 24" className="inline-block w-[1.
   <path fillRule="evenodd" d="M21.55 17.46c1.29-1.09 1.64-3.33 1.36-3.68-.12-.15-.71-.3-1.45-.3-.8 0-1.73.18-2.45.67-.22.15-.17.35.05.32.76-.1 2.5-.3 2.82.1.3.4-.35 2.03-.65 2.74-.07.23.1.3.32.15ZM18.12 7.4h-.52c-.12 0-.17.05-.17.18v4.1c0 .12.05.17.17.17h.52c.12 0 .17-.05.17-.17v-4.1c0-.1-.05-.18-.17-.18Zm.15-1.68a.58.58 0 0 0-.42-.15c-.18 0-.3.05-.4.15a.5.5 0 0 0-.15.37c0 .15.05.3.15.37.1.1.22.15.4.15.17 0 .3-.05.4-.15a.5.5 0 0 0 .14-.37c0-.15-.02-.3-.12-.37Z" clipRule="evenodd"></path>
 </svg>);
 interface SettingsPageProps {
-    onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
-    onResetRequest?: (resetFn: () => void) => void;
+  onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
+  onResetRequest?: (resetFn: () => void) => void;
 }
 export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: SettingsPageProps) {
-    const [savedSettings, setSavedSettings] = useState<SettingsType>(getSettings());
-    const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
-    const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
-    const [showResetConfirm, setShowResetConfirm] = useState(false);
-    const [showFFmpegWarning, setShowFFmpegWarning] = useState(false);
-    const [isInstallingFFmpeg, setIsInstallingFFmpeg] = useState(false);
-    const [installProgress, setInstallProgress] = useState(0);
-    const downloadProgress = useDownloadProgress();
-    const hasUnsavedChanges = JSON.stringify(savedSettings) !== JSON.stringify(tempSettings);
-    const resetToSaved = useCallback(() => {
-        const freshSavedSettings = getSettings();
-        flushSync(() => {
-            setTempSettings(freshSavedSettings);
-            setIsDark(document.documentElement.classList.contains('dark'));
-        });
-    }, []);
-    useEffect(() => {
-        if (onResetRequest) {
-            onResetRequest(resetToSaved);
-        }
-    }, [onResetRequest, resetToSaved]);
-    useEffect(() => {
-        onUnsavedChangesChange?.(hasUnsavedChanges);
-    }, [hasUnsavedChanges, onUnsavedChangesChange]);
-    useEffect(() => {
-        applyThemeMode(savedSettings.themeMode);
+  const [savedSettings, setSavedSettings] = useState<SettingsType>(getSettings());
+  const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
+  const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showFFmpegWarning, setShowFFmpegWarning] = useState(false);
+  const [isInstallingFFmpeg, setIsInstallingFFmpeg] = useState(false);
+  const [installProgress, setInstallProgress] = useState(0);
+  const downloadProgress = useDownloadProgress();
+  const hasUnsavedChanges = JSON.stringify(savedSettings) !== JSON.stringify(tempSettings);
+  const resetToSaved = useCallback(() => {
+    const freshSavedSettings = getSettings();
+    flushSync(() => {
+      setTempSettings(freshSavedSettings);
+      setIsDark(document.documentElement.classList.contains('dark'));
+    });
+  }, []);
+  useEffect(() => {
+    if (onResetRequest) {
+      onResetRequest(resetToSaved);
+    }
+  }, [onResetRequest, resetToSaved]);
+  useEffect(() => {
+    onUnsavedChangesChange?.(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onUnsavedChangesChange]);
+  useEffect(() => {
+    applyThemeMode(savedSettings.themeMode);
+    applyTheme(savedSettings.theme);
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      if (savedSettings.themeMode === "auto") {
+        applyThemeMode("auto");
         applyTheme(savedSettings.theme);
-        const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-        const handleChange = () => {
-            if (savedSettings.themeMode === "auto") {
-                applyThemeMode("auto");
-                applyTheme(savedSettings.theme);
-            }
-        };
-        mediaQuery.addEventListener("change", handleChange);
-        return () => mediaQuery.removeEventListener("change", handleChange);
-    }, [savedSettings.themeMode, savedSettings.theme]);
-    useEffect(() => {
-        applyThemeMode(tempSettings.themeMode);
-        applyTheme(tempSettings.theme);
-        applyFont(tempSettings.fontFamily);
-        setTimeout(() => {
-            setIsDark(document.documentElement.classList.contains('dark'));
-        }, 0);
-    }, [tempSettings.themeMode, tempSettings.theme, tempSettings.fontFamily]);
-    useEffect(() => {
-        const loadDefaults = async () => {
-            if (!savedSettings.downloadPath) {
-                const settingsWithDefaults = await getSettingsWithDefaults();
-                setSavedSettings(settingsWithDefaults);
-                setTempSettings(settingsWithDefaults);
-                await saveSettings(settingsWithDefaults);
-            }
-        };
-        loadDefaults();
-    }, []);
-    const handleSave = async () => {
-        await saveSettings(tempSettings);
-        setSavedSettings(tempSettings);
-        toast.success("Settings saved");
-        onUnsavedChangesChange?.(false);
+      }
     };
-    const handleReset = async () => {
-        const defaultSettings = await resetToDefaultSettings();
-        setTempSettings(defaultSettings);
-        setSavedSettings(defaultSettings);
-        applyThemeMode(defaultSettings.themeMode);
-        applyTheme(defaultSettings.theme);
-        applyFont(defaultSettings.fontFamily);
-        setShowResetConfirm(false);
-        toast.success("Settings reset to default");
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [savedSettings.themeMode, savedSettings.theme]);
+  useEffect(() => {
+    applyThemeMode(tempSettings.themeMode);
+    applyTheme(tempSettings.theme);
+    applyFont(tempSettings.fontFamily);
+    setTimeout(() => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    }, 0);
+  }, [tempSettings.themeMode, tempSettings.theme, tempSettings.fontFamily]);
+  useEffect(() => {
+    const loadDefaults = async () => {
+      if (!savedSettings.downloadPath) {
+        const settingsWithDefaults = await getSettingsWithDefaults();
+        setSavedSettings(settingsWithDefaults);
+        setTempSettings(settingsWithDefaults);
+        await saveSettings(settingsWithDefaults);
+      }
     };
-    const handleBrowseFolder = async () => {
-        try {
-            const selectedPath = await SelectFolder(tempSettings.downloadPath || "");
-            if (selectedPath && selectedPath.trim() !== "") {
-                setTempSettings((prev) => ({ ...prev, downloadPath: selectedPath }));
-            }
+    loadDefaults();
+  }, []);
+  const handleSave = async () => {
+    await saveSettings(tempSettings);
+    setSavedSettings(tempSettings);
+    toast.success("Settings saved");
+    onUnsavedChangesChange?.(false);
+  };
+  const handleReset = async () => {
+    const defaultSettings = await resetToDefaultSettings();
+    setTempSettings(defaultSettings);
+    setSavedSettings(defaultSettings);
+    applyThemeMode(defaultSettings.themeMode);
+    applyTheme(defaultSettings.theme);
+    applyFont(defaultSettings.fontFamily);
+    setShowResetConfirm(false);
+    toast.success("Settings reset to default");
+  };
+  const handleBrowseFolder = async () => {
+    try {
+      const selectedPath = await SelectFolder(tempSettings.downloadPath || "");
+      if (selectedPath && selectedPath.trim() !== "") {
+        setTempSettings((prev) => ({ ...prev, downloadPath: selectedPath }));
+      }
+    }
+    catch (error) {
+      console.error("Error selecting folder:", error);
+      toast.error(`Error selecting folder: ${error}`);
+    }
+  };
+  const handleTidalQualityChange = async (value: "LOSSLESS" | "HI_RES_LOSSLESS") => {
+    if (value === "HI_RES_LOSSLESS") {
+      try {
+        const { CheckFFmpegInstalled } = await import("../../wailsjs/go/main/App");
+        const isInstalled = await CheckFFmpegInstalled();
+        if (!isInstalled) {
+          setShowFFmpegWarning(true);
+          return;
         }
-        catch (error) {
-            console.error("Error selecting folder:", error);
-            toast.error(`Error selecting folder: ${error}`);
-        }
-    };
-    const handleTidalQualityChange = async (value: "LOSSLESS" | "HI_RES_LOSSLESS") => {
-        if (value === "HI_RES_LOSSLESS") {
-            try {
-                const { CheckFFmpegInstalled } = await import("../../wailsjs/go/main/App");
-                const isInstalled = await CheckFFmpegInstalled();
-                if (!isInstalled) {
-                    setShowFFmpegWarning(true);
-                    return;
-                }
-            }
-            catch (error) {
-                console.error("Error checking FFmpeg:", error);
-            }
-        }
-        setTempSettings((prev) => ({ ...prev, tidalQuality: value }));
-    };
-    const handleInstallFFmpeg = async () => {
-        setIsInstallingFFmpeg(true);
-        setInstallProgress(0);
-        try {
-            const { DownloadFFmpeg } = await import("../../wailsjs/go/main/App");
-            const { EventsOn, EventsOff } = await import("../../wailsjs/runtime/runtime");
-            EventsOn("ffmpeg:progress", (progress: number) => {
-                setInstallProgress(progress);
-            });
-            const response = await DownloadFFmpeg();
-            EventsOff("ffmpeg:progress");
-            if (response.success) {
-                toast.success("FFmpeg installed successfully!");
-                setShowFFmpegWarning(false);
-                setTempSettings((prev) => ({ ...prev, tidalQuality: "HI_RES_LOSSLESS" }));
-            }
-            else {
-                toast.error(`Failed to install FFmpeg: ${response.error}`);
-            }
-        }
-        catch (error) {
-            console.error("Error installing FFmpeg:", error);
-            toast.error(`Error during FFmpeg installation: ${error}`);
-        }
-        finally {
-            setIsInstallingFFmpeg(false);
-            setInstallProgress(0);
-        }
-    };
-    return (<div className="space-y-6">
+      }
+      catch (error) {
+        console.error("Error checking FFmpeg:", error);
+      }
+    }
+    setTempSettings((prev) => ({ ...prev, tidalQuality: value }));
+  };
+  const handleInstallFFmpeg = async () => {
+    setIsInstallingFFmpeg(true);
+    setInstallProgress(0);
+    try {
+      const { DownloadFFmpeg } = await import("../../wailsjs/go/main/App");
+      const { EventsOn, EventsOff } = await import("../../wailsjs/runtime/runtime");
+      EventsOn("ffmpeg:progress", (progress: number) => {
+        setInstallProgress(progress);
+      });
+      const response = await DownloadFFmpeg();
+      EventsOff("ffmpeg:progress");
+      if (response.success) {
+        toast.success("FFmpeg installed successfully!");
+        setShowFFmpegWarning(false);
+        setTempSettings((prev) => ({ ...prev, tidalQuality: "HI_RES_LOSSLESS" }));
+      }
+      else {
+        toast.error(`Failed to install FFmpeg: ${response.error}`);
+      }
+    }
+    catch (error) {
+      console.error("Error installing FFmpeg:", error);
+      toast.error(`Error during FFmpeg installation: ${error}`);
+    }
+    finally {
+      setIsInstallingFFmpeg(false);
+      setInstallProgress(0);
+    }
+  };
+  return (<div className="space-y-6">
     <h1 className="text-2xl font-bold">Settings</h1>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -170,9 +170,9 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         <div className="space-y-2">
           <Label htmlFor="download-path">Download Path</Label>
           <div className="flex gap-2">
-            <InputWithContext id="download-path" value={tempSettings.downloadPath} onChange={(e) => setTempSettings((prev) => ({ ...prev, downloadPath: e.target.value }))} placeholder="C:\Users\YourUsername\Music"/>
+            <InputWithContext id="download-path" value={tempSettings.downloadPath} onChange={(e) => setTempSettings((prev) => ({ ...prev, downloadPath: e.target.value }))} placeholder="C:\Users\YourUsername\Music" />
             <Button type="button" onClick={handleBrowseFolder} className="gap-1.5">
-              <FolderOpen className="h-4 w-4"/>
+              <FolderOpen className="h-4 w-4" />
               Browse
             </Button>
           </div>
@@ -183,7 +183,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           <Label htmlFor="theme-mode">Mode</Label>
           <Select value={tempSettings.themeMode} onValueChange={(value: "auto" | "light" | "dark") => setTempSettings((prev) => ({ ...prev, themeMode: value }))}>
             <SelectTrigger id="theme-mode">
-              <SelectValue placeholder="Select theme mode"/>
+              <SelectValue placeholder="Select theme mode" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="auto">Auto</SelectItem>
@@ -198,14 +198,14 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           <Label htmlFor="theme">Accent</Label>
           <Select value={tempSettings.theme} onValueChange={(value) => setTempSettings((prev) => ({ ...prev, theme: value }))}>
             <SelectTrigger id="theme">
-              <SelectValue placeholder="Select a theme"/>
+              <SelectValue placeholder="Select a theme" />
             </SelectTrigger>
             <SelectContent>
               {themes.map((theme) => (<SelectItem key={theme.name} value={theme.name}>
                 <span className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full border border-border" style={{
-                backgroundColor: isDark ? theme.cssVars.dark.primary : theme.cssVars.light.primary
-            }}/>
+                    backgroundColor: isDark ? theme.cssVars.dark.primary : theme.cssVars.light.primary
+                  }} />
                   {theme.label}
                 </span>
               </SelectItem>))}
@@ -218,7 +218,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           <Label htmlFor="font">Font</Label>
           <Select value={tempSettings.fontFamily} onValueChange={(value: FontFamily) => setTempSettings((prev) => ({ ...prev, fontFamily: value }))}>
             <SelectTrigger id="font">
-              <SelectValue placeholder="Select a font"/>
+              <SelectValue placeholder="Select a font" />
             </SelectTrigger>
             <SelectContent>
               {FONT_OPTIONS.map((font) => (<SelectItem key={font.value} value={font.value}>
@@ -231,7 +231,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
 
         <div className="flex items-center gap-3">
           <Label htmlFor="sfx-enabled" className="cursor-pointer text-sm">Sound Effects</Label>
-          <Switch id="sfx-enabled" checked={tempSettings.sfxEnabled} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))}/>
+          <Switch id="sfx-enabled" checked={tempSettings.sfxEnabled} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, sfxEnabled: checked }))} />
         </div>
       </div>
 
@@ -243,7 +243,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           <div className="flex gap-2">
             <Select value={tempSettings.downloader} onValueChange={(value: "auto" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}>
               <SelectTrigger id="downloader" className="h-9 w-fit">
-                <SelectValue placeholder="Select a source"/>
+                <SelectValue placeholder="Select a source" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto">Auto</SelectItem>
@@ -279,14 +279,11 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
               </SelectContent>
             </Select>)}
 
-            {tempSettings.downloader === "amazon" && (<Select value={tempSettings.amazonQuality} onValueChange={(value: "HI_RES") => setTempSettings((prev) => ({ ...prev, amazonQuality: value }))}>
-              <SelectTrigger className="h-9 w-fit">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="HI_RES">Hi-Res (24-bit/48kHz+)</SelectItem>
-              </SelectContent>
-            </Select>)}
+            {tempSettings.downloader === "amazon" && (
+              <div className="h-9 px-3 flex items-center text-sm font-medium border border-input rounded-md bg-muted/30 text-muted-foreground whitespace-nowrap cursor-default">
+                16-bit/44.1kHz or 24-bit/48kHz+
+              </div>
+            )}
           </div>
         </div>
 
@@ -294,15 +291,15 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <Label htmlFor="embed-lyrics" className="cursor-pointer text-sm">Embed Lyrics</Label>
-            <Switch id="embed-lyrics" checked={tempSettings.embedLyrics} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedLyrics: checked }))}/>
+            <Switch id="embed-lyrics" checked={tempSettings.embedLyrics} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedLyrics: checked }))} />
           </div>
           <div className="flex items-center gap-3">
             <Label htmlFor="embed-max-quality-cover" className="cursor-pointer text-sm">Embed Max Quality Cover</Label>
-            <Switch id="embed-max-quality-cover" checked={tempSettings.embedMaxQualityCover} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedMaxQualityCover: checked }))}/>
+            <Switch id="embed-max-quality-cover" checked={tempSettings.embedMaxQualityCover} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedMaxQualityCover: checked }))} />
           </div>
         </div>
 
-        <div className="border-t"/>
+        <div className="border-t" />
 
 
         <div className="space-y-2">
@@ -310,7 +307,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
             <Label className="text-sm">Folder Structure</Label>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help"/>
+                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent side="top">
                 <p className="text-xs whitespace-nowrap">Variables: {TEMPLATE_VARIABLES.map(v => v.key).join(", ")}</p>
@@ -319,13 +316,13 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           </div>
           <div className="flex gap-2">
             <Select value={tempSettings.folderPreset} onValueChange={(value: FolderPreset) => {
-            const preset = FOLDER_PRESETS[value];
-            setTempSettings(prev => ({
+              const preset = FOLDER_PRESETS[value];
+              setTempSettings(prev => ({
                 ...prev,
                 folderPreset: value,
                 folderTemplate: value === "custom" ? (prev.folderTemplate || preset.template) : preset.template
-            }));
-        }}>
+              }));
+            }}>
               <SelectTrigger className="h-9 w-fit">
                 <SelectValue />
               </SelectTrigger>
@@ -333,14 +330,14 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                 {Object.entries(FOLDER_PRESETS).map(([key, { label }]) => (<SelectItem key={key} value={key}>{label}</SelectItem>))}
               </SelectContent>
             </Select>
-            {tempSettings.folderPreset === "custom" && (<InputWithContext value={tempSettings.folderTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))} placeholder="{artist}/{album}" className="h-9 text-sm flex-1"/>)}
+            {tempSettings.folderPreset === "custom" && (<InputWithContext value={tempSettings.folderTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, folderTemplate: e.target.value }))} placeholder="{artist}/{album}" className="h-9 text-sm flex-1" />)}
           </div>
           {tempSettings.folderTemplate && (<p className="text-xs text-muted-foreground">
             Preview: <span className="font-mono">{tempSettings.folderTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{year\}/g, "2018")}/</span>
           </p>)}
         </div>
 
-        <div className="border-t"/>
+        <div className="border-t" />
 
 
         <div className="space-y-2">
@@ -348,7 +345,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
             <Label className="text-sm">Filename Format</Label>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help"/>
+                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
               </TooltipTrigger>
               <TooltipContent side="top">
                 <p className="text-xs whitespace-nowrap">Variables: {TEMPLATE_VARIABLES.map(v => v.key).join(", ")}</p>
@@ -357,13 +354,13 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           </div>
           <div className="flex gap-2">
             <Select value={tempSettings.filenamePreset} onValueChange={(value: FilenamePreset) => {
-            const preset = FILENAME_PRESETS[value];
-            setTempSettings(prev => ({
+              const preset = FILENAME_PRESETS[value];
+              setTempSettings(prev => ({
                 ...prev,
                 filenamePreset: value,
                 filenameTemplate: value === "custom" ? (prev.filenameTemplate || preset.template) : preset.template
-            }));
-        }}>
+              }));
+            }}>
               <SelectTrigger className="h-9 w-fit">
                 <SelectValue />
               </SelectTrigger>
@@ -371,7 +368,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                 {Object.entries(FILENAME_PRESETS).map(([key, { label }]) => (<SelectItem key={key} value={key}>{label}</SelectItem>))}
               </SelectContent>
             </Select>
-            {tempSettings.filenamePreset === "custom" && (<InputWithContext value={tempSettings.filenameTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))} placeholder="{track}. {title}" className="h-9 text-sm flex-1"/>)}
+            {tempSettings.filenamePreset === "custom" && (<InputWithContext value={tempSettings.filenameTemplate} onChange={(e) => setTempSettings(prev => ({ ...prev, filenameTemplate: e.target.value }))} placeholder="{track}. {title}" className="h-9 text-sm flex-1" />)}
           </div>
           {tempSettings.filenameTemplate && (<p className="text-xs text-muted-foreground">
             Preview: <span className="font-mono">{tempSettings.filenameTemplate.replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{title\}/g, "All The Stars").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018")}.flac</span>
@@ -383,11 +380,11 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
 
     <div className="flex gap-2 justify-between pt-4 border-t">
       <Button variant="outline" onClick={() => setShowResetConfirm(true)} className="gap-1.5">
-        <RotateCcw className="h-4 w-4"/>
+        <RotateCcw className="h-4 w-4" />
         Reset to Default
       </Button>
       <Button onClick={handleSave} className="gap-1.5">
-        <Save className="h-4 w-4"/>
+        <Save className="h-4 w-4" />
         Save Changes
       </Button>
     </div>
@@ -419,24 +416,24 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
             </div>
 
             {isInstallingFFmpeg && (<div className="space-y-2 py-2">
-                <div className="flex justify-between text-xs font-medium">
-                  <div className="flex flex-col gap-1">
-                    <span>Downloading & Extracting...</span>
-                    {downloadProgress.is_downloading && downloadProgress.mb_downloaded > 0 && (<span className="text-muted-foreground font-normal">
-                        {downloadProgress.mb_downloaded.toFixed(2)} MB
-                        {downloadProgress.speed_mbps > 0 && ` @ ${downloadProgress.speed_mbps.toFixed(2)} MB/s`}
-                      </span>)}
-                  </div>
-                  <span>{installProgress}%</span>
+              <div className="flex justify-between text-xs font-medium">
+                <div className="flex flex-col gap-1">
+                  <span>Downloading & Extracting...</span>
+                  {downloadProgress.is_downloading && downloadProgress.mb_downloaded > 0 && (<span className="text-muted-foreground font-normal">
+                    {downloadProgress.mb_downloaded.toFixed(2)} MB
+                    {downloadProgress.speed_mbps > 0 && ` @ ${downloadProgress.speed_mbps.toFixed(2)} MB/s`}
+                  </span>)}
                 </div>
-                <Progress value={installProgress} className="h-2"/>
-              </div>)}
+                <span>{installProgress}%</span>
+              </div>
+              <Progress value={installProgress} className="h-2" />
+            </div>)}
           </DialogDescription>
         </DialogHeader>
         {!isInstallingFFmpeg && (<DialogFooter>
-            <Button variant="outline" onClick={() => setShowFFmpegWarning(false)}>Cancel</Button>
-            <Button onClick={handleInstallFFmpeg}>Install FFmpeg</Button>
-          </DialogFooter>)}
+          <Button variant="outline" onClick={() => setShowFFmpegWarning(false)}>Cancel</Button>
+          <Button onClick={handleInstallFFmpeg}>Install FFmpeg</Button>
+        </DialogFooter>)}
       </DialogContent>
     </Dialog>
   </div>);

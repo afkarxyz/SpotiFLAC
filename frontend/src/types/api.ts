@@ -45,6 +45,7 @@ export interface AlbumResponse {
     track_list: TrackMetadata[];
 }
 export interface PlaylistInfo {
+    name: string;
     tracks: {
         total: number;
     };

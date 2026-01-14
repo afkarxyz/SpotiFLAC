@@ -32,7 +32,9 @@ export function useLyrics() {
                 track: position,
                 playlist: playlistName?.replace(/\//g, placeholder),
             };
-            if (playlistName && !isAlbum) {
+            const folderTemplate = settings.folderTemplate || "";
+            const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+            if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
                 outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
             }
             if (settings.folderTemplate) {
@@ -125,7 +127,9 @@ export function useLyrics() {
                     track: trackPosition,
                     playlist: playlistName?.replace(/\//g, placeholder),
                 };
-                if (playlistName && !isAlbum) {
+                const folderTemplate = settings.folderTemplate || "";
+                const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+                if (playlistName && (!isAlbum || !useAlbumSubfolder)) {
                     outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
                 }
                 if (settings.folderTemplate) {
