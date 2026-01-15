@@ -84,6 +84,12 @@ You are solely responsible for:
 
 The software is provided "as is", without warranty of any kind. The author assumes no liability for any bans, damages, or legal issues arising from its use.
 
+## API Credits
+
+- Tidal: https://github.com/binimun/hifi-api
+- Qobuz: https://dabmusic.xyz, https://squid.wtf  
+- Amazon Music: https://doubledouble.top, https://lucida.to
+
 > [!TIP]
 >
 > **Star Us**, You will receive all release notifications from GitHub without any delay ~
