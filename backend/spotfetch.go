@@ -714,6 +714,17 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 			}
 		}
 
+		if albumArtistsString == "" {
+			albumArtists := extractArtists(getMap(albumData, "artists"))
+			if len(albumArtists) > 0 {
+				albumArtistNames := []string{}
+				for _, artist := range albumArtists {
+					albumArtistNames = append(albumArtistNames, getString(artist, "name"))
+				}
+				albumArtistsString = strings.Join(albumArtistNames, ", ")
+			}
+		}
+
 		albumInfo = map[string]interface{}{
 			"id":       albumID,
 			"name":     getString(albumData, "name"),
@@ -1228,6 +1239,11 @@ func extractDiscographyItems(itemsData map[string]interface{}) []map[string]inte
 	return items
 }
 
+func stripHTMLTags(s string) string {
+	re := regexp.MustCompile(`<[^>]*>`)
+	return re.ReplaceAllString(s, "")
+}
+
 func FilterArtist(data map[string]interface{}) map[string]interface{} {
 	dataMap := getMap(data, "data")
 	artistData := getMap(dataMap, "artistUnion")
@@ -1243,7 +1259,7 @@ func FilterArtist(data map[string]interface{}) map[string]interface{} {
 			if ok {
 				biographyText := getString(biographyMap, "text")
 				if biographyText != "" {
-					profile["biography"] = html.UnescapeString(biographyText)
+					profile["biography"] = html.UnescapeString(stripHTMLTags(biographyText))
 				}
 			}
 		}

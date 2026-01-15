@@ -266,40 +266,40 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="tidal-qobuz">
-                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="tidal-amazon">
-                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="qobuz-tidal">
-                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="qobuz-amazon">
-                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="amazon-tidal">
-                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="amazon-qobuz">
-                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="tidal-qobuz-amazon">
-                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="tidal-amazon-qobuz">
-                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><TidalIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="qobuz-tidal-amazon">
-                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="qobuz-amazon-tidal">
-                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><QobuzIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><AmazonIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="amazon-tidal-qobuz">
-                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-current"/></span>
                   </SelectItem>
                   <SelectItem value="amazon-qobuz-tidal">
-                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-white"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-white"/></span>
+                    <span className="flex items-center gap-1.5"><AmazonIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><QobuzIcon className="fill-current"/><ArrowRight className="h-3 w-3 text-muted-foreground"/><TidalIcon className="fill-current"/></span>
                   </SelectItem>
                 </SelectContent>
               </Select>

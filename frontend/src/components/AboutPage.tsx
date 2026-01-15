@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Bug, Lightbulb, ExternalLink } from "lucide-react";
+import { Bug, Lightbulb, ExternalLink, Star, GitFork, Clock, Download } from "lucide-react";
 import ExyezedIcon from "@/assets/icons/exyezed.svg";
 import SpotubeDLIcon from "@/assets/icons/spotubedl.svg";
 import SpotiDownloaderIcon from "@/assets/icons/spotidownloader.svg";
 import XBatchDLIcon from "@/assets/icons/xbatchdl.svg";
+import { langColors } from "@/assets/github-lang-colors";
 interface AboutPageProps {
     version: string;
 }
@@ -27,6 +28,7 @@ export function AboutPage({ version }: AboutPageProps) {
     const [featureDesc, setFeatureDesc] = useState("");
     const [useCase, setUseCase] = useState("");
     const [featureContext, setFeatureContext] = useState("");
+    const [repoStats, setRepoStats] = useState<Record<string, any>>({});
     useEffect(() => {
         const fetchOS = async () => {
             try {
@@ -66,6 +68,80 @@ export function AboutPage({ version }: AboutPageProps) {
             }
         };
         fetchLocation();
+        const fetchRepoStats = async () => {
+            const CACHE_KEY = 'github_repo_stats';
+            const CACHE_DURATION = 1000 * 60 * 60;
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+                try {
+                    const { data, timestamp } = JSON.parse(cached);
+                    if (Date.now() - timestamp < CACHE_DURATION) {
+                        setRepoStats(data);
+                        return;
+                    }
+                }
+                catch (err) {
+                    console.error('Failed to parse cache:', err);
+                }
+            }
+            const repos = [
+                { name: 'SpotiDownloader', owner: 'afkarxyz' },
+                { name: 'Twitter-X-Media-Batch-Downloader', owner: 'afkarxyz' }
+            ];
+            const stats: Record<string, any> = {};
+            for (const repo of repos) {
+                try {
+                    const [repoRes, releasesRes, langsRes] = await Promise.all([
+                        fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}`),
+                        fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/releases`),
+                        fetch(`https://api.github.com/repos/${repo.owner}/${repo.name}/languages`)
+                    ]);
+                    if (repoRes.status === 403) {
+                        if (cached) {
+                            const { data } = JSON.parse(cached);
+                            setRepoStats(data);
+                        }
+                        return;
+                    }
+                    if (repoRes.ok && releasesRes.ok && langsRes.ok) {
+                        const repoData = await repoRes.json();
+                        const releases = await releasesRes.json();
+                        const languages = await langsRes.json();
+                        let totalDownloads = 0;
+                        let latestDownloads = 0;
+                        if (releases.length > 0) {
+                            latestDownloads = releases[0].assets?.reduce((sum: number, asset: any) => sum + (asset.download_count || 0), 0) || 0;
+                            totalDownloads = releases.reduce((sum: number, release: any) => {
+                                return sum + (release.assets?.reduce((s: number, a: any) => s + (a.download_count || 0), 0) || 0);
+                            }, 0);
+                        }
+                        const topLangs = Object.entries(languages)
+                            .sort(([, a]: any, [, b]: any) => b - a)
+                            .slice(0, 4)
+                            .map(([lang]) => lang);
+                        stats[repo.name] = {
+                            stars: repoData.stargazers_count,
+                            forks: repoData.forks_count,
+                            createdAt: repoData.created_at,
+                            totalDownloads,
+                            latestDownloads,
+                            languages: topLangs
+                        };
+                    }
+                }
+                catch (err) {
+                    console.error(`Failed to fetch stats for ${repo.name}:`, err);
+                    if (cached) {
+                        const { data } = JSON.parse(cached);
+                        setRepoStats(data);
+                        return;
+                    }
+                }
+            }
+            setRepoStats(stats);
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ data: stats, timestamp: Date.now() }));
+        };
+        fetchRepoStats();
     }, []);
     const faqs = [
         {
@@ -91,6 +167,34 @@ export function AboutPage({ version }: AboutPageProps) {
     ];
     const sanitizeForURL = (text: string): string => {
         return text.replace(/[()]/g, "").replace(/,/g, " -");
+    };
+    const formatTimeAgo = (dateString: string): string => {
+        const now = new Date();
+        const updated = new Date(dateString);
+        const diffMs = now.getTime() - updated.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffMonths = Math.floor(diffDays / 30);
+        if (diffDays === 0)
+            return 'today';
+        if (diffDays === 1)
+            return '1d';
+        if (diffDays < 30)
+            return `${diffDays}d`;
+        if (diffMonths === 1)
+            return '1mo';
+        if (diffMonths < 12)
+            return `${diffMonths}mo`;
+        const diffYears = Math.floor(diffMonths / 12);
+        return `${diffYears}y`;
+    };
+    const formatNumber = (num: number): string => {
+        if (num >= 1000) {
+            return num.toLocaleString();
+        }
+        return num.toString();
+    };
+    const getLangColor = (lang: string): string => {
+        return langColors[lang] || '#858585';
     };
     const handleSubmit = () => {
         let title = "";
@@ -256,12 +360,40 @@ ${location || "Unknown"}
                             <CardTitle className="flex items-center gap-2"><img src={SpotiDownloaderIcon} className="h-5 w-5" alt="SpotiDownloader" /> SpotiDownloader</CardTitle>
                             <CardDescription>Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API.</CardDescription>
                         </CardHeader>
+                        {repoStats['SpotiDownloader'] && (<CardContent className="space-y-3">
+                            <div className="flex flex-wrap gap-2 text-xs">
+                                {repoStats['SpotiDownloader'].languages?.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: getLangColor(lang) + '20', color: getLangColor(lang) }}>{lang}</span>))}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" /> {formatNumber(repoStats['SpotiDownloader'].stars)}</span>
+                                <span className="flex items-center gap-1"><GitFork className="h-3.5 w-3.5" /> {repoStats['SpotiDownloader'].forks}</span>
+                                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatTimeAgo(repoStats['SpotiDownloader'].createdAt)}</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><Download className="h-3.5 w-3.5" /> TOTAL: {formatNumber(repoStats['SpotiDownloader'].totalDownloads)}</span>
+                                <span className="flex items-center gap-1 text-green-600 dark:text-green-400"><Download className="h-3.5 w-3.5" /> LATEST: {formatNumber(repoStats['SpotiDownloader'].latestDownloads)}</span>
+                            </div>
+                        </CardContent>)}
                     </Card>
                     <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/afkarxyz/Twitter-X-Media-Batch-Downloader")}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><img src={XBatchDLIcon} className="h-5 w-5" alt="Twitter/X Media Batch Downloader" /> Twitter/X Batch Downloader</CardTitle>
+                            <CardTitle className="flex items-center gap-2"><img src={XBatchDLIcon} className="h-5 w-5" alt="Twitter/X Media Batch Downloader" /> Twitter/X Media Batch Downloader</CardTitle>
                             <CardDescription>A GUI tool to download original-quality images and videos from Twitter/X accounts, powered by gallery-dl by @mikf</CardDescription>
                         </CardHeader>
+                        {repoStats['Twitter-X-Media-Batch-Downloader'] && (<CardContent className="space-y-3">
+                            <div className="flex flex-wrap gap-2 text-xs">
+                                {repoStats['Twitter-X-Media-Batch-Downloader'].languages?.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: getLangColor(lang) + '20', color: getLangColor(lang) }}>{lang}</span>))}
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" /> {formatNumber(repoStats['Twitter-X-Media-Batch-Downloader'].stars)}</span>
+                                <span className="flex items-center gap-1"><GitFork className="h-3.5 w-3.5" /> {repoStats['Twitter-X-Media-Batch-Downloader'].forks}</span>
+                                <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatTimeAgo(repoStats['Twitter-X-Media-Batch-Downloader'].createdAt)}</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span className="flex items-center gap-1"><Download className="h-3.5 w-3.5" /> TOTAL: {formatNumber(repoStats['Twitter-X-Media-Batch-Downloader'].totalDownloads)}</span>
+                                <span className="flex items-center gap-1 text-green-600 dark:text-green-400"><Download className="h-3.5 w-3.5" /> LATEST: {formatNumber(repoStats['Twitter-X-Media-Batch-Downloader'].latestDownloads)}</span>
+                            </div>
+                        </CardContent>)}
                     </Card>
                 </div>
             </TabsContent>

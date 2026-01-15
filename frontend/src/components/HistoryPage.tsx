@@ -131,151 +131,155 @@ export function HistoryPage() {
         setShowClearConfirm(false);
     };
     return (<div className="space-y-6">
-            <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-2xl font-bold tracking-tight">Download History</h2>
-                        {history.length > 0 && (<Badge variant="secondary" className="font-mono">
-                                {history.length.toLocaleString('en-US')}
-                            </Badge>)}
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setShowClearConfirm(true)} disabled={history.length === 0} className="cursor-pointer gap-2">
-                        <Trash2 className="h-4 w-4"/> Clear
-                    </Button>
-                </div>
-
+        <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground"/>
-                        <Input placeholder="Search history..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 h-9"/>
-                    </div>
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                        <SelectTrigger className="w-[180px] h-9">
-                            <ArrowUpDown className="mr-2 h-4 w-4"/>
-                            <SelectValue placeholder="Sort by"/>
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="default">Default</SelectItem>
-                            <SelectItem value="date_desc">Date (Newest)</SelectItem>
-                            <SelectItem value="date_asc">Date (Oldest)</SelectItem>
-                            <SelectItem value="title_asc">Title (A-Z)</SelectItem>
-                            <SelectItem value="title_desc">Title (Z-A)</SelectItem>
-                            <SelectItem value="artist_asc">Artist (A-Z)</SelectItem>
-                            <SelectItem value="artist_desc">Artist (Z-A)</SelectItem>
-                            <SelectItem value="duration_asc">Duration (Short)</SelectItem>
-                            <SelectItem value="duration_desc">Duration (Long)</SelectItem>
-                        </SelectContent>
-                    </Select>
+                    <h2 className="text-2xl font-bold tracking-tight">Download History</h2>
+                    {history.length > 0 && (<Badge variant="secondary" className="font-mono">
+                        {history.length.toLocaleString('en-US')}
+                    </Badge>)}
                 </div>
+                <Button variant="outline" size="sm" onClick={() => setShowClearConfirm(true)} disabled={history.length === 0} className="cursor-pointer gap-2">
+                    <Trash2 className="h-4 w-4" /> Clear
+                </Button>
             </div>
 
-            <div className="rounded-md border overflow-hidden">
-                {paginatedHistory.length === 0 ? (<div className="flex flex-col items-center justify-center p-16 text-center text-muted-foreground gap-3">
-                        <div className="rounded-full bg-muted/50 p-4 ring-8 ring-muted/20">
-                            <History className="h-10 w-10 opacity-40"/>
-                        </div>
-                        <div className="space-y-1">
-                            <p className="font-medium text-foreground/80">No download history</p>
-                            <p className="text-sm">Your downloaded tracks will appear here.</p>
-                        </div>
-                    </div>) : (<table className="w-full table-fixed">
-                        <thead>
-                            <tr className="border-b bg-muted/50">
-                                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground w-12 text-xs uppercase">#</th>
-                                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground text-xs uppercase">Title</th>
-                                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell text-xs uppercase w-1/4">Album</th>
-                                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell w-32 text-xs uppercase">Format</th>
-                                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell w-16 text-xs uppercase text-nowrap">Dur</th>
-                                <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell w-40 text-xs uppercase text-nowrap">Downloaded At</th>
-                                <th className="h-10 px-4 text-center align-middle font-medium text-muted-foreground w-16 text-xs uppercase text-nowrap">Link</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {paginatedHistory.map((item, index) => (<tr key={item.id} className="border-b transition-colors hover:bg-muted/50">
-                                    <td className="p-3 align-middle text-sm text-muted-foreground text-left font-mono">
-                                        {startIndex + index + 1}
-                                    </td>
-                                    <td className="p-3 align-middle min-w-0">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <img src={item.cover_url || "https://placehold.co/300?text=No+Cover"} alt={item.album} className="h-10 w-10 rounded shrink-0 bg-secondary object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "https://placehold.co/300?text=No+Cover"; }}/>
-                                            <div className="flex flex-col min-w-0 flex-1">
-                                                <span className="font-medium text-sm truncate">{item.title}</span>
-                                                <span className="text-xs text-muted-foreground truncate">{item.artists}</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="p-3 align-middle text-sm text-muted-foreground hidden md:table-cell">
-                                        <div className="truncate">{item.album}</div>
-                                    </td>
-                                    <td className="p-3 align-middle text-left hidden lg:table-cell">
-                                        <div className="flex flex-col items-start gap-1">
-                                            <span className="text-[10px] font-bold text-foreground">{item.format}</span>
-                                            {item.quality && <span className="text-[9px] text-muted-foreground leading-none whitespace-nowrap">{item.quality}</span>}
-                                        </div>
-                                    </td>
-                                    <td className="p-3 align-middle text-sm text-muted-foreground text-left hidden xl:table-cell font-mono">
-                                        {item.duration_str}
-                                    </td>
-                                    <td className="p-3 align-middle text-xs text-muted-foreground hidden md:table-cell whitespace-nowrap">
-                                        {formatDate(item.timestamp)}
-                                    </td>
-                                    <td className="p-3 align-middle text-center">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => openExternal(`https://open.spotify.com/track/${item.spotify_id}`)}>
-                                            <ExternalLink className="h-4 w-4"/>
-                                        </Button>
-                                    </td>
-                                </tr>))}
-                        </tbody>
-                    </table>)}
+            <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Search history..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 h-9" />
+                </div>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="w-[180px] h-9">
+                        <ArrowUpDown className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="default">Default</SelectItem>
+                        <SelectItem value="date_desc">Date (Newest)</SelectItem>
+                        <SelectItem value="date_asc">Date (Oldest)</SelectItem>
+                        <SelectItem value="title_asc">Title (A-Z)</SelectItem>
+                        <SelectItem value="title_desc">Title (Z-A)</SelectItem>
+                        <SelectItem value="artist_asc">Artist (A-Z)</SelectItem>
+                        <SelectItem value="artist_desc">Artist (Z-A)</SelectItem>
+                        <SelectItem value="duration_asc">Duration (Short)</SelectItem>
+                        <SelectItem value="duration_desc">Duration (Long)</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
+        </div>
 
-            {totalPages > 1 && (<Pagination>
-                    <PaginationContent>
-                        <PaginationItem>
-                            <PaginationPrevious href="#" onClick={(e) => {
-                e.preventDefault();
-                if (currentPage > 1)
-                    setCurrentPage(currentPage - 1);
-            }} className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}/>
-                        </PaginationItem>
+        <div className="rounded-md border overflow-hidden">
+            {paginatedHistory.length === 0 ? (<div className="flex flex-col items-center justify-center p-16 text-center text-muted-foreground gap-3">
+                <div className="rounded-full bg-muted/50 p-4 ring-8 ring-muted/20">
+                    <History className="h-10 w-10 opacity-40" />
+                </div>
+                <div className="space-y-1">
+                    <p className="font-medium text-foreground/80">No download history</p>
+                    <p className="text-sm">Your downloaded tracks will appear here.</p>
+                </div>
+            </div>) : (<table className="w-full table-fixed">
+                <thead>
+                    <tr className="border-b bg-muted/50">
+                        <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground w-12 text-xs uppercase">#</th>
+                        <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground text-xs uppercase">Title</th>
+                        <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell text-xs uppercase w-1/4">Album</th>
+                        <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell w-32 text-xs uppercase">Format</th>
+                        <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell w-16 text-xs uppercase text-nowrap">Dur</th>
+                        <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell w-40 text-xs uppercase text-nowrap">Downloaded At</th>
+                        <th className="h-10 px-4 text-center align-middle font-medium text-muted-foreground w-16 text-xs uppercase text-nowrap">Link</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {paginatedHistory.map((item, index) => (<tr key={item.id} className="border-b transition-colors hover:bg-muted/50">
+                        <td className="p-3 align-middle text-sm text-muted-foreground text-left font-mono">
+                            {startIndex + index + 1}
+                        </td>
+                        <td className="p-3 align-middle min-w-0">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <img src={item.cover_url || "https://placehold.co/300?text=No+Cover"} alt={item.album} className="h-10 w-10 rounded shrink-0 bg-secondary object-cover" onError={(e) => { (e.target as HTMLImageElement).src = "https://placehold.co/300?text=No+Cover"; }} />
+                                <div className="flex flex-col min-w-0 flex-1">
+                                    <span className="font-medium text-sm truncate">{item.title}</span>
+                                    <span className="text-xs text-muted-foreground truncate">{item.artists}</span>
+                                </div>
+                            </div>
+                        </td>
+                        <td className="p-3 align-middle text-sm text-muted-foreground hidden md:table-cell">
+                            <div className="truncate">{item.album}</div>
+                        </td>
+                        <td className="p-3 align-middle text-left hidden lg:table-cell">
+                            <div className="flex flex-col items-start gap-1">
+                                <span className="text-xs font-bold text-foreground">
+                                    {['HI_RES_LOSSLESS', 'LOSSLESS'].includes(item.format) ? 'FLAC' : item.format}
+                                </span>
+                                {item.quality && <span className="text-[11px] text-muted-foreground leading-none whitespace-nowrap">{item.quality}</span>}
+                            </div>
+                        </td>
+                        <td className="p-3 align-middle text-sm text-muted-foreground text-left hidden xl:table-cell font-mono">
+                            {item.duration_str}
+                        </td>
+                        <td className="p-3 align-middle text-xs text-muted-foreground hidden md:table-cell whitespace-nowrap">
+                            {formatDate(item.timestamp)}
+                        </td>
+                        <td className="p-3 align-middle text-center">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => openExternal(`https://open.spotify.com/track/${item.spotify_id}`)}>
+                                <ExternalLink className="h-4 w-4" />
+                            </Button>
+                        </td>
+                    </tr>))}
+                </tbody>
+            </table>)}
+        </div>
 
-                        {getPaginationPages(currentPage, totalPages).map((page, index) => (page === 'ellipsis' ? (<PaginationItem key={`ellipsis-${index}`}>
-                                    <PaginationEllipsis />
-                                </PaginationItem>) : (<PaginationItem key={page}>
-                                    <PaginationLink href="#" onClick={(e) => {
-                    e.preventDefault();
-                    setCurrentPage(page);
-                }} isActive={currentPage === page} className="cursor-pointer">
-                                        {page}
-                                    </PaginationLink>
-                                </PaginationItem>)))}
+        {
+            totalPages > 1 && (<Pagination>
+                <PaginationContent>
+                    <PaginationItem>
+                        <PaginationPrevious href="#" onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage > 1)
+                                setCurrentPage(currentPage - 1);
+                        }} className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} />
+                    </PaginationItem>
 
-                        <PaginationItem>
-                            <PaginationNext href="#" onClick={(e) => {
-                e.preventDefault();
-                if (currentPage < totalPages)
-                    setCurrentPage(currentPage + 1);
-            }} className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}/>
-                        </PaginationItem>
-                    </PaginationContent>
-                </Pagination>)}
+                    {getPaginationPages(currentPage, totalPages).map((page, index) => (page === 'ellipsis' ? (<PaginationItem key={`ellipsis-${index}`}>
+                        <PaginationEllipsis />
+                    </PaginationItem>) : (<PaginationItem key={page}>
+                        <PaginationLink href="#" onClick={(e) => {
+                            e.preventDefault();
+                            setCurrentPage(page);
+                        }} isActive={currentPage === page} className="cursor-pointer">
+                            {page}
+                        </PaginationLink>
+                    </PaginationItem>)))}
 
-            <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
-                <DialogContent className="max-w-md [&>button]:hidden">
-                    <DialogHeader>
-                        <DialogTitle>Clear Download History?</DialogTitle>
-                        <DialogDescription>
-                            This will remove all entries from your download history. This action cannot be undone.
-                            Note: The actual downloaded files will NOT be deleted.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowClearConfirm(false)} className="cursor-pointer">Cancel</Button>
-                        <Button variant="destructive" onClick={handleClearHistory} className="cursor-pointer">
-                            Clear History
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </div>);
+                    <PaginationItem>
+                        <PaginationNext href="#" onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage < totalPages)
+                                setCurrentPage(currentPage + 1);
+                        }} className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"} />
+                    </PaginationItem>
+                </PaginationContent>
+            </Pagination>)
+        }
+
+        <Dialog open={showClearConfirm} onOpenChange={setShowClearConfirm}>
+            <DialogContent className="max-w-md [&>button]:hidden">
+                <DialogHeader>
+                    <DialogTitle>Clear Download History?</DialogTitle>
+                    <DialogDescription>
+                        This will remove all entries from your download history. This action cannot be undone.
+                        Note: The actual downloaded files will NOT be deleted.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowClearConfirm(false)} className="cursor-pointer">Cancel</Button>
+                    <Button variant="destructive" onClick={handleClearHistory} className="cursor-pointer">
+                        Clear History
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    </div >);
 }
