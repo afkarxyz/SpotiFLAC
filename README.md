@@ -86,7 +86,7 @@ The software is provided "as is", without warranty of any kind. The author assum
 
 ## API Credits
 
-- **Tidal**: [hifi-api](https://github.com/binimun/hifi-api)
+- **Tidal**: [hifi-api](https://github.com/binimum/hifi-api)
 - **Qobuz**: [dabmusic.xyz](https://dabmusic.xyz), [squid.wtf](https://squid.wtf)
 - **Amazon Music**: [doubledouble.top](https://doubledouble.top), [lucida.to](https://lucida.to)
 
