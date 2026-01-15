@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"regexp"
-	goRuntime "runtime"
+
 	"spotiflac/backend"
 	"strings"
 	"time"
@@ -1181,57 +1181,5 @@ func (a *App) CheckFFmpegInstalled() (bool, error) {
 }
 
 func (a *App) GetOSInfo() (string, error) {
-	osType := goRuntime.GOOS
-	arch := goRuntime.GOARCH
-
-	switch osType {
-	case "windows":
-		out, err := exec.Command("wmic", "os", "get", "Caption,Version", "/value").Output()
-		if err != nil {
-			outVer, errVer := exec.Command("cmd", "/c", "ver").Output()
-			if errVer != nil {
-				return fmt.Sprintf("Windows %s", arch), nil
-			}
-			return strings.TrimSpace(string(outVer)), nil
-		}
-
-		lines := strings.Split(string(out), "\n")
-		var caption, version string
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "Caption=") {
-				caption = strings.TrimPrefix(line, "Caption=")
-			} else if strings.HasPrefix(line, "Version=") {
-				version = strings.TrimPrefix(line, "Version=")
-			}
-		}
-		if caption != "" && version != "" {
-			return fmt.Sprintf("%s (%s, %s)", caption, version, arch), nil
-		}
-		return strings.TrimSpace(string(out)), nil
-
-	case "darwin":
-		out, err := exec.Command("sw_vers", "-productVersion").Output()
-		if err != nil {
-			return fmt.Sprintf("macOS %s", arch), nil
-		}
-		version := strings.TrimSpace(string(out))
-		return fmt.Sprintf("macOS %s (%s)", version, arch), nil
-
-	case "linux":
-		out, err := exec.Command("cat", "/etc/os-release").Output()
-		if err == nil {
-			lines := strings.Split(string(out), "\n")
-			for _, line := range lines {
-				if strings.HasPrefix(line, "PRETTY_NAME=") {
-					name := strings.Trim(strings.TrimPrefix(line, "PRETTY_NAME="), "\"")
-					return fmt.Sprintf("%s (%s)", name, arch), nil
-				}
-			}
-		}
-		return fmt.Sprintf("Linux %s", arch), nil
-
-	default:
-		return fmt.Sprintf("%s %s", osType, arch), nil
-	}
+	return backend.GetOSInfo()
 }

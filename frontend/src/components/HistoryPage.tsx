@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Trash2, ExternalLink, Search, ArrowUpDown, History } from "lucide-react";
+import { Trash2, ExternalLink, Search, ArrowUpDown, History, Play, Pause } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, } from "@/components/ui/pagination";
-import { GetDownloadHistory, ClearDownloadHistory } from "../../wailsjs/go/main/App";
+import { GetDownloadHistory, ClearDownloadHistory, GetPreviewURL } from "../../wailsjs/go/main/App";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { openExternal } from "@/lib/utils";
 const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -38,6 +39,8 @@ export function HistoryPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [sortBy, setSortBy] = useState("default");
     const [currentPage, setCurrentPage] = useState(1);
+    const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
     const ITEMS_PER_PAGE = 50;
     const fetchHistory = async () => {
         try {
@@ -51,8 +54,39 @@ export function HistoryPage() {
     useEffect(() => {
         fetchHistory();
         const interval = setInterval(fetchHistory, 5000);
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            if (audioRef.current) {
+                audioRef.current.pause();
+            }
+        };
     }, []);
+
+    const handlePreview = async (id: string, spotifyId: string) => {
+        if (playingPreviewId === id) {
+            audioRef.current?.pause();
+            setPlayingPreviewId(null);
+            return;
+        }
+
+        if (audioRef.current) {
+            audioRef.current.pause();
+        }
+
+        try {
+            const url = await GetPreviewURL(spotifyId);
+            if (url) {
+                const audio = new Audio(url);
+                audioRef.current = audio;
+                audio.volume = 0.5;
+                audio.onended = () => setPlayingPreviewId(null);
+                audio.play();
+                setPlayingPreviewId(id);
+            }
+        } catch (e) {
+            console.error("Failed to play preview:", e);
+        }
+    };
     useEffect(() => {
         let result = [...history];
         if (searchQuery) {
@@ -187,7 +221,7 @@ export function HistoryPage() {
                         <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell w-32 text-xs uppercase">Format</th>
                         <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell w-16 text-xs uppercase text-nowrap">Dur</th>
                         <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell w-40 text-xs uppercase text-nowrap">Downloaded At</th>
-                        <th className="h-10 px-4 text-center align-middle font-medium text-muted-foreground w-16 text-xs uppercase text-nowrap">Link</th>
+                        <th className="h-10 px-4 text-center align-middle font-medium text-muted-foreground w-20 text-xs uppercase text-nowrap">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -219,12 +253,39 @@ export function HistoryPage() {
                             {item.duration_str}
                         </td>
                         <td className="p-3 align-middle text-xs text-muted-foreground hidden md:table-cell whitespace-nowrap">
-                            {formatDate(item.timestamp)}
+                            <div className="flex flex-col">
+                                <span>{formatDate(item.timestamp).split(' ')[0]}</span>
+                                <span className="text-[10px] text-muted-foreground">{formatDate(item.timestamp).split(' ')[1]}</span>
+                            </div>
                         </td>
                         <td className="p-3 align-middle text-center">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => openExternal(`https://open.spotify.com/track/${item.spotify_id}`)}>
-                                <ExternalLink className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center justify-center gap-1">
+                                <TooltipProvider>
+                                    <Tooltip delayDuration={0}>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => handlePreview(item.id, item.spotify_id)} disabled={!item.spotify_id}>
+                                                {playingPreviewId === item.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>{playingPreviewId === item.id ? "Pause Preview" : "Play Preview"}</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+
+                                <TooltipProvider>
+                                    <Tooltip delayDuration={0}>
+                                        <TooltipTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => openExternal(`https://open.spotify.com/track/${item.spotify_id}`)}>
+                                                <ExternalLink className="h-4 w-4" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Open in Spotify</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            </div>
                         </td>
                     </tr>))}
                 </tbody>
