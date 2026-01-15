@@ -9,7 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Bug, Lightbulb, ExternalLink, Star, GitFork, Clock, Download } from "lucide-react";
-import ExyezedIcon from "@/assets/icons/exyezed.svg";
+import AudioTTSProIcon from "@/assets/audiotts-pro.webp";
+import ChatGPTTTSIcon from "@/assets/chatgpt-tts.webp";
+import XProIcon from "@/assets/x-pro.webp";
 import SpotubeDLIcon from "@/assets/icons/spotubedl.svg";
 import SpotiDownloaderIcon from "@/assets/icons/spotidownloader.svg";
 import XBatchDLIcon from "@/assets/icons/xbatchdl.svg";
@@ -345,8 +347,12 @@ ${location || "Unknown"}
                 <div className="grid gap-4 md:grid-cols-2">
                     <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://exyezed.cc/")}>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><img src={ExyezedIcon} className="h-5 w-5 invert dark:invert-0" alt="exyezed" /> exyezed.cc</CardTitle>
-                            <CardDescription>Browser Extensions & Scripts</CardDescription>
+                            <CardTitle>Browser Extensions & Scripts</CardTitle>
+                            <CardDescription className="flex gap-3 pt-2">
+                                <img src={AudioTTSProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="AudioTTS Pro" />
+                                <img src={ChatGPTTTSIcon} className="h-8 w-8 rounded-md shadow-sm" alt="ChatGPT TTS" />
+                                <img src={XProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="X Pro" />
+                            </CardDescription>
                         </CardHeader>
                     </Card>
                     <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://spotubedl.com/")}>
