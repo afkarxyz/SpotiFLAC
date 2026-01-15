@@ -10,6 +10,7 @@ export interface CoffeeIconHandle {
 }
 interface CoffeeIconProps extends HTMLAttributes<HTMLDivElement> {
     size?: number;
+    loop?: boolean;
 }
 const PATH_VARIANTS: Variants = {
     normal: {
@@ -27,7 +28,7 @@ const PATH_VARIANTS: Variants = {
         },
     }),
 };
-const CoffeeIcon = forwardRef<CoffeeIconHandle, CoffeeIconProps>(({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
+const CoffeeIcon = forwardRef<CoffeeIconHandle, CoffeeIconProps>(({ onMouseEnter, onMouseLeave, className, size = 28, loop = false, ...props }, ref) => {
     const controls = useAnimation();
     const isControlledRef = useRef(false);
     useImperativeHandle(ref, () => {
@@ -55,12 +56,12 @@ const CoffeeIcon = forwardRef<CoffeeIconHandle, CoffeeIconProps>(({ onMouseEnter
     }, [controls, onMouseLeave]);
     return (<div className={cn(className)} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} {...props}>
         <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: 'visible' }}>
-          <motion.path d="M10 2v2" animate={controls} variants={PATH_VARIANTS} custom={0.2}/>
-          <motion.path d="M14 2v2" animate={controls} variants={PATH_VARIANTS} custom={0.4}/>
-          <motion.path d="M6 2v2" animate={controls} variants={PATH_VARIANTS} custom={0}/>
-          <path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>
+            <motion.path d="M10 2v2" animate={loop ? 'animate' : controls} variants={PATH_VARIANTS} custom={0.2}/>
+            <motion.path d="M14 2v2" animate={loop ? 'animate' : controls} variants={PATH_VARIANTS} custom={0.4}/>
+            <motion.path d="M6 2v2" animate={loop ? 'animate' : controls} variants={PATH_VARIANTS} custom={0}/>
+            <path d="M16 8a1 1 0 0 1 1 1v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1h14a4 4 0 1 1 0 8h-1"/>
         </svg>
-      </div>);
+    </div>);
 });
 CoffeeIcon.displayName = 'CoffeeIcon';
 export { CoffeeIcon };

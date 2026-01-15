@@ -10,6 +10,7 @@ export interface TerminalIconHandle {
 }
 interface TerminalIconProps extends HTMLAttributes<HTMLDivElement> {
     size?: number;
+    loop?: boolean;
 }
 const LINE_VARIANTS: Variants = {
     normal: { opacity: 1 },
@@ -22,7 +23,7 @@ const LINE_VARIANTS: Variants = {
         },
     },
 };
-const TerminalIcon = forwardRef<TerminalIconHandle, TerminalIconProps>(({ onMouseEnter, onMouseLeave, className, size = 28, ...props }, ref) => {
+const TerminalIcon = forwardRef<TerminalIconHandle, TerminalIconProps>(({ onMouseEnter, onMouseLeave, className, size = 28, loop = false, ...props }, ref) => {
     const controls = useAnimation();
     const isControlledRef = useRef(false);
     useImperativeHandle(ref, () => {
@@ -50,10 +51,10 @@ const TerminalIcon = forwardRef<TerminalIconHandle, TerminalIconProps>(({ onMous
     }, [controls, onMouseLeave]);
     return (<div className={cn(className)} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} {...props}>
         <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="4 17 10 11 4 5"/>
-          <motion.line x1="12" x2="20" y1="19" y2="19" variants={LINE_VARIANTS} animate={controls} initial="normal"/>
+            <polyline points="4 17 10 11 4 5"/>
+            <motion.line x1="12" x2="20" y1="19" y2="19" variants={LINE_VARIANTS} animate={loop ? 'animate' : controls} initial="normal"/>
         </svg>
-      </div>);
+    </div>);
 });
 TerminalIcon.displayName = 'TerminalIcon';
 export { TerminalIcon };

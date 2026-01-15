@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:sketch="http://www.bohemiancoding.com/sketch/ns" viewBox="0 0 512 512">
+  <defs>
+    <style>
+      .cls-1 {
+        fill: #2dc261;
+        fill-rule: evenodd;
+      }
+    </style>
+  </defs>
+  <!-- Generator: Adobe Illustrator 28.7.2, SVG Export Plug-In . SVG Version: 1.2.0 Build 154)  -->
+  <g>
+    <g id="Layer_1">
+      <g id="SVGRepo_iconCarrier">
+        <g id="Page-1" sketch:type="MSPage">
+          <g id="Icon-Set-Filled" sketch:type="MSLayerGroup">
+            <path id="arrow-right-circle" class="cls-1" d="M350.1,268.7l-81.5,81.5c-5.6,5.6-14.7,5.6-20.4,0-5.6-5.6-5.6-14.8,0-20.5l59.4-59.3h-152.5c-8,0-14.4-6.5-14.4-14.4s6.4-14.4,14.4-14.4h152.5l-59.4-59.3c-5.6-5.6-5.6-14.7,0-20.5,5.6-5.6,14.7-5.6,20.4,0l81.5,81.5c3.5,3.5,4.5,8.2,3.7,12.7.8,4.5-.3,9.2-3.7,12.7h0ZM256,25.6c-127.3,0-230.4,103.1-230.4,230.4s103.2,230.4,230.4,230.4,230.4-103.1,230.4-230.4S383.3,25.6,256,25.6h0Z" sketch:type="MSShapeGroup"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

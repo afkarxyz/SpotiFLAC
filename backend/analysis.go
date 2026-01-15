@@ -162,3 +162,46 @@ func GetFileSize(filepath string) (int64, error) {
 	}
 	return info.Size(), nil
 }
+
+func GetTrackMetadata(filepath string) (*AnalysisResult, error) {
+	if !fileExists(filepath) {
+		return nil, fmt.Errorf("file does not exist: %s", filepath)
+	}
+
+	fileInfo, err := os.Stat(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
+	}
+
+	f, err := flac.ParseFile(filepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse FLAC file: %w", err)
+	}
+
+	result := &AnalysisResult{
+		FilePath: filepath,
+		FileSize: fileInfo.Size(),
+	}
+
+	if len(f.Meta) > 0 {
+		streamInfo := f.Meta[0]
+		if streamInfo.Type == flac.StreamInfo {
+			data := streamInfo.Data
+			if len(data) >= 18 {
+				result.SampleRate = uint32(data[10])<<12 | uint32(data[11])<<4 | uint32(data[12])>>4
+				result.BitsPerSample = ((data[12]&0x01)<<4 | data[13]>>4) + 1
+				result.TotalSamples = uint64(data[13]&0x0F)<<32 |
+					uint64(data[14])<<24 |
+					uint64(data[15])<<16 |
+					uint64(data[16])<<8 |
+					uint64(data[17])
+
+				if result.SampleRate > 0 {
+					result.Duration = float64(result.TotalSamples) / float64(result.SampleRate)
+				}
+			}
+		}
+	}
+	result.BitDepth = fmt.Sprintf("%d-bit", result.BitsPerSample)
+	return result, nil
+}

@@ -17,12 +17,6 @@ const ListDirectoryFiles = (path: string): Promise<backend.FileInfo[]> => (windo
 const PreviewRenameFiles = (files: string[], format: string): Promise<backend.RenamePreview[]> => (window as any)['go']['main']['App']['PreviewRenameFiles'](files, format);
 const RenameFilesByMetadata = (files: string[], format: string): Promise<backend.RenameResult[]> => (window as any)['go']['main']['App']['RenameFilesByMetadata'](files, format);
 const ReadFileMetadata = (path: string): Promise<backend.AudioMetadata> => (window as any)['go']['main']['App']['ReadFileMetadata'](path);
-const IsFFprobeInstalled = (): Promise<boolean> => (window as any)['go']['main']['App']['IsFFprobeInstalled']();
-const DownloadFFmpeg = (): Promise<{
-    success: boolean;
-    message: string;
-    error?: string;
-}> => (window as any)['go']['main']['App']['DownloadFFmpeg']();
 const ReadTextFile = (path: string): Promise<string> => (window as any)['go']['main']['App']['ReadTextFile'](path);
 const RenameFileTo = (oldPath: string, newName: string): Promise<void> => (window as any)['go']['main']['App']['RenameFileTo'](oldPath, newName);
 const ReadImageAsBase64 = (path: string): Promise<string> => (window as any)['go']['main']['App']['ReadImageAsBase64'](path);
@@ -118,8 +112,6 @@ export function FileManagerPage() {
     const [metadataFile, setMetadataFile] = useState<string>("");
     const [metadataInfo, setMetadataInfo] = useState<FileMetadata | null>(null);
     const [loadingMetadata, setLoadingMetadata] = useState(false);
-    const [showFFprobeDialog, setShowFFprobeDialog] = useState(false);
-    const [installingFFprobe, setInstallingFFprobe] = useState(false);
     const [showLyricsPreview, setShowLyricsPreview] = useState(false);
     const [lyricsContent, setLyricsContent] = useState("");
     const [lyricsFile, setLyricsFile] = useState("");
@@ -279,14 +271,6 @@ export function FileManagerPage() {
             toast.error("No files selected");
             return;
         }
-        const hasM4A = Array.from(selectedFiles).some(f => f.toLowerCase().endsWith(".m4a"));
-        if (hasM4A) {
-            const installed = await IsFFprobeInstalled();
-            if (!installed) {
-                setShowFFprobeDialog(true);
-                return;
-            }
-        }
         try {
             const result = await PreviewRenameFiles(Array.from(selectedFiles), renameFormat);
             setPreviewData(result);
@@ -299,13 +283,6 @@ export function FileManagerPage() {
     };
     const handleShowMetadata = async (filePath: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        if (filePath.toLowerCase().endsWith(".m4a")) {
-            const installed = await IsFFprobeInstalled();
-            if (!installed) {
-                setShowFFprobeDialog(true);
-                return;
-            }
-        }
         setMetadataFile(filePath);
         setLoadingMetadata(true);
         try {
@@ -319,24 +296,6 @@ export function FileManagerPage() {
         }
         finally {
             setLoadingMetadata(false);
-        }
-    };
-    const handleInstallFFprobe = async () => {
-        setInstallingFFprobe(true);
-        try {
-            const result = await DownloadFFmpeg();
-            if (result.success) {
-                toast.success("FFprobe installed successfully");
-                setShowFFprobeDialog(false);
-            }
-            else
-                toast.error("Failed to install FFprobe", { description: result.error || result.message });
-        }
-        catch (err) {
-            toast.error("Failed to install FFprobe", { description: err instanceof Error ? err.message : "Unknown error" });
-        }
-        finally {
-            setInstallingFFprobe(false);
         }
     };
     const handleShowLyrics = async (filePath: string, e: React.MouseEvent) => {
@@ -389,17 +348,17 @@ export function FileManagerPage() {
                 if (!text)
                     return null;
                 return (<div key={index} className="flex items-center gap-2 py-1">
-                        <Badge variant="secondary" className="font-mono text-xs shrink-0">
-                            {formatTimestamp(timestamp)}
-                        </Badge>
-                        <span className="text-sm">{text}</span>
-                    </div>);
+          <Badge variant="secondary" className="font-mono text-xs shrink-0">
+            {formatTimestamp(timestamp)}
+          </Badge>
+          <span className="text-sm">{text}</span>
+        </div>);
             }
             if (!line.trim())
                 return null;
             return (<div key={index} className="py-1">
-                    <span className="text-sm">{line}</span>
-                </div>);
+        <span className="text-sm">{line}</span>
+      </div>);
         }).filter(item => item !== null);
     };
     const handleCopyLyrics = async () => {
@@ -463,331 +422,318 @@ export function FileManagerPage() {
     };
     const renderTrackTree = (nodes: FileNode[], depth = 0) => {
         return nodes.map((node) => (<div key={node.path}>
-        <div className={`flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer ${selectedFiles.has(node.path) ? "bg-primary/10" : ""}`} style={{ paddingLeft: `${depth * 16 + 8}px` }} onClick={() => (node.is_dir ? toggleExpand(node.path) : toggleSelect(node.path))}>
-          {node.is_dir ? (<>
-              <Checkbox checked={isFolderSelected(node) === true} ref={(el) => {
+      <div className={`flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer ${selectedFiles.has(node.path) ? "bg-primary/10" : ""}`} style={{ paddingLeft: `${depth * 16 + 8}px` }} onClick={() => (node.is_dir ? toggleExpand(node.path) : toggleSelect(node.path))}>
+        {node.is_dir ? (<>
+          <Checkbox checked={isFolderSelected(node) === true} ref={(el) => {
                     if (el)
                         (el as HTMLButtonElement).dataset.state = isFolderSelected(node) === "indeterminate" ? "indeterminate" : isFolderSelected(node) ? "checked" : "unchecked";
                 }} onCheckedChange={() => toggleFolderSelect(node)} onClick={(e) => e.stopPropagation()} className="shrink-0 data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground"/>
-              {node.expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0"/> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0"/>}
-              <Folder className="h-4 w-4 text-yellow-500 shrink-0"/>
-            </>) : (<>
-              <Checkbox checked={selectedFiles.has(node.path)} onCheckedChange={() => toggleSelect(node.path)} onClick={(e) => e.stopPropagation()} className="shrink-0"/>
-              <FileMusic className="h-4 w-4 text-primary shrink-0"/>
-            </>)}
-          <span className="truncate text-sm flex-1">
-            {node.name}
-            {node.is_dir && <span className="text-muted-foreground ml-1">({getAllFilesFlat([node]).length})</span>}
-          </span>
-          {!node.is_dir && (<>
-              <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleShowMetadata(node.path, e)}>
-                    <Info className="h-3.5 w-3.5 text-muted-foreground"/>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>View Metadata</TooltipContent>
-              </Tooltip>
-            </>)}
-        </div>
-        {node.is_dir && node.expanded && node.children && <div>{renderTrackTree(node.children, depth + 1)}</div>}
-      </div>));
+          {node.expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0"/> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0"/>}
+          <Folder className="h-4 w-4 text-yellow-500 shrink-0"/>
+        </>) : (<>
+          <Checkbox checked={selectedFiles.has(node.path)} onCheckedChange={() => toggleSelect(node.path)} onClick={(e) => e.stopPropagation()} className="shrink-0"/>
+          <FileMusic className="h-4 w-4 text-primary shrink-0"/>
+        </>)}
+        <span className="truncate text-sm flex-1">
+          {node.name}
+          {node.is_dir && <span className="text-muted-foreground ml-1">({getAllFilesFlat([node]).length})</span>}
+        </span>
+        {!node.is_dir && (<>
+          <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleShowMetadata(node.path, e)}>
+                <Info className="h-3.5 w-3.5 text-muted-foreground"/>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>View Metadata</TooltipContent>
+          </Tooltip>
+        </>)}
+      </div>
+      {node.is_dir && node.expanded && node.children && <div>{renderTrackTree(node.children, depth + 1)}</div>}
+    </div>));
     };
     const renderLyricTree = (nodes: FileNode[], depth = 0) => {
         return nodes.map((node) => (<div key={node.path}>
-        <div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer" style={{ paddingLeft: `${depth * 16 + 8}px` }} onClick={(e) => node.is_dir ? toggleExpand(node.path) : handleShowLyrics(node.path, e)}>
-          {node.is_dir ? (<>
-              {node.expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0"/> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0"/>}
-              <Folder className="h-4 w-4 text-yellow-500 shrink-0"/>
-            </>) : (<FileText className="h-4 w-4 text-blue-500 shrink-0"/>)}
-          <span className="truncate text-sm flex-1">
-            {node.name}
-            {node.is_dir && <span className="text-muted-foreground ml-1">({getAllFilesFlat([node]).length})</span>}
-          </span>
-          {!node.is_dir && (<>
-              <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleManualRename(node.path, e)}>
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground"/>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Rename</TooltipContent>
-              </Tooltip>
-            </>)}
-        </div>
-        {node.is_dir && node.expanded && node.children && <div>{renderLyricTree(node.children, depth + 1)}</div>}
-      </div>));
+      <div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer" style={{ paddingLeft: `${depth * 16 + 8}px` }} onClick={(e) => node.is_dir ? toggleExpand(node.path) : handleShowLyrics(node.path, e)}>
+        {node.is_dir ? (<>
+          {node.expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0"/> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0"/>}
+          <Folder className="h-4 w-4 text-yellow-500 shrink-0"/>
+        </>) : (<FileText className="h-4 w-4 text-blue-500 shrink-0"/>)}
+        <span className="truncate text-sm flex-1">
+          {node.name}
+          {node.is_dir && <span className="text-muted-foreground ml-1">({getAllFilesFlat([node]).length})</span>}
+        </span>
+        {!node.is_dir && (<>
+          <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleManualRename(node.path, e)}>
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground"/>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Rename</TooltipContent>
+          </Tooltip>
+        </>)}
+      </div>
+      {node.is_dir && node.expanded && node.children && <div>{renderLyricTree(node.children, depth + 1)}</div>}
+    </div>));
     };
     const renderCoverTree = (nodes: FileNode[], depth = 0) => {
         return nodes.map((node) => (<div key={node.path}>
-        <div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer" style={{ paddingLeft: `${depth * 16 + 8}px` }} onClick={(e) => node.is_dir ? toggleExpand(node.path) : handleShowCover(node.path, e)}>
-          {node.is_dir ? (<>
-              {node.expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0"/> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0"/>}
-              <Folder className="h-4 w-4 text-yellow-500 shrink-0"/>
-            </>) : (<Image className="h-4 w-4 text-green-500 shrink-0"/>)}
-          <span className="truncate text-sm flex-1">
-            {node.name}
-            {node.is_dir && <span className="text-muted-foreground ml-1">({getAllFilesFlat([node]).length})</span>}
-          </span>
-          {!node.is_dir && (<>
-              <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleManualRename(node.path, e)}>
-                    <Pencil className="h-3.5 w-3.5 text-muted-foreground"/>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>Rename</TooltipContent>
-              </Tooltip>
-            </>)}
-        </div>
-        {node.is_dir && node.expanded && node.children && <div>{renderCoverTree(node.children, depth + 1)}</div>}
-      </div>));
+      <div className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/50 cursor-pointer" style={{ paddingLeft: `${depth * 16 + 8}px` }} onClick={(e) => node.is_dir ? toggleExpand(node.path) : handleShowCover(node.path, e)}>
+        {node.is_dir ? (<>
+          {node.expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0"/> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0"/>}
+          <Folder className="h-4 w-4 text-yellow-500 shrink-0"/>
+        </>) : (<Image className="h-4 w-4 text-green-500 shrink-0"/>)}
+        <span className="truncate text-sm flex-1">
+          {node.name}
+          {node.is_dir && <span className="text-muted-foreground ml-1">({getAllFilesFlat([node]).length})</span>}
+        </span>
+        {!node.is_dir && (<>
+          <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(node.size)}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button className="p-1 rounded hover:bg-muted shrink-0" onClick={(e) => handleManualRename(node.path, e)}>
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground"/>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Rename</TooltipContent>
+          </Tooltip>
+        </>)}
+      </div>
+      {node.is_dir && node.expanded && node.children && <div>{renderCoverTree(node.children, depth + 1)}</div>}
+    </div>));
     };
     const allSelected = allAudioFiles.length > 0 && selectedFiles.size === allAudioFiles.length;
     return (<div className={`space-y-6 ${isFullscreen ? "h-full flex flex-col" : ""}`}>
-      <div className="flex items-center justify-between shrink-0">
-        <h1 className="text-2xl font-bold">File Manager</h1>
+    <div className="flex items-center justify-between shrink-0">
+      <h1 className="text-2xl font-bold">File Manager</h1>
+    </div>
+
+
+    <div className="flex items-center gap-2 shrink-0">
+      <InputWithContext value={rootPath} onChange={(e) => setRootPath(e.target.value)} placeholder="Select a folder..." className="flex-1"/>
+      <Button onClick={handleSelectFolder}>
+        <FolderOpen className="h-4 w-4"/>
+        Browse
+      </Button>
+      <Button variant="outline" onClick={loadFiles} disabled={loading || !rootPath}>
+        <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}/>
+        Refresh
+      </Button>
+    </div>
+
+
+    <div className="flex gap-2 border-b shrink-0">
+      <Button variant={activeTab === "track" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("track")} className="rounded-b-none">
+        <FileMusic className="h-4 w-4"/>
+        Track ({allAudioFiles.length})
+      </Button>
+      <Button variant={activeTab === "lyric" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("lyric")} className="rounded-b-none">
+        <FileText className="h-4 w-4"/>
+        Lyric ({allLyricFiles.length})
+      </Button>
+      <Button variant={activeTab === "cover" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("cover")} className="rounded-b-none">
+        <Image className="h-4 w-4"/>
+        Cover ({allCoverFiles.length})
+      </Button>
+    </div>
+
+
+    {activeTab === "track" && (<div className="space-y-2 shrink-0">
+      <div className="flex items-center gap-2">
+        <Label className="text-sm">Rename Format</Label>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help"/>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p className="text-xs whitespace-nowrap">Variables: {"{title}"}, {"{artist}"}, {"{album}"}, {"{album_artist}"}, {"{track}"}, {"{disc}"}, {"{year}"}</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
-
-      
-      <div className="flex items-center gap-2 shrink-0">
-        <InputWithContext value={rootPath} onChange={(e) => setRootPath(e.target.value)} placeholder="Select a folder..." className="flex-1"/>
-        <Button onClick={handleSelectFolder}>
-          <FolderOpen className="h-4 w-4"/>
-          Browse
-        </Button>
-        <Button variant="outline" onClick={loadFiles} disabled={loading || !rootPath}>
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}/>
-          Refresh
-        </Button>
+      <div className="flex items-center gap-2">
+        <Select value={formatPreset} onValueChange={setFormatPreset}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Object.entries(FORMAT_PRESETS).map(([key, { label }]) => (<SelectItem key={key} value={key}>{label}</SelectItem>))}
+          </SelectContent>
+        </Select>
+        {formatPreset === "custom" && (<InputWithContext value={customFormat} onChange={(e) => setCustomFormat(e.target.value)} placeholder="{artist} - {title}" className="flex-1"/>)}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon" onClick={() => setShowResetConfirm(true)}>
+              <RotateCcw className="h-4 w-4"/>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Reset to Default</TooltipContent>
+        </Tooltip>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Preview: <span className="font-mono">{renameFormat.replace(/\{title\}/g, "All The Stars").replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018")}.flac</span>
+      </p>
+    </div>)}
 
-      
-      <div className="flex gap-2 border-b shrink-0">
-        <Button variant={activeTab === "track" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("track")} className="rounded-b-none">
-          <FileMusic className="h-4 w-4"/>
-          Track ({allAudioFiles.length})
-        </Button>
-        <Button variant={activeTab === "lyric" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("lyric")} className="rounded-b-none">
-          <FileText className="h-4 w-4"/>
-          Lyric ({allLyricFiles.length})
-        </Button>
-        <Button variant={activeTab === "cover" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("cover")} className="rounded-b-none">
-          <Image className="h-4 w-4"/>
-          Cover ({allCoverFiles.length})
-        </Button>
-      </div>
 
-      
-      {activeTab === "track" && (<div className="space-y-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <Label className="text-sm">Rename Format</Label>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help"/>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p className="text-xs whitespace-nowrap">Variables: {"{title}"}, {"{artist}"}, {"{album}"}, {"{album_artist}"}, {"{track}"}, {"{disc}"}, {"{year}"}</p>
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <div className="flex items-center gap-2">
-            <Select value={formatPreset} onValueChange={setFormatPreset}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {Object.entries(FORMAT_PRESETS).map(([key, { label }]) => (<SelectItem key={key} value={key}>{label}</SelectItem>))}
-              </SelectContent>
-            </Select>
-            {formatPreset === "custom" && (<InputWithContext value={customFormat} onChange={(e) => setCustomFormat(e.target.value)} placeholder="{artist} - {title}" className="flex-1"/>)}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => setShowResetConfirm(true)}>
-                  <RotateCcw className="h-4 w-4"/>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset to Default</TooltipContent>
-            </Tooltip>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Preview: <span className="font-mono">{renameFormat.replace(/\{title\}/g, "All The Stars").replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018")}.flac</span>
-          </p>
-        </div>)}
+    <div className={`border rounded-lg ${isFullscreen ? "flex-1 flex flex-col min-h-0" : ""}`}>
+      {activeTab === "track" && (<div className="flex items-center justify-between p-3 border-b bg-muted/30 shrink-0">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={allSelected ? deselectAll : selectAll}>
+            {allSelected ? "Deselect All" : "Select All"}
+          </Button>
+          <span className="text-sm text-muted-foreground">{selectedFiles.size} of {allAudioFiles.length} file(s) selected</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => handlePreview(true)} disabled={selectedFiles.size === 0 || loading}>
+            <Eye className="h-4 w-4"/>
+            Preview
+          </Button>
+          <Button size="sm" onClick={() => handlePreview(false)} disabled={selectedFiles.size === 0 || loading}>
+            <Pencil className="h-4 w-4"/>
+            Rename
+          </Button>
+        </div>
+      </div>)}
 
-      
-      <div className={`border rounded-lg ${isFullscreen ? "flex-1 flex flex-col min-h-0" : ""}`}>
-        {activeTab === "track" && (<div className="flex items-center justify-between p-3 border-b bg-muted/30 shrink-0">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={allSelected ? deselectAll : selectAll}>
-                {allSelected ? "Deselect All" : "Select All"}
-              </Button>
-              <span className="text-sm text-muted-foreground">{selectedFiles.size} of {allAudioFiles.length} file(s) selected</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => handlePreview(true)} disabled={selectedFiles.size === 0 || loading}>
-                <Eye className="h-4 w-4"/>
-                Preview
-              </Button>
-              <Button size="sm" onClick={() => handlePreview(false)} disabled={selectedFiles.size === 0 || loading}>
-                <Pencil className="h-4 w-4"/>
-                Rename
-              </Button>
-            </div>
-          </div>)}
-
-        <div className={`overflow-y-auto p-2 ${isFullscreen ? "flex-1 min-h-0" : "max-h-[400px]"}`}>
-          {loading ? (<div className="flex items-center justify-center py-8"><Spinner className="h-6 w-6"/></div>) : filteredFiles.length === 0 ? (<div className="text-center py-8 text-muted-foreground">
-              {rootPath ? `No ${activeTab} files found` : "Select a folder to browse"}
-            </div>) : (activeTab === "track" ? renderTrackTree(filteredFiles) :
+      <div className={`overflow-y-auto p-2 ${isFullscreen ? "flex-1 min-h-0" : "max-h-[400px]"}`}>
+        {loading ? (<div className="flex items-center justify-center py-8"><Spinner className="h-6 w-6"/></div>) : filteredFiles.length === 0 ? (<div className="text-center py-8 text-muted-foreground">
+          {rootPath ? `No ${activeTab} files found` : "Select a folder to browse"}
+        </div>) : (activeTab === "track" ? renderTrackTree(filteredFiles) :
             activeTab === "lyric" ? renderLyricTree(filteredFiles) :
                 renderCoverTree(filteredFiles))}
-        </div>
       </div>
+    </div>
 
-      
-      <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
-        <DialogContent className="max-w-md [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>Reset to Default?</DialogTitle>
-            <DialogDescription>This will reset the rename format to "Title - Artist". Your custom format will be lost.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowResetConfirm(false)}>Cancel</Button>
-            <Button onClick={resetToDefault}>Reset</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>Rename Preview</DialogTitle>
-            <DialogDescription>Review the changes before renaming. Files with errors will be skipped.</DialogDescription>
-          </DialogHeader>
-          <div className="flex-1 overflow-y-auto space-y-2 py-4">
-            {previewData.map((item, index) => (<div key={index} className={`p-3 rounded-lg border ${item.error ? "border-destructive/50 bg-destructive/5" : "border-border"}`}>
-                <div className="text-sm">
-                  <div className="text-muted-foreground break-all">{item.old_name}</div>
-                  {item.error ? <div className="text-destructive text-xs mt-1">{item.error}</div> : <div className="text-primary font-medium break-all mt-1">→ {item.new_name}</div>}
-                </div>
-              </div>))}
-          </div>
-          <DialogFooter>
-            {previewOnly ? (<Button onClick={() => setShowPreview(false)}>Close</Button>) : (<>
-                <Button variant="outline" onClick={() => setShowPreview(false)}>Cancel</Button>
-                <Button onClick={handleRename} disabled={renaming}>
-                  {renaming ? <><Spinner className="h-4 w-4"/>Renaming...</> : <>Rename {previewData.filter((p) => !p.error).length} File(s)</>}
-                </Button>
-              </>)}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+    <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+      <DialogContent className="max-w-md [&>button]:hidden">
+        <DialogHeader>
+          <DialogTitle>Reset to Default?</DialogTitle>
+          <DialogDescription>This will reset the rename format to "Title - Artist". Your custom format will be lost.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowResetConfirm(false)}>Cancel</Button>
+          <Button onClick={resetToDefault}>Reset</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-      
-      <Dialog open={showMetadata} onOpenChange={setShowMetadata}>
-        <DialogContent className="max-w-md [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>File Metadata</DialogTitle>
-            <DialogDescription className="break-all">{metadataFile.split(/[/\\]/).pop()}</DialogDescription>
-          </DialogHeader>
-          {loadingMetadata ? (<div className="flex items-center justify-center py-8"><Spinner className="h-6 w-6"/></div>) : metadataInfo ? (<div className="space-y-3 py-2">
-              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Title</span><span>{metadataInfo.title || "-"}</span></div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Artist</span><span>{metadataInfo.artist || "-"}</span></div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Album</span><span>{metadataInfo.album || "-"}</span></div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Album Artist</span><span>{metadataInfo.album_artist || "-"}</span></div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Track</span><span>{metadataInfo.track_number || "-"}</span></div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Disc</span><span>{metadataInfo.disc_number || "-"}</span></div>
-              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Year</span><span>{metadataInfo.year ? metadataInfo.year.substring(0, 4) : "-"}</span></div>
-            </div>) : (<div className="text-center py-4 text-muted-foreground">No metadata available</div>)}
-          <DialogFooter><Button onClick={() => setShowMetadata(false)}>Close</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      
-      <Dialog open={showFFprobeDialog} onOpenChange={setShowFFprobeDialog}>
-        <DialogContent className="max-w-md [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>FFprobe Required</DialogTitle>
-            <DialogDescription>Reading M4A metadata requires FFprobe. Would you like to download and install it now?</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowFFprobeDialog(false)} disabled={installingFFprobe}>Cancel</Button>
-            <Button onClick={handleInstallFFprobe} disabled={installingFFprobe}>
-              {installingFFprobe ? <><Spinner className="h-4 w-4"/>Installing...</> : "Install FFprobe"}
+    <Dialog open={showPreview} onOpenChange={setShowPreview}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
+        <DialogHeader>
+          <DialogTitle>Rename Preview</DialogTitle>
+          <DialogDescription>Review the changes before renaming. Files with errors will be skipped.</DialogDescription>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto space-y-2 py-4">
+          {previewData.map((item, index) => (<div key={index} className={`p-3 rounded-lg border ${item.error ? "border-destructive/50 bg-destructive/5" : "border-border"}`}>
+            <div className="text-sm">
+              <div className="text-muted-foreground break-all">{item.old_name}</div>
+              {item.error ? <div className="text-destructive text-xs mt-1">{item.error}</div> : <div className="text-primary font-medium break-all mt-1">→ {item.new_name}</div>}
+            </div>
+          </div>))}
+        </div>
+        <DialogFooter>
+          {previewOnly ? (<Button onClick={() => setShowPreview(false)}>Close</Button>) : (<>
+            <Button variant="outline" onClick={() => setShowPreview(false)}>Cancel</Button>
+            <Button onClick={handleRename} disabled={renaming}>
+              {renaming ? <><Spinner className="h-4 w-4"/>Renaming...</> : <>Rename {previewData.filter((p) => !p.error).length} File(s)</>}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </>)}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-      
-      <Dialog open={showLyricsPreview} onOpenChange={setShowLyricsPreview}>
-        <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>Lyrics Preview</DialogTitle>
-            <DialogDescription className="break-all">{lyricsFile.split(/[/\\]/).pop()}</DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-2 border-b pb-2">
-            <Button variant={lyricsTab === "synced" ? "default" : "ghost"} size="sm" onClick={() => setLyricsTab("synced")}>Synced</Button>
-            <Button variant={lyricsTab === "plain" ? "default" : "ghost"} size="sm" onClick={() => setLyricsTab("plain")}>Plain</Button>
-          </div>
-          <div className="flex-1 overflow-y-auto py-4">
-            {lyricsTab === "synced" ? (<div className="bg-muted/30 p-4 rounded-lg space-y-0">
-                {renderSyncedLyrics(lyricsContent)}
-              </div>) : (<pre className="text-sm whitespace-pre-wrap font-mono bg-muted/30 p-4 rounded-lg">
-                {getPlainLyrics(lyricsContent) || "No lyrics content"}
-              </pre>)}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCopyLyrics} className="gap-1.5">
-              {copySuccess ? <Check className="h-4 w-4"/> : <Copy className="h-4 w-4"/>}
-              Copy
-            </Button>
-            <Button onClick={() => setShowLyricsPreview(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      
-      <Dialog open={showCoverPreview} onOpenChange={setShowCoverPreview}>
-        <DialogContent className="max-w-lg [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>Cover Preview</DialogTitle>
-            <DialogDescription className="break-all">{coverFile.split(/[/\\]/).pop()}</DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center justify-center p-4">
-            {coverData ? <img src={coverData} alt="Cover" className="max-w-full max-h-[350px] rounded-lg object-contain"/> : <div className="text-muted-foreground">Loading...</div>}
-          </div>
-          <DialogFooter><Button onClick={() => setShowCoverPreview(false)}>Close</Button></DialogFooter>
-        </DialogContent>
-      </Dialog>
+    <Dialog open={showMetadata} onOpenChange={setShowMetadata}>
+      <DialogContent className="max-w-md [&>button]:hidden">
+        <DialogHeader>
+          <DialogTitle>File Metadata</DialogTitle>
+          <DialogDescription className="break-all">{metadataFile.split(/[/\\]/).pop()}</DialogDescription>
+        </DialogHeader>
+        {loadingMetadata ? (<div className="flex items-center justify-center py-8"><Spinner className="h-6 w-6"/></div>) : metadataInfo ? (<div className="space-y-3 py-2">
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Title</span><span>{metadataInfo.title || "-"}</span></div>
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Artist</span><span>{metadataInfo.artist || "-"}</span></div>
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Album</span><span>{metadataInfo.album || "-"}</span></div>
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Album Artist</span><span>{metadataInfo.album_artist || "-"}</span></div>
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Track</span><span>{metadataInfo.track_number || "-"}</span></div>
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Disc</span><span>{metadataInfo.disc_number || "-"}</span></div>
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Year</span><span>{metadataInfo.year ? metadataInfo.year.substring(0, 4) : "-"}</span></div>
+        </div>) : (<div className="text-center py-4 text-muted-foreground">No metadata available</div>)}
+        <DialogFooter><Button onClick={() => setShowMetadata(false)}>Close</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-      
-      <Dialog open={showManualRename} onOpenChange={setShowManualRename}>
-        <DialogContent className="max-w-2xl [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>Rename File</DialogTitle>
-            <DialogDescription className="break-all">{manualRenameFile.split(/[/\\]/).pop()}</DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="newName" className="text-sm">New Name</Label>
-            <div className="flex items-center gap-2 mt-2">
-              <InputWithContext id="newName" value={manualRenameName} onChange={(e) => setManualRenameName(e.target.value)} placeholder="Enter new name" className="flex-1" onKeyDown={(e) => {
+
+
+
+
+    <Dialog open={showLyricsPreview} onOpenChange={setShowLyricsPreview}>
+      <DialogContent className="max-w-lg max-h-[80vh] overflow-hidden flex flex-col [&>button]:hidden">
+        <DialogHeader>
+          <DialogTitle>Lyrics Preview</DialogTitle>
+          <DialogDescription className="break-all">{lyricsFile.split(/[/\\]/).pop()}</DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2 border-b pb-2">
+          <Button variant={lyricsTab === "synced" ? "default" : "ghost"} size="sm" onClick={() => setLyricsTab("synced")}>Synced</Button>
+          <Button variant={lyricsTab === "plain" ? "default" : "ghost"} size="sm" onClick={() => setLyricsTab("plain")}>Plain</Button>
+        </div>
+        <div className="flex-1 overflow-y-auto py-4">
+          {lyricsTab === "synced" ? (<div className="bg-muted/30 p-4 rounded-lg space-y-0">
+            {renderSyncedLyrics(lyricsContent)}
+          </div>) : (<pre className="text-sm whitespace-pre-wrap font-mono bg-muted/30 p-4 rounded-lg">
+            {getPlainLyrics(lyricsContent) || "No lyrics content"}
+          </pre>)}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCopyLyrics} className="gap-1.5">
+            {copySuccess ? <Check className="h-4 w-4"/> : <Copy className="h-4 w-4"/>}
+            Copy
+          </Button>
+          <Button onClick={() => setShowLyricsPreview(false)}>Close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+
+    <Dialog open={showCoverPreview} onOpenChange={setShowCoverPreview}>
+      <DialogContent className="max-w-lg [&>button]:hidden">
+        <DialogHeader>
+          <DialogTitle>Cover Preview</DialogTitle>
+          <DialogDescription className="break-all">{coverFile.split(/[/\\]/).pop()}</DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center justify-center p-4">
+          {coverData ? <img src={coverData} alt="Cover" className="max-w-full max-h-[350px] rounded-lg object-contain"/> : <div className="text-muted-foreground">Loading...</div>}
+        </div>
+        <DialogFooter><Button onClick={() => setShowCoverPreview(false)}>Close</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+
+    <Dialog open={showManualRename} onOpenChange={setShowManualRename}>
+      <DialogContent className="max-w-2xl [&>button]:hidden">
+        <DialogHeader>
+          <DialogTitle>Rename File</DialogTitle>
+          <DialogDescription className="break-all">{manualRenameFile.split(/[/\\]/).pop()}</DialogDescription>
+        </DialogHeader>
+        <div className="py-4">
+          <Label htmlFor="newName" className="text-sm">New Name</Label>
+          <div className="flex items-center gap-2 mt-2">
+            <InputWithContext id="newName" value={manualRenameName} onChange={(e) => setManualRenameName(e.target.value)} placeholder="Enter new name" className="flex-1" onKeyDown={(e) => {
             if (e.key === "Enter" && !manualRenaming)
                 handleConfirmManualRename();
         }}/>
-              <span className="text-sm text-muted-foreground shrink-0">{manualRenameFile.match(/\.[^.]+$/)?.[0] || ""}</span>
-            </div>
+            <span className="text-sm text-muted-foreground shrink-0">{manualRenameFile.match(/\.[^.]+$/)?.[0] || ""}</span>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowManualRename(false)} disabled={manualRenaming}>Cancel</Button>
-            <Button onClick={handleConfirmManualRename} disabled={manualRenaming || !manualRenameName.trim()}>
-              {manualRenaming ? <><Spinner className="h-4 w-4"/>Renaming...</> : "Rename"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>);
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowManualRename(false)} disabled={manualRenaming}>Cancel</Button>
+          <Button onClick={handleConfirmManualRename} disabled={manualRenaming || !manualRenameName.trim()}>
+            {manualRenaming ? <><Spinner className="h-4 w-4"/>Renaming...</> : "Rename"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </div>);
 }

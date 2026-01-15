@@ -23,6 +23,8 @@ export interface Settings {
     tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
     qobuzQuality: "6" | "7";
     amazonQuality: "original";
+    autoOrder: "tidal-qobuz-amazon" | "tidal-amazon-qobuz" | "qobuz-tidal-amazon" | "qobuz-amazon-tidal" | "amazon-tidal-qobuz" | "amazon-qobuz-tidal" | "tidal-qobuz" | "tidal-amazon" | "qobuz-tidal" | "qobuz-amazon" | "amazon-tidal" | "amazon-qobuz";
+    autoQuality: "16" | "24";
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -95,31 +97,33 @@ export const DEFAULT_SETTINGS: Settings = {
     operatingSystem: detectOS(),
     tidalQuality: "LOSSLESS",
     qobuzQuality: "6",
-    amazonQuality: "original"
+    amazonQuality: "original",
+    autoOrder: "tidal-qobuz-amazon",
+    autoQuality: "16"
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
     label: string;
     fontFamily: string;
 }[] = [
-        { value: "bricolage-grotesque", label: "Bricolage Grotesque", fontFamily: '"Bricolage Grotesque", system-ui, sans-serif' },
-        { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
-        { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
-        { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
-        { value: "google-sans", label: "Google Sans", fontFamily: '"Google Sans", system-ui, sans-serif' },
-        { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
-        { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
-        { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
-        { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
-        { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
-        { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
-        { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
-        { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
-        { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
-        { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
-        { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
-        { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
-    ];
+    { value: "bricolage-grotesque", label: "Bricolage Grotesque", fontFamily: '"Bricolage Grotesque", system-ui, sans-serif' },
+    { value: "dm-sans", label: "DM Sans", fontFamily: '"DM Sans", system-ui, sans-serif' },
+    { value: "figtree", label: "Figtree", fontFamily: '"Figtree", system-ui, sans-serif' },
+    { value: "geist-sans", label: "Geist Sans", fontFamily: '"Geist", system-ui, sans-serif' },
+    { value: "google-sans", label: "Google Sans", fontFamily: '"Google Sans", system-ui, sans-serif' },
+    { value: "inter", label: "Inter", fontFamily: '"Inter", system-ui, sans-serif' },
+    { value: "jetbrains-mono", label: "JetBrains Mono", fontFamily: '"JetBrains Mono", ui-monospace, monospace' },
+    { value: "manrope", label: "Manrope", fontFamily: '"Manrope", system-ui, sans-serif' },
+    { value: "noto-sans", label: "Noto Sans", fontFamily: '"Noto Sans", system-ui, sans-serif' },
+    { value: "nunito-sans", label: "Nunito Sans", fontFamily: '"Nunito Sans", system-ui, sans-serif' },
+    { value: "outfit", label: "Outfit", fontFamily: '"Outfit", system-ui, sans-serif' },
+    { value: "plus-jakarta-sans", label: "Plus Jakarta Sans", fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif' },
+    { value: "poppins", label: "Poppins", fontFamily: '"Poppins", system-ui, sans-serif' },
+    { value: "public-sans", label: "Public Sans", fontFamily: '"Public Sans", system-ui, sans-serif' },
+    { value: "raleway", label: "Raleway", fontFamily: '"Raleway", system-ui, sans-serif' },
+    { value: "roboto", label: "Roboto", fontFamily: '"Roboto", system-ui, sans-serif' },
+    { value: "space-grotesk", label: "Space Grotesk", fontFamily: '"Space Grotesk", system-ui, sans-serif' },
+];
 export function applyFont(fontFamily: FontFamily): void {
     const font = FONT_OPTIONS.find(f => f.value === fontFamily);
     if (font) {
@@ -196,6 +200,12 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('amazonQuality' in parsed)) {
                 parsed.amazonQuality = "original";
             }
+            if (!('autoOrder' in parsed)) {
+                parsed.autoOrder = "tidal-qobuz-amazon";
+            }
+            if (!('autoQuality' in parsed)) {
+                parsed.autoQuality = "16";
+            }
             return { ...DEFAULT_SETTINGS, ...parsed };
         }
     }
@@ -265,6 +275,12 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('amazonQuality' in parsed)) {
                 parsed.amazonQuality = "original";
+            }
+            if (!('autoOrder' in parsed)) {
+                parsed.autoOrder = "tidal-qobuz-amazon";
+            }
+            if (!('autoQuality' in parsed)) {
+                parsed.autoQuality = "16";
             }
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
             return cachedSettings!;

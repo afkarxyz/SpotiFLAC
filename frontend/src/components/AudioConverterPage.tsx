@@ -1,14 +1,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { ToggleGroup, ToggleGroupItem, } from "@/components/ui/toggle-group";
-import { Upload, Download, X, CheckCircle2, AlertCircle, Trash2, FileMusic, WandSparkles, } from "lucide-react";
+import { Upload, X, CheckCircle2, AlertCircle, Trash2, FileMusic, WandSparkles, } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
-import { IsFFmpegInstalled, DownloadFFmpeg, ConvertAudio, SelectAudioFiles, } from "../../wailsjs/go/main/App";
+import { ConvertAudio, SelectAudioFiles, } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
-import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 interface AudioFile {
     path: string;
     name: string;
@@ -38,9 +36,6 @@ const M4A_CODEC_OPTIONS = [
 ];
 const STORAGE_KEY = "spotiflac_audio_converter_state";
 export function AudioConverterPage() {
-    const [ffmpegInstalled, setFfmpegInstalled] = useState<boolean>(false);
-    const [installingFfmpeg, setInstallingFfmpeg] = useState(false);
-    const downloadProgress = useDownloadProgress();
     const [files, setFiles] = useState<AudioFile[]>(() => {
         try {
             const saved = sessionStorage.getItem(STORAGE_KEY);
@@ -115,9 +110,6 @@ export function AudioConverterPage() {
         }
     }, []);
     useEffect(() => {
-        checkFfmpegInstallation();
-    }, []);
-    useEffect(() => {
         saveState({ files, outputFormat, bitrate, m4aCodec });
     }, [files, outputFormat, bitrate, m4aCodec, saveState]);
     useEffect(() => {
@@ -147,41 +139,6 @@ export function AudioConverterPage() {
             window.removeEventListener("focus", checkFullscreen);
         };
     }, []);
-    const checkFfmpegInstallation = async () => {
-        try {
-            const installed = await IsFFmpegInstalled();
-            setFfmpegInstalled(installed);
-        }
-        catch (err) {
-            console.error("Failed to check ffmpeg:", err);
-            setFfmpegInstalled(false);
-        }
-    };
-    const handleInstallFfmpeg = async () => {
-        setInstallingFfmpeg(true);
-        try {
-            const result = await DownloadFFmpeg();
-            if (result.success) {
-                toast.success("FFmpeg Installed", {
-                    description: "FFmpeg has been installed successfully",
-                });
-                setFfmpegInstalled(true);
-            }
-            else {
-                toast.error("Installation Failed", {
-                    description: result.error || "Failed to install FFmpeg",
-                });
-            }
-        }
-        catch (err) {
-            toast.error("Installation Failed", {
-                description: err instanceof Error ? err.message : "Unknown error",
-            });
-        }
-        finally {
-            setInstallingFfmpeg(false);
-        }
-    };
     const handleSelectFiles = async () => {
         try {
             const selectedFiles = await SelectAudioFiles();
@@ -250,15 +207,13 @@ export function AudioConverterPage() {
         addFiles(paths);
     }, [addFiles]);
     useEffect(() => {
-        if (ffmpegInstalled === true) {
-            OnFileDrop((x, y, paths) => {
-                handleFileDrop(x, y, paths);
-            }, true);
-            return () => {
-                OnFileDropOff();
-            };
-        }
-    }, [handleFileDrop, ffmpegInstalled]);
+        OnFileDrop((x, y, paths) => {
+            handleFileDrop(x, y, paths);
+        }, true);
+        return () => {
+            OnFileDropOff();
+        };
+    }, [handleFileDrop]);
     const removeFile = (path: string) => {
         setFiles((prev) => prev.filter((f) => f.path !== path));
     };
@@ -336,62 +291,24 @@ export function AudioConverterPage() {
     };
     const convertableCount = files.filter((f) => f.status === "pending" || f.status === "success").length;
     const successCount = files.filter((f) => f.status === "success").length;
-    if (ffmpegInstalled === false) {
-        return (<div className={`space-y-6 ${isFullscreen ? "h-full flex flex-col" : ""}`}>
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold">Audio Converter</h1>
-        </div>
+    return (<div className={`space-y-6 ${isFullscreen ? "h-full flex flex-col" : ""}`}>
 
-        <div className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all ${isFullscreen ? "flex-1 min-h-[400px]" : "h-[400px]"} border-muted-foreground/30`}>
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <Download className="h-8 w-8 text-primary"/>
-          </div>
-          <p className="text-sm text-muted-foreground mb-4 text-center">
-            FFmpeg is required to convert audio files
-          </p>
-          <Button onClick={handleInstallFfmpeg} disabled={installingFfmpeg} size="lg">
-            {installingFfmpeg ? (<>
-                <Spinner className="h-5 w-5"/>
-                Installing FFmpeg...
-              </>) : (<>
-                <Download className="h-5 w-5"/>
-                Install FFmpeg
-              </>)}
-          </Button>
-          
-          {installingFfmpeg && downloadProgress.is_downloading && downloadProgress.mb_downloaded > 0 && (<div className="w-full max-w-md mt-6 space-y-2 px-4">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Downloading FFmpeg</span>
-                <span className="font-mono tabular-nums">
-                  {downloadProgress.mb_downloaded.toFixed(2)} MB
-                  {downloadProgress.speed_mbps > 0 && (<span className="text-muted-foreground ml-2">
-                      @ {downloadProgress.speed_mbps.toFixed(2)} MB/s
-                    </span>)}
-                </span>
-              </div>
-              <Progress value={Math.min(100, (downloadProgress.mb_downloaded / 200) * 100)} className="h-2"/>
+        <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">Audio Converter</h1>
+            {files.length > 0 && (<div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleSelectFiles}>
+                    <Upload className="h-4 w-4"/>
+                    Add More
+                </Button>
+                <Button variant="outline" size="sm" onClick={clearFiles} disabled={converting}>
+                    <Trash2 className="h-4 w-4"/>
+                    Clear All
+                </Button>
             </div>)}
         </div>
-      </div>);
-    }
-    return (<div className={`space-y-6 ${isFullscreen ? "h-full flex flex-col" : ""}`}>
-      
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Audio Converter</h1>
-        {files.length > 0 && (<div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleSelectFiles}>
-              <Upload className="h-4 w-4"/>
-              Add More
-            </Button>
-            <Button variant="outline" size="sm" onClick={clearFiles} disabled={converting}>
-              <Trash2 className="h-4 w-4"/>
-              Clear All
-            </Button>
-          </div>)}
-      </div>
 
-      
-      <div className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all ${isFullscreen ? "flex-1 min-h-[400px]" : "h-[400px]"} ${isDragging
+
+        <div className={`flex flex-col items-center justify-center border-2 border-dashed rounded-lg transition-all ${isFullscreen ? "flex-1 min-h-[400px]" : "h-[400px]"} ${isDragging
             ? "border-primary bg-primary/10"
             : "border-muted-foreground/30"}`} onDragOver={(e) => {
             e.preventDefault();
@@ -403,110 +320,110 @@ export function AudioConverterPage() {
             e.preventDefault();
             setIsDragging(false);
         }} style={{ "--wails-drop-target": "drop" } as React.CSSProperties}>
-        {files.length === 0 ? (<>
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <Upload className="h-8 w-8 text-primary"/>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4 text-center">
-              {isDragging
+            {files.length === 0 ? (<>
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                    <Upload className="h-8 w-8 text-primary"/>
+                </div>
+                <p className="text-sm text-muted-foreground mb-4 text-center">
+                    {isDragging
                 ? "Drop your audio files here"
                 : "Drag and drop audio files here, or click the button below to select"}
-            </p>
-            <Button onClick={handleSelectFiles} size="lg">
-              <Upload className="h-5 w-5"/>
-              Select Files
-            </Button>
-            <p className="text-xs text-muted-foreground mt-4 text-center">
-              Supported formats: FLAC, MP3
-            </p>
-          </>) : (<div className="w-full h-full p-6 space-y-4 flex flex-col">
-            
-            <div className="space-y-2 pb-4 border-b shrink-0">
-                
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Label className="whitespace-nowrap">Format:</Label>
-                    <ToggleGroup type="single" variant="outline" value={outputFormat} onValueChange={(value) => {
+                </p>
+                <Button onClick={handleSelectFiles} size="lg">
+                    <Upload className="h-5 w-5"/>
+                    Select Files
+                </Button>
+                <p className="text-xs text-muted-foreground mt-4 text-center">
+                    Supported formats: FLAC, MP3
+                </p>
+            </>) : (<div className="w-full h-full p-6 space-y-4 flex flex-col">
+
+                <div className="space-y-2 pb-4 border-b shrink-0">
+
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <Label className="whitespace-nowrap">Format:</Label>
+                            <ToggleGroup type="single" variant="outline" value={outputFormat} onValueChange={(value) => {
                 if (value && !isFormatDisabled)
                     setOutputFormat(value as "mp3" | "m4a");
             }} disabled={isFormatDisabled}>
-                      {!isFormatDisabled && (<ToggleGroupItem value="mp3" aria-label="MP3">
-                          MP3
-                        </ToggleGroupItem>)}
-                      <ToggleGroupItem value="m4a" aria-label="M4A" disabled={isFormatDisabled}>
-                        M4A
-                      </ToggleGroupItem>
-                    </ToggleGroup>
-                  </div>
-                  
-                  {outputFormat === "m4a" && hasFlacFiles && (<div className="flex items-center gap-2">
-                      <Label className="whitespace-nowrap">Codec:</Label>
-                      <ToggleGroup type="single" variant="outline" value={m4aCodec} onValueChange={(value) => {
+                                {!isFormatDisabled && (<ToggleGroupItem value="mp3" aria-label="MP3">
+                                    MP3
+                                </ToggleGroupItem>)}
+                                <ToggleGroupItem value="m4a" aria-label="M4A" disabled={isFormatDisabled}>
+                                    M4A
+                                </ToggleGroupItem>
+                            </ToggleGroup>
+                        </div>
+
+                        {outputFormat === "m4a" && hasFlacFiles && (<div className="flex items-center gap-2">
+                            <Label className="whitespace-nowrap">Codec:</Label>
+                            <ToggleGroup type="single" variant="outline" value={m4aCodec} onValueChange={(value) => {
                     if (value)
                         setM4aCodec(value as "aac" | "alac");
                 }}>
-                        {M4A_CODEC_OPTIONS.map((option) => (<ToggleGroupItem key={option.value} value={option.value} aria-label={option.label}>
-                            {option.label}
-                          </ToggleGroupItem>))}
-                      </ToggleGroup>
-                    </div>)}
-                  
-                  {!(outputFormat === "m4a" && m4aCodec === "alac") && (<div className="flex items-center gap-2">
-                      <Label className="whitespace-nowrap">Bitrate:</Label>
-                      <ToggleGroup type="single" variant="outline" value={bitrate} onValueChange={(value) => {
+                                {M4A_CODEC_OPTIONS.map((option) => (<ToggleGroupItem key={option.value} value={option.value} aria-label={option.label}>
+                                    {option.label}
+                                </ToggleGroupItem>))}
+                            </ToggleGroup>
+                        </div>)}
+
+                        {!(outputFormat === "m4a" && m4aCodec === "alac") && (<div className="flex items-center gap-2">
+                            <Label className="whitespace-nowrap">Bitrate:</Label>
+                            <ToggleGroup type="single" variant="outline" value={bitrate} onValueChange={(value) => {
                     if (value)
                         setBitrate(value);
                 }}>
-                        {BITRATE_OPTIONS.map((option) => (<ToggleGroupItem key={option.value} value={option.value} aria-label={option.label}>
-                            {option.label}
-                          </ToggleGroupItem>))}
-                      </ToggleGroup>
-                    </div>)}
+                                {BITRATE_OPTIONS.map((option) => (<ToggleGroupItem key={option.value} value={option.value} aria-label={option.label}>
+                                    {option.label}
+                                </ToggleGroupItem>))}
+                            </ToggleGroup>
+                        </div>)}
+                    </div>
                 </div>
-              </div>
 
-              
-              <div className="flex items-center justify-between shrink-0">
-                <div className="text-sm text-muted-foreground">
-                  {files.length} file(s) • {successCount} converted
+
+                <div className="flex items-center justify-between shrink-0">
+                    <div className="text-sm text-muted-foreground">
+                        {files.length} file(s) • {successCount} converted
+                    </div>
                 </div>
-              </div>
 
-              
-              <div className="flex-1 space-y-2 overflow-y-auto min-h-0">
-              {files.map((file) => (<div key={file.path} className="flex items-center gap-3 rounded-lg border p-3">
-                  {getStatusIcon(file.status)}
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-sm font-medium">{file.name}</p>
-                    {file.error && (<p className="truncate text-xs text-destructive">
-                        {file.error}
-                      </p>)}
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {formatFileSize(file.size)}
-                  </span>
-                  <span className="text-xs uppercase text-muted-foreground">
-                    {file.format}
-                  </span>
-                  {file.status !== "converting" && (<Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeFile(file.path)} disabled={converting}>
-                      <X className="h-4 w-4"/>
-                    </Button>)}
-                </div>))}
-            </div>
 
-              
-              <div className="flex justify-center pt-4 border-t shrink-0">
-                <Button onClick={handleConvert} disabled={converting || convertableCount === 0} size="lg">
-                {converting ? (<>
-                    <Spinner className="h-4 w-4"/>
-                    Converting...
-                  </>) : (<>
-                    <WandSparkles className="h-4 w-4"/>
-                    Convert {convertableCount > 0 ? `${convertableCount} File(s)` : ""}
-                  </>)}
-              </Button>
-            </div>
-          </div>)}
-      </div>
+                <div className="flex-1 space-y-2 overflow-y-auto min-h-0">
+                    {files.map((file) => (<div key={file.path} className="flex items-center gap-3 rounded-lg border p-3">
+                        {getStatusIcon(file.status)}
+                        <div className="flex-1 min-w-0">
+                            <p className="truncate text-sm font-medium">{file.name}</p>
+                            {file.error && (<p className="truncate text-xs text-destructive">
+                                {file.error}
+                            </p>)}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                            {formatFileSize(file.size)}
+                        </span>
+                        <span className="text-xs uppercase text-muted-foreground">
+                            {file.format}
+                        </span>
+                        {file.status !== "converting" && (<Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeFile(file.path)} disabled={converting}>
+                            <X className="h-4 w-4"/>
+                        </Button>)}
+                    </div>))}
+                </div>
+
+
+                <div className="flex justify-center pt-4 border-t shrink-0">
+                    <Button onClick={handleConvert} disabled={converting || convertableCount === 0} size="lg">
+                        {converting ? (<>
+                            <Spinner className="h-4 w-4"/>
+                            Converting...
+                        </>) : (<>
+                            <WandSparkles className="h-4 w-4"/>
+                            Convert {convertableCount > 0 ? `${convertableCount} File(s)` : ""}
+                        </>)}
+                    </Button>
+                </div>
+            </div>)}
+        </div>
     </div>);
 }

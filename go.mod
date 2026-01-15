@@ -11,6 +11,7 @@ require (
 	github.com/pquerna/otp v1.5.0
 	github.com/ulikunitz/xz v0.5.15
 	github.com/wailsapp/wails/v2 v2.11.0
+	go.etcd.io/bbolt v1.4.3
 )
 
 require (

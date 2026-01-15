@@ -7,7 +7,8 @@ import { Search, X, ArrowUp } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
-import { OpenFolder } from "../wailsjs/go/main/App";
+import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg } from "../wailsjs/go/main/App";
+import { EventsOn, EventsOff, Quit } from "../wailsjs/runtime/runtime";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { TitleBar } from "@/components/TitleBar";
 import { Sidebar, type PageType } from "@/components/Sidebar";
@@ -24,6 +25,8 @@ import { AudioConverterPage } from "@/components/AudioConverterPage";
 import { FileManagerPage } from "@/components/FileManagerPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { DebugLoggerPage } from "@/components/DebugLoggerPage";
+import { AboutPage } from "@/components/AboutPage";
+import { HistoryPage } from "@/components/HistoryPage";
 import type { HistoryItem } from "@/components/FetchHistory";
 import { useDownload } from "@/hooks/useDownload";
 import { useMetadata } from "@/hooks/useMetadata";
@@ -31,6 +34,7 @@ import { useLyrics } from "@/hooks/useLyrics";
 import { useCover } from "@/hooks/useCover";
 import { useAvailability } from "@/hooks/useAvailability";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
+import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 const HISTORY_KEY = "spotiflac_fetch_history";
 const MAX_HISTORY = 5;
 function App() {
@@ -50,13 +54,18 @@ function App() {
     const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
     const [resetSettingsFn, setResetSettingsFn] = useState<(() => void) | null>(null);
     const ITEMS_PER_PAGE = 50;
-    const CURRENT_VERSION = "7.0.5";
+    const CURRENT_VERSION = "7.0.6";
     const download = useDownload();
     const metadata = useMetadata();
     const lyrics = useLyrics();
     const cover = useCover();
     const availability = useAvailability();
     const downloadQueue = useDownloadQueueDialog();
+    const downloadProgress = useDownloadProgress();
+    const [isFFmpegInstalled, setIsFFmpegInstalled] = useState<boolean | null>(null);
+    const [isInstallingFFmpeg, setIsInstallingFFmpeg] = useState(false);
+    const [ffmpegInstallProgress, setFfmpegInstallProgress] = useState(0);
+    const [ffmpegInstallStatus, setFfmpegInstallStatus] = useState("");
     useLayoutEffect(() => {
         const savedSettings = getSettings();
         if (savedSettings) {
@@ -65,7 +74,6 @@ function App() {
             applyFont(savedSettings.fontFamily);
         }
     }, []);
-
     useEffect(() => {
         const initSettings = async () => {
             const settings = await loadSettings();
@@ -78,6 +86,17 @@ function App() {
             }
         };
         initSettings();
+        const checkFFmpeg = async () => {
+            try {
+                const installed = await CheckFFmpegInstalled();
+                setIsFFmpegInstalled(installed);
+            }
+            catch (err) {
+                console.error("Failed to check FFmpeg:", err);
+                setIsFFmpegInstalled(false);
+            }
+        };
+        checkFFmpeg();
         const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
         const handleChange = () => {
             const currentSettings = getSettings();
@@ -136,6 +155,44 @@ function App() {
         }
         catch (err) {
             console.error("Failed to load history:", err);
+        }
+    };
+    const handleInstallFFmpeg = async () => {
+        setIsInstallingFFmpeg(true);
+        setFfmpegInstallProgress(0);
+        setFfmpegInstallStatus("starting");
+        try {
+            EventsOn("ffmpeg:progress", (progress: number) => {
+                setFfmpegInstallProgress(progress);
+                if (progress >= 100) {
+                    setFfmpegInstallStatus("extracting");
+                }
+                else {
+                    setFfmpegInstallStatus("downloading");
+                }
+            });
+            EventsOn("ffmpeg:status", (status: string) => {
+                setFfmpegInstallStatus(status);
+            });
+            const response = await DownloadFFmpeg();
+            EventsOff("ffmpeg:progress");
+            EventsOff("ffmpeg:status");
+            if (response.success) {
+                toast.success("FFmpeg installed successfully!");
+                setIsFFmpegInstalled(true);
+            }
+            else {
+                toast.error(`Failed to install FFmpeg: ${response.error}`);
+            }
+        }
+        catch (error) {
+            console.error("Error installing FFmpeg:", error);
+            toast.error(`Error during FFmpeg installation: ${error}`);
+        }
+        finally {
+            setIsInstallingFFmpeg(false);
+            setFfmpegInstallProgress(0);
+            setFfmpegInstallStatus("");
         }
     };
     const saveHistory = (history: HistoryItem[]) => {
@@ -262,49 +319,49 @@ function App() {
             return null;
         if ("track" in metadata.metadata) {
             const { track } = metadata.metadata;
-            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(track.isrc)} isFailed={download.failedTracks.has(track.isrc)} isSkipped={download.skippedTracks.has(track.isrc)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics.has(track.spotify_id || "")} failedLyrics={lyrics.failedLyrics.has(track.spotify_id || "")} skippedLyrics={lyrics.skippedLyrics.has(track.spotify_id || "")} checkingAvailability={availability.checkingTrackId === track.spotify_id} availability={availability.availabilityMap.get(track.spotify_id || "")} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} failedCover={cover.failedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} skippedCover={cover.skippedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, track.album_name, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, track.album_name, undefined, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onOpenFolder={handleOpenFolder} />);
+            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(track.isrc)} isFailed={download.failedTracks.has(track.isrc)} isSkipped={download.skippedTracks.has(track.isrc)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics.has(track.spotify_id || "")} failedLyrics={lyrics.failedLyrics.has(track.spotify_id || "")} skippedLyrics={lyrics.skippedLyrics.has(track.spotify_id || "")} checkingAvailability={availability.checkingTrackId === track.spotify_id} availability={availability.availabilityMap.get(track.spotify_id || "")} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} failedCover={cover.failedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} skippedCover={cover.skippedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, track.album_name, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, track.album_name, undefined, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onOpenFolder={handleOpenFolder}/>);
         }
         if ("album_info" in metadata.metadata) {
             const { album_info, track_list } = metadata.metadata;
             return (<AlbumInfo albumInfo={album_info} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} checkingAvailabilityTrack={availability.checkingTrackId} availabilityMap={availability.availabilityMap} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, album_info.name, position, albumArtist, releaseDate, discNumber, true)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, album_info.name, position, trackId, albumArtist, releaseDate, discNumber, true)} onCheckAvailability={availability.checkAvailability} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, album_info.name, undefined, true)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, album_info.name, true)} onDownloadAll={() => download.handleDownloadAll(track_list, album_info.name, true)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, album_info.name, true)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onArtistClick={async (artist) => {
-                const artistUrl = await metadata.handleArtistClick(artist);
-                if (artistUrl) {
-                    setSpotifyUrl(artistUrl);
-                }
-            }} onTrackClick={async (track) => {
-                if (track.external_urls) {
-                    setSpotifyUrl(track.external_urls);
-                    await metadata.handleFetchMetadata(track.external_urls);
-                }
-            }} />);
+                    const artistUrl = await metadata.handleArtistClick(artist);
+                    if (artistUrl) {
+                        setSpotifyUrl(artistUrl);
+                    }
+                }} onTrackClick={async (track) => {
+                    if (track.external_urls) {
+                        setSpotifyUrl(track.external_urls);
+                        await metadata.handleFetchMetadata(track.external_urls);
+                    }
+                }}/>);
         }
         if ("playlist_info" in metadata.metadata) {
             const { playlist_info, track_list } = metadata.metadata;
             return (<PlaylistInfo playlistInfo={playlist_info} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} checkingAvailabilityTrack={availability.checkingTrackId} availabilityMap={availability.availabilityMap} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, playlist_info.name, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, playlist_info.name, position, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, playlist_info.name)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, playlist_info.name)} onDownloadAll={() => download.handleDownloadAll(track_list, playlist_info.name)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, playlist_info.name)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onPageChange={setCurrentListPage} onAlbumClick={metadata.handleAlbumClick} onArtistClick={async (artist) => {
-                const artistUrl = await metadata.handleArtistClick(artist);
-                if (artistUrl) {
-                    setSpotifyUrl(artistUrl);
-                }
-            }} onTrackClick={async (track) => {
-                if (track.external_urls) {
-                    setSpotifyUrl(track.external_urls);
-                    await metadata.handleFetchMetadata(track.external_urls);
-                }
-            }} />);
+                    const artistUrl = await metadata.handleArtistClick(artist);
+                    if (artistUrl) {
+                        setSpotifyUrl(artistUrl);
+                    }
+                }} onTrackClick={async (track) => {
+                    if (track.external_urls) {
+                        setSpotifyUrl(track.external_urls);
+                        await metadata.handleFetchMetadata(track.external_urls);
+                    }
+                }}/>);
         }
         if ("artist_info" in metadata.metadata) {
             const { artist_info, album_list, track_list } = metadata.metadata;
             return (<ArtistInfo artistInfo={artist_info} albumList={album_list} trackList={track_list} searchQuery={searchQuery} sortBy={sortBy} selectedTracks={selectedTracks} downloadedTracks={download.downloadedTracks} failedTracks={download.failedTracks} skippedTracks={download.skippedTracks} downloadingTrack={download.downloadingTrack} isDownloading={download.isDownloading} bulkDownloadType={download.bulkDownloadType} downloadProgress={download.downloadProgress} currentDownloadInfo={download.currentDownloadInfo} currentPage={currentListPage} itemsPerPage={ITEMS_PER_PAGE} downloadedLyrics={lyrics.downloadedLyrics} failedLyrics={lyrics.failedLyrics} skippedLyrics={lyrics.skippedLyrics} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} checkingAvailabilityTrack={availability.checkingTrackId} availabilityMap={availability.availabilityMap} downloadedCovers={cover.downloadedCovers} failedCovers={cover.failedCovers} skippedCovers={cover.skippedCovers} downloadingCoverTrack={cover.downloadingCoverTrack} isBulkDownloadingCovers={cover.isBulkDownloadingCovers} isBulkDownloadingLyrics={lyrics.isBulkDownloadingLyrics} onSearchChange={handleSearchChange} onSortChange={setSortBy} onToggleTrack={toggleTrackSelection} onToggleSelectAll={toggleSelectAll} onDownloadTrack={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, _folderName, _isArtistDiscography, position, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, artist_info.name, position, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _folderName, _isArtistDiscography, position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, artist_info.name, position, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onDownloadAllLyrics={() => lyrics.handleDownloadAllLyrics(track_list, artist_info.name)} onDownloadAllCovers={() => cover.handleDownloadAllCovers(track_list, artist_info.name)} onDownloadAll={() => download.handleDownloadAll(track_list, artist_info.name)} onDownloadSelected={() => download.handleDownloadSelected(selectedTracks, track_list, artist_info.name)} onStopDownload={download.handleStopDownload} onOpenFolder={handleOpenFolder} onAlbumClick={metadata.handleAlbumClick} onArtistClick={async (artist) => {
-                const artistUrl = await metadata.handleArtistClick(artist);
-                if (artistUrl) {
-                    setSpotifyUrl(artistUrl);
-                }
-            }} onPageChange={setCurrentListPage} onTrackClick={async (track) => {
-                if (track.external_urls) {
-                    setSpotifyUrl(track.external_urls);
-                    await metadata.handleFetchMetadata(track.external_urls);
-                }
-            }} />);
+                    const artistUrl = await metadata.handleArtistClick(artist);
+                    if (artistUrl) {
+                        setSpotifyUrl(artistUrl);
+                    }
+                }} onPageChange={setCurrentListPage} onTrackClick={async (track) => {
+                    if (track.external_urls) {
+                        setSpotifyUrl(track.external_urls);
+                        await metadata.handleFetchMetadata(track.external_urls);
+                    }
+                }}/>);
         }
         return null;
     };
@@ -337,9 +394,13 @@ function App() {
     const renderPage = () => {
         switch (currentPage) {
             case "settings":
-                return <SettingsPage onUnsavedChangesChange={setHasUnsavedSettings} onResetRequest={setResetSettingsFn} />;
+                return <SettingsPage onUnsavedChangesChange={setHasUnsavedSettings} onResetRequest={setResetSettingsFn}/>;
             case "debug":
                 return <DebugLoggerPage />;
+            case "about":
+                return <AboutPage version={CURRENT_VERSION}/>;
+            case "history":
+                return <HistoryPage />;
             case "audio-analysis":
                 return <AudioAnalysisPage />;
             case "audio-converter":
@@ -348,14 +409,14 @@ function App() {
                 return <FileManagerPage />;
             default:
                 return (<>
-                    <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} releaseDate={releaseDate} />
+                    <Header version={CURRENT_VERSION} hasUpdate={hasUpdate} releaseDate={releaseDate}/>
 
 
                     <Dialog open={metadata.showTimeoutDialog} onOpenChange={metadata.setShowTimeoutDialog}>
                         <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
                             <div className="absolute right-4 top-4">
                                 <Button variant="ghost" size="icon" className="h-6 w-6 opacity-70 hover:opacity-100" onClick={() => metadata.setShowTimeoutDialog(false)}>
-                                    <X className="h-4 w-4" />
+                                    <X className="h-4 w-4"/>
                                 </Button>
                             </div>
                             <DialogTitle className="text-sm font-medium">Fetch Artist</DialogTitle>
@@ -369,7 +430,7 @@ function App() {
                             <div className="space-y-4 py-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="timeout">Timeout (seconds)</Label>
-                                    <Input id="timeout" type="number" min="10" max="600" value={metadata.timeoutValue} onChange={(e) => metadata.setTimeoutValue(Number(e.target.value))} />
+                                    <Input id="timeout" type="number" min="10" max="600" value={metadata.timeoutValue} onChange={(e) => metadata.setTimeoutValue(Number(e.target.value))}/>
                                     <p className="text-xs text-muted-foreground">
                                         Default: 60 seconds. For large discographies, try 300-600 seconds (5-10
                                         minutes).
@@ -381,7 +442,7 @@ function App() {
                                     Cancel
                                 </Button>
                                 <Button onClick={metadata.handleConfirmFetch}>
-                                    <Search className="h-4 w-4" />
+                                    <Search className="h-4 w-4"/>
                                     Fetch
                                 </Button>
                             </DialogFooter>
@@ -393,7 +454,7 @@ function App() {
                         <DialogContent className="sm:max-w-[425px] p-6 [&>button]:hidden">
                             <div className="absolute right-4 top-4">
                                 <Button variant="ghost" size="icon" className="h-6 w-6 opacity-70 hover:opacity-100" onClick={() => metadata.setShowAlbumDialog(false)}>
-                                    <X className="h-4 w-4" />
+                                    <X className="h-4 w-4"/>
                                 </Button>
                             </div>
                             <DialogTitle className="text-sm font-medium">Fetch Album</DialogTitle>
@@ -408,12 +469,12 @@ function App() {
                                     Cancel
                                 </Button>
                                 <Button onClick={async () => {
-                                    const albumUrl = await metadata.handleConfirmAlbumFetch();
-                                    if (albumUrl) {
-                                        setSpotifyUrl(albumUrl);
-                                    }
-                                }}>
-                                    <Search className="h-4 w-4" />
+                        const albumUrl = await metadata.handleConfirmAlbumFetch();
+                        if (albumUrl) {
+                            setSpotifyUrl(albumUrl);
+                        }
+                    }}>
+                                    <Search className="h-4 w-4"/>
                                     Fetch Album
                                 </Button>
                             </DialogFooter>
@@ -426,7 +487,7 @@ function App() {
                         if (updatedUrl) {
                             setSpotifyUrl(updatedUrl);
                         }
-                    }} history={fetchHistory} onHistorySelect={handleHistorySelect} onHistoryRemove={removeFromHistory} hasResult={!!metadata.metadata} searchMode={isSearchMode} onSearchModeChange={setIsSearchMode} />
+                    }} history={fetchHistory} onHistorySelect={handleHistorySelect} onHistoryRemove={removeFromHistory} hasResult={!!metadata.metadata} searchMode={isSearchMode} onSearchModeChange={setIsSearchMode}/>
 
                     {!isSearchMode && metadata.metadata && renderMetadata()}
                 </>);
@@ -435,7 +496,7 @@ function App() {
     return (<TooltipProvider>
         <div className="min-h-screen bg-background flex flex-col">
             <TitleBar />
-            <Sidebar currentPage={currentPage} onPageChange={handlePageChange} />
+            <Sidebar currentPage={currentPage} onPageChange={handlePageChange}/>
 
 
             <div className="flex-1 ml-14 mt-10 p-4 md:p-8">
@@ -445,14 +506,14 @@ function App() {
             </div>
 
 
-            <DownloadProgressToast onClick={downloadQueue.openQueue} />
+            <DownloadProgressToast onClick={downloadQueue.openQueue}/>
 
 
-            <DownloadQueue isOpen={downloadQueue.isOpen} onClose={downloadQueue.closeQueue} />
+            <DownloadQueue isOpen={downloadQueue.isOpen} onClose={downloadQueue.closeQueue}/>
 
 
             {showScrollTop && (<Button onClick={scrollToTop} className="fixed bottom-6 right-6 z-50 h-10 w-10 rounded-full shadow-lg" size="icon">
-                <ArrowUp className="h-5 w-5" />
+                <ArrowUp className="h-5 w-5"/>
             </Button>)}
 
 
@@ -470,6 +531,54 @@ function App() {
                         </Button>
                         <Button variant="destructive" onClick={handleDiscardChanges}>
                             Discard Changes
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            
+            <Dialog open={isFFmpegInstalled === false} onOpenChange={() => { }}>
+                <DialogContent className="max-w-[360px] [&>button]:hidden p-6 gap-5">
+                    <DialogHeader className="space-y-2">
+                        <DialogTitle className="text-lg font-bold tracking-tight">
+                            FFmpeg Required
+                        </DialogTitle>
+                        <DialogDescription className="text-sm text-foreground/70 leading-relaxed font-normal">
+                            FFmpeg is essential for SpotiFLAC to function properly.
+                            This setup will download about <span className="text-foreground font-semibold">100-200MB</span> of data.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {isInstallingFFmpeg && (<div className="space-y-4">
+                            {ffmpegInstallStatus === "extracting" ? (<div className="flex flex-col items-center justify-center py-2 animate-in fade-in duration-500">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin"/>
+                                        <span className="text-sm font-bold tracking-tight">Extracting...</span>
+                                    </div>
+                                    <span className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-bold mt-2">Finalizing setup</span>
+                                </div>) : (<div className="space-y-3">
+                                    <div className="flex justify-between text-[11px] font-bold">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-muted-foreground uppercase tracking-wider">Downloading...</span>
+                                            {downloadProgress.is_downloading && downloadProgress.mb_downloaded > 0 && (<span className="text-primary font-mono tabular-nums">
+                                                    {downloadProgress.mb_downloaded.toFixed(1)}MB
+                                                    {downloadProgress.speed_mbps > 0 && ` @ ${downloadProgress.speed_mbps.toFixed(1)}MB/s`}
+                                                </span>)}
+                                        </div>
+                                        <span className="text-xl font-bold tracking-tighter text-primary">{ffmpegInstallProgress}%</span>
+                                    </div>
+                                    <div className="h-1.5 w-full bg-secondary/30 rounded-full overflow-hidden">
+                                        <div className="h-full bg-primary transition-all duration-300 shadow-[0_0_10px_rgba(var(--primary),0.3)]" style={{ width: `${ffmpegInstallProgress}%` }}/>
+                                    </div>
+                                </div>)}
+                        </div>)}
+
+                    <DialogFooter className="flex-row gap-3 pt-2">
+                        {!isInstallingFFmpeg && (<Button variant="outline" className="flex-1 h-11 text-sm font-bold transition-colors" onClick={() => Quit()}>
+                                Exit
+                            </Button>)}
+                        <Button className={`${isInstallingFFmpeg ? 'w-full' : 'flex-1'} h-11 text-sm font-bold shadow-lg shadow-primary/10`} onClick={handleInstallFFmpeg} disabled={isInstallingFFmpeg}>
+                            {isInstallingFFmpeg ? "Installing..." : "Install now"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
