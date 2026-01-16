@@ -42,9 +42,14 @@
           ];
         };
 
+        appimg-wrapped = pkgs.writeShellScriptBin "spotiflac" ''
+          export PATH="${pkgs.ffmpeg}/bin:$PATH"
+          exec ${appimg}/bin/spotiflac "$@"
+        '';
+
         desktopItem = pkgs.makeDesktopItem {
           name = "spotiflac";
-          exec = "${appimg}/bin/spotiflac";
+          exec = "${appimg-wrapped}/bin/spotiflac";
           icon = "${iconSrc}";
           desktopName = "SpotiFLAC";
           genericName = "Music Downloader";
@@ -61,14 +66,14 @@
         packages.default = pkgs.symlinkJoin {
           name = pname;
           paths = [
-            appimg
+            appimg-wrapped
             desktopItem
           ];
         };
 
         apps.default = {
           type = "app";
-          program = "${appimg}/bin/${pname}";
+          program = "${appimg-wrapped}/bin/${pname}";
         };
       }
     );
