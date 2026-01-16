@@ -37,6 +37,7 @@
           inherit pname version src;
           extraPkgs = pkgs: [
             pkgs.ffmpeg
+            pkgs.librsvg
             pkgs.webkitgtk_4_1
           ];
         };
