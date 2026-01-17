@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    # nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.05";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -11,14 +11,14 @@
     {
       self,
       nixpkgs,
-      # nixpkgs-stable,
+      nixpkgs-stable,
       flake-utils,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = import nixpkgs { inherit system; };
-        # pkgs-stable = import nixpkgs-stable { inherit system; };
+        pkgs-stable = import nixpkgs-stable { inherit system; };
 
         pname = "spotiflac";
         version = "7.0.6";
@@ -39,17 +39,18 @@
             pkgs.ffmpeg
             pkgs.librsvg
             pkgs.webkitgtk_4_1
+            pkgs-stable.webkitgtk_4_0
           ];
         };
 
-        appimg-wrapped = pkgs.writeShellScriptBin "spotiflac" ''
-          export PATH="${pkgs.ffmpeg}/bin:$PATH"
-          exec ${appimg}/bin/spotiflac "$@"
-        '';
+        # appimg-wrapped = pkgs.writeShellScriptBin "spotiflac" ''
+        #   export PATH="${pkgs.ffmpeg}/bin:$PATH"
+        #   exec ${appimg}/bin/spotiflac "$@"
+        # '';
 
         desktopItem = pkgs.makeDesktopItem {
           name = "spotiflac";
-          exec = "${appimg-wrapped}/bin/spotiflac";
+          exec = "${appimg}/bin/spotiflac";
           icon = "${iconSrc}";
           desktopName = "SpotiFLAC";
           genericName = "Music Downloader";
@@ -66,14 +67,14 @@
         packages.default = pkgs.symlinkJoin {
           name = pname;
           paths = [
-            appimg-wrapped
+            appimg
             desktopItem
           ];
         };
 
         apps.default = {
           type = "app";
-          program = "${appimg-wrapped}/bin/${pname}";
+          program = "${appimg}/bin/${pname}";
         };
       }
     );
