@@ -1,0 +1,3 @@
+#!/command/with-contenv bash
+
+exec s6-setuidgid $(id -nu $PUID) openbox

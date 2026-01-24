@@ -1,0 +1,13 @@
+#!/command/with-contenv bash
+
+if [ -n "$VNCPWD_FILE" ] && [ -f "$VNCPWD_FILE" ]; then
+  VNCPWD=$(cat $VNCPWD_FILE)
+fi
+
+if [ -z "${VNCPWD}" ]; then
+  noauth="-SecurityTypes None"
+else
+  echo "${VNCPWD}" | vncpasswd -f > /tmp/passwd
+fi
+
+exec s6-setuidgid $(id -nu $PUID) Xtigervnc -desktop spotiflac -auth /tmp/.Xauthority -rfbport ${VNC_PORT} -nopn -rfbauth /tmp/passwd -quiet -AlwaysShared $noauth :1

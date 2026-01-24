@@ -1,0 +1,7 @@
+#!/command/with-contenv bash
+
+export HOME=/data
+export XDG_CONFIG_HOME=/data/config
+umask ${UMASK}
+
+exec s6-setuidgid $(id -nu $PUID) /app/SpotiFLAC

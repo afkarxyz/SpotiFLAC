@@ -1,0 +1,7 @@
+.git
+.gitignore
+*.md
+build/
+frontend/node_modules/
+frontend/dist/
+docker/
