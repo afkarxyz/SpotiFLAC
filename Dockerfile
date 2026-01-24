@@ -1,4 +1,3 @@
-FROM --platform=linux/amd64 ubuntu:22.04 AS builder
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
@@ -14,9 +13,10 @@ RUN apt-get update && \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+# Install Node.js 20
+ENV NODE_VERSION=20.18.0
+RUN curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz | tar -C /usr/local -xz
+ENV PATH="/usr/local/bin:${PATH}"
 
 ENV GO_VERSION=1.23.4
 RUN curl -fsSL https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz | tar -C /usr/local -xz
