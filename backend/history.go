@@ -76,6 +76,9 @@ func SetConfiguration(key, value string) error {
 	}
 	return historyDB.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(configBucket))
+		if b == nil {
+			return fmt.Errorf("config bucket %s not found", configBucket)
+		}
 		return b.Put([]byte(key), []byte(value))
 	})
 }

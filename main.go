@@ -6,9 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"spotiflac/backend"
@@ -29,6 +33,9 @@ func main() {
 	// CLI Flags
 	setOutput := flag.String("set-output", "", "Set the default download directory")
 	outputDir := flag.String("o", "", "Output directory for this download")
+	delay := flag.Duration("delay", 500*time.Millisecond, "Delay between downloads (e.g., 500ms, 1s)")
+	concurrency := flag.Int("c", 3, "Number of concurrent downloads")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s [flags] [spotify-url]\n", os.Args[0])
@@ -37,18 +44,29 @@ func main() {
 	}
 	flag.Parse()
 
+	args := flag.Args()
+
 	// Handle Persistent Config Set
 	if *setOutput != "" {
+		if len(args) > 0 {
+			// Check if a URL was also provided
+			possibleUrl := args[0]
+			if strings.HasPrefix(possibleUrl, "http") {
+				fmt.Fprintln(os.Stderr, "Error: --set-output cannot be used together with a Spotify URL.")
+				flag.Usage()
+				os.Exit(1)
+			}
+		}
 		handleSetOutput(*setOutput)
 		return
 	}
 
 	// Handle CLI Download
-	args := flag.Args()
 	if len(args) > 0 {
 		arg := args[0]
+		// Basic prefix check, full validation happens in runCLI
 		if strings.HasPrefix(arg, "http") && strings.Contains(arg, "spotify.com") {
-			runCLI(app, arg, *outputDir)
+			runCLI(app, arg, *outputDir, *delay, *concurrency)
 			return
 		}
 	}
@@ -96,7 +114,16 @@ func handleSetOutput(path string) {
 	if err != nil {
 		log.Fatalf("Failed to resolve absolute path: %v", err)
 	}
-	
+
+	// Ensure the resolved path is either a directory or does not exist
+	if info, err := os.Stat(absPath); err == nil {
+		if !info.IsDir() {
+			log.Fatalf("Path %s already exists and is not a directory", absPath)
+		}
+	} else if !os.IsNotExist(err) {
+		log.Fatalf("Failed to stat path %s: %v", absPath, err)
+	}
+
 	// Create directory (idempotent)
 	if err := os.MkdirAll(absPath, 0755); err != nil {
 		log.Fatalf("Failed to create directory %s: %v", absPath, err)
@@ -109,12 +136,21 @@ func handleSetOutput(path string) {
 	fmt.Printf("Default download directory set to: %s\n", absPath)
 }
 
-func runCLI(app *App, spotifyURL string, outputDirOverride string) {
-	// Initialize backend manually since Wails isn't doing it
-	// app.startup normally does this, but it takes a context we can provide
-	ctx := context.Background()
+func runCLI(app *App, spotifyURL string, outputDirOverride string, delay time.Duration, concurrency int) {
+	// Manually manage the app lifecycle for CLI mode: in the normal Wails GUI flow,
+	// Wails calls startup/shutdown for us and supplies the context; here we create
+	// a Cancel context and invoke startup/shutdown ourselves to handle signals.
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	app.startup(ctx)
 	defer app.shutdown(ctx)
+
+	// Robust URL validation
+	u, err := url.Parse(spotifyURL)
+	if err != nil || u.Scheme == "" || u.Host == "" || !strings.Contains(u.Host, "spotify.com") {
+		log.Fatalf("Invalid Spotify URL: %s. Must be a valid http/https URL from spotify.com", spotifyURL)
+	}
 
 	fmt.Printf("Analyzing Spotify URL: %s\n", spotifyURL)
 
@@ -142,19 +178,15 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string) {
 	case backend.PlaylistResponsePayload:
 		fmt.Printf("Found Playlist: %s (%d tracks)\n", v.PlaylistInfo.Owner.Name, len(v.TrackList))
 		for _, t := range v.TrackList {
-			req := mapAlbumTrackToDownloadRequest(t, backend.AlbumInfoMetadata{}) 
+			req := mapAlbumTrackToDownloadRequest(t, backend.AlbumInfoMetadata{})
 			tracksToDownload = append(tracksToDownload, req)
 		}
-	
+
 	default:
 		log.Fatalf("Unsupported Spotify content type via CLI: %T", v)
 	}
 
-	fmt.Printf("Queued %d tracks for download...\n", len(tracksToDownload))
-	
-	// Process downloads
-	successCount := 0
-	failCount := 0
+	fmt.Printf("Queued %d tracks for download (Concurrency: %d, Delay: %v)...\n", len(tracksToDownload), concurrency, delay)
 
 	// Determine output directory once
 	finalOutputDir := backend.GetDefaultMusicPath()
@@ -169,62 +201,108 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string) {
 		}
 	}
 
+	// Process downloads concurrently
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, concurrency) // Semaphore to limit concurrency
+	var mu sync.Mutex
+
+	successCount := 0
+	failCount := 0
+
+	total := len(tracksToDownload)
+
 	for i, req := range tracksToDownload {
-		fmt.Printf("[%d/%d] Downloading: %s - %s\n", i+1, len(tracksToDownload), req.TrackName, req.ArtistName)
-		
-		req.OutputDir = finalOutputDir
-
-		// Set default service to Tidal if not specified (struct defaults are empty)
-		if req.Service == "" {
-			req.Service = "tidal"
-		}
-		if req.AudioFormat == "" {
-			req.AudioFormat = "LOSSLESS"
+		// Check for cancellation before starting new downloads
+		select {
+		case <-ctx.Done():
+			fmt.Println("\nDownload cancelled by user.")
+			// Fallthrough to check below
+		default:
 		}
 
-		resp, err := app.DownloadTrack(req)
-		if err != nil {
-			fmt.Printf("Failed: %v\n", err)
-			failCount++
-		} else {
-			if resp.Success {
-				msg := "Done"
+		if ctx.Err() != nil {
+			break
+		}
+
+		wg.Add(1)
+		sem <- struct{}{} // Acquire token
+
+		go func(idx int, r DownloadRequest) {
+			defer wg.Done()
+			defer func() { <-sem }() // Release token
+
+			// Simulating delay for politeness if needed across threads,
+			// though less effective when strictly parallel, still helps stagger requests.
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+
+			r.OutputDir = finalOutputDir
+			if r.Service == "" {
+				r.Service = "tidal"
+			}
+			if r.AudioFormat == "" {
+				r.AudioFormat = "LOSSLESS"
+			}
+
+			resp, err := app.DownloadTrack(r)
+
+			var resultMsg string
+			var isSuccess bool
+
+			if err != nil {
+				resultMsg = fmt.Sprintf("[%d/%d] Failed: %s - %s (%v)", idx+1, total, r.TrackName, r.ArtistName, err)
+				isSuccess = false
+			} else if !resp.Success {
+				resultMsg = fmt.Sprintf("[%d/%d] Failed: %s - %s (%s)", idx+1, total, r.TrackName, r.ArtistName, resp.Error)
+				isSuccess = false
+			} else {
+				status := "Done"
 				if resp.AlreadyExists {
-					msg = "Already Exists"
+					status = "Exists"
 				}
-				fmt.Printf("%s: %s\n", msg, resp.File)
+				resultMsg = fmt.Sprintf("[%d/%d] %s: %s - %s", idx+1, total, status, r.TrackName, r.ArtistName)
+				isSuccess = true
+			}
+
+			// Print immediately (might interleave slightly but acceptable for CLI)
+			fmt.Println(resultMsg)
+
+			mu.Lock()
+			if isSuccess {
 				successCount++
 			} else {
-				fmt.Printf("Failed: %s\n", resp.Error)
 				failCount++
 			}
-		}
-		// Small delay to be nice
-		time.Sleep(500 * time.Millisecond)
+			mu.Unlock()
+
+		}(i, req)
 	}
+
+	wg.Wait()
 
 	fmt.Printf("\nSummary: %d Success, %d Failed. Output dir: %s\n", successCount, failCount, finalOutputDir)
 }
 
 func mapTrackToDownloadRequest(t backend.TrackMetadata) DownloadRequest {
 	return DownloadRequest{
-		SpotifyID:           t.SpotifyID,
-		ISRC:                t.ISRC,
-		TrackName:           t.Name,
-		ArtistName:          t.Artists,
-		AlbumName:           t.AlbumName,
-		AlbumArtist:         t.AlbumArtist,
-		ReleaseDate:         t.ReleaseDate,
-		CoverURL:            t.Images,
-		TrackNumber:         true, 
-		Position:            t.TrackNumber,
-		SpotifyTrackNumber:  t.TrackNumber,
-		SpotifyDiscNumber:   t.DiscNumber,
-		SpotifyTotalTracks:  t.TotalTracks,
-		SpotifyTotalDiscs:   t.TotalDiscs,
-		Copyright:           t.Copyright,
-		Publisher:           t.Publisher,
-		Duration:            t.DurationMS,
+		SpotifyID:          t.SpotifyID,
+		ISRC:               t.ISRC,
+		TrackName:          t.Name,
+		ArtistName:         t.Artists,
+		AlbumName:          t.AlbumName,
+		AlbumArtist:        t.AlbumArtist,
+		ReleaseDate:        t.ReleaseDate,
+		CoverURL:           t.Images,
+		TrackNumber:        true,
+		Position:           t.TrackNumber,
+		SpotifyTrackNumber: t.TrackNumber,
+		SpotifyDiscNumber:  t.DiscNumber,
+		SpotifyTotalTracks: t.TotalTracks,
+		SpotifyTotalDiscs:  t.TotalDiscs,
+		Copyright:          t.Copyright,
+		Publisher:          t.Publisher,
+		Duration:           t.DurationMS,
 	}
 }
 
@@ -254,8 +332,17 @@ func mapAlbumTrackToDownloadRequest(t backend.AlbumTrackMetadata, albumInfo back
 	if req.ReleaseDate == "" {
 		req.ReleaseDate = albumInfo.ReleaseDate
 	}
-	// Note: Playlist items might not have AlbumInfo passed in correctly, logic might need adjustment if playlist tracks lack album data in themselves.
-	// But AlbumTrackMetadata usually has AlbumName.
-	
+
+	// Known limitation: for playlist items, AlbumInfoMetadata may be incomplete or empty.
+	// We check if we can infer from the track metadata itself using fields found in AlbumTrackMetadata if available.
+	if req.AlbumName == "" && t.AlbumName != "" {
+		req.AlbumName = t.AlbumName
+	}
+	if req.ReleaseDate == "" && t.ReleaseDate != "" {
+		req.ReleaseDate = t.ReleaseDate
+	}
+
+	// TODO: Verify how playlist tracks populate AlbumTrackMetadata/AlbumInfoMetadata and extend this fallback logic if playlist tracks can legitimately lack album data.
+
 	return req
 }
