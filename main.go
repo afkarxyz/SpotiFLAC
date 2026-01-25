@@ -62,15 +62,21 @@ func main() {
 	}
 
 	// Handle CLI Download
+	var validURLs []string
 	if len(args) > 0 {
-		arg := args[0]
-		// Validate as an HTTPS Spotify URL before invoking CLI mode
-		if u, err := url.Parse(arg); err == nil && u.Scheme == "https" && strings.Contains(u.Host, "spotify.com") {
-			runCLI(app, arg, *outputDir, *delay, *concurrency)
+		for _, arg := range args {
+			// Validate as an HTTPS Spotify URL
+			if u, err := url.Parse(arg); err == nil && u.Scheme == "https" && strings.Contains(u.Host, "spotify.com") {
+				validURLs = append(validURLs, arg)
+			} else {
+				// Inform the user that the argument was not recognized as a Spotify URL
+				fmt.Fprintf(os.Stderr, "Warning: Unrecognized argument %q. Launching GUI instead (if no valid URLs found).\n", arg)
+			}
+		}
+
+		if len(validURLs) > 0 {
+			runCLI(app, validURLs, *outputDir, *delay, *concurrency)
 			return
-		} else {
-			// Inform the user that the argument was not recognized as a Spotify URL
-			fmt.Fprintf(os.Stderr, "Warning: Unrecognized argument %q. Launching GUI instead.\n", arg)
 		}
 	}
 
@@ -139,7 +145,7 @@ func handleSetOutput(path string) {
 	fmt.Printf("Default download directory set to: %s\n", absPath)
 }
 
-func runCLI(app *App, spotifyURL string, outputDirOverride string, delay time.Duration, concurrency int) {
+func runCLI(app *App, spotifyURLs []string, outputDirOverride string, delay time.Duration, concurrency int) {
 	// Manually manage the app lifecycle for CLI mode: in the normal Wails GUI flow,
 	// Wails calls startup/shutdown for us and supplies the context; here we create
 	// a signal-aware context that cancels on interrupt/termination signals and invoke
@@ -150,44 +156,53 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string, delay time.Du
 	app.startup(ctx)
 	defer app.shutdown(ctx)
 
-	// Robust URL validation
-	u, err := url.Parse(spotifyURL)
-	if err != nil || u.Scheme == "" || u.Host == "" || !strings.Contains(u.Host, "spotify.com") {
-		log.Fatalf("Error: invalid Spotify URL: %s. Must be a valid http/https URL from spotify.com", spotifyURL)
-	}
-
-	fmt.Printf("Analyzing Spotify URL: %s\n", spotifyURL)
-
-	// Fetch metadata directly using backend
-	data, err := backend.GetFilteredSpotifyData(ctx, spotifyURL, false, 0)
-	if err != nil {
-		log.Fatalf("Failed to fetch metadata: %v", err)
-	}
-
 	var tracksToDownload []DownloadRequest
 
-	switch v := data.(type) {
-	case backend.TrackResponse:
-		fmt.Printf("Found Track: %s - %s\n", v.Track.Name, v.Track.Artists)
-		req := mapTrackToDownloadRequest(v.Track)
-		tracksToDownload = append(tracksToDownload, req)
-
-	case *backend.AlbumResponsePayload:
-		fmt.Printf("Found Album: %s - %s (%d tracks)\n", v.AlbumInfo.Name, v.AlbumInfo.Artists, len(v.TrackList))
-		for _, t := range v.TrackList {
-			req := mapAlbumTrackToDownloadRequest(t, v.AlbumInfo)
-			tracksToDownload = append(tracksToDownload, req)
+	for _, spotifyURL := range spotifyURLs {
+		// Robust URL validation (redundant if main checked, but good for safety)
+		u, err := url.Parse(spotifyURL)
+		if err != nil || u.Scheme == "" || u.Host == "" || !strings.Contains(u.Host, "spotify.com") {
+			log.Printf("Error: invalid Spotify URL: %s. Skipping.", spotifyURL)
+			continue
 		}
 
-	case backend.PlaylistResponsePayload:
-		fmt.Printf("Found Playlist: %s (%d tracks)\n", v.PlaylistInfo.Owner.Name, len(v.TrackList))
-		for _, t := range v.TrackList {
-			req := mapAlbumTrackToDownloadRequest(t, backend.AlbumInfoMetadata{})
-			tracksToDownload = append(tracksToDownload, req)
+		fmt.Printf("Analyzing Spotify URL: %s\n", spotifyURL)
+
+		// Fetch metadata directly using backend
+		data, err := backend.GetFilteredSpotifyData(ctx, spotifyURL, false, 0)
+		if err != nil {
+			log.Printf("Failed to fetch metadata for %s: %v", spotifyURL, err)
+			continue
 		}
 
-	default:
-		log.Fatalf("Unsupported Spotify content type via CLI: %T", v)
+		switch v := data.(type) {
+		case backend.TrackResponse:
+			fmt.Printf("Found Track: %s - %s\n", v.Track.Name, v.Track.Artists)
+			req := mapTrackToDownloadRequest(v.Track)
+			tracksToDownload = append(tracksToDownload, req)
+
+		case *backend.AlbumResponsePayload:
+			fmt.Printf("Found Album: %s - %s (%d tracks)\n", v.AlbumInfo.Name, v.AlbumInfo.Artists, len(v.TrackList))
+			for _, t := range v.TrackList {
+				req := mapAlbumTrackToDownloadRequest(t, v.AlbumInfo)
+				tracksToDownload = append(tracksToDownload, req)
+			}
+
+		case backend.PlaylistResponsePayload:
+			fmt.Printf("Found Playlist: %s (%d tracks)\n", v.PlaylistInfo.Owner.Name, len(v.TrackList))
+			for _, t := range v.TrackList {
+				req := mapAlbumTrackToDownloadRequest(t, backend.AlbumInfoMetadata{})
+				tracksToDownload = append(tracksToDownload, req)
+			}
+
+		default:
+			log.Printf("Unsupported Spotify content type via CLI for %s: %T", spotifyURL, v)
+		}
+	}
+
+	if len(tracksToDownload) == 0 {
+		fmt.Println("No tracks found to download.")
+		return
 	}
 
 	fmt.Printf("Queued %d tracks for download (Concurrency: %d, Delay: %v)...\n", len(tracksToDownload), concurrency, delay)
@@ -225,7 +240,7 @@ downloadLoop:
 		wg.Add(1)
 
 		go func(idx int, r DownloadRequest) {
-			sem <- struct{}{} // Acquire token
+			sem <- struct{}{}        // Acquire token
 			defer func() { <-sem }() // Release token
 			defer wg.Done()
 
