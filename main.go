@@ -213,19 +213,15 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string, delay time.Du
 
 	total := len(tracksToDownload)
 
+downloadLoop:
 	for i, req := range tracksToDownload {
 		// Check for cancellation before starting new downloads
 		select {
 		case <-ctx.Done():
 			fmt.Println("\nDownload cancelled by user.")
-			// Fallthrough to check below
+			break downloadLoop
 		default:
 		}
-
-		if ctx.Err() != nil {
-			break
-		}
-
 		wg.Add(1)
 		sem <- struct{}{} // Acquire token
 
