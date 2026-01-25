@@ -96,7 +96,7 @@ func GetConfiguration(key string) (string, error) {
 	err := historyDB.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(configBucket))
 		if b == nil {
-			return nil
+			return fmt.Errorf("config bucket %s not found", configBucket)
 		}
 		v := b.Get([]byte(key))
 		if v != nil {
