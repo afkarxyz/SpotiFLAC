@@ -231,8 +231,12 @@ downloadLoop:
 
 			// Simulating delay for politeness if needed across threads,
 			// though less effective when strictly parallel, still helps stagger requests.
-			if delay > 0 {
-				time.Sleep(delay)
+			clampedDelay := delay
+			if clampedDelay < 0 {
+				clampedDelay = 0
+			}
+			if clampedDelay > 0 {
+				time.Sleep(clampedDelay)
 			}
 
 			r.OutputDir = finalOutputDir
