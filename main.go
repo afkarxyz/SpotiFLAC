@@ -50,8 +50,8 @@ func main() {
 	if *setOutput != "" {
 		if len(args) > 0 {
 			// Check if a URL was also provided
-			possibleUrl := args[0]
-			if strings.HasPrefix(possibleUrl, "http") {
+			possibleURL := args[0]
+			if strings.HasPrefix(possibleURL, "http") {
 				fmt.Fprintln(os.Stderr, "Error: --set-output cannot be used together with a Spotify URL.")
 				flag.Usage()
 				os.Exit(1)
