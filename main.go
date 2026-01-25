@@ -198,11 +198,9 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string, delay time.Du
 		normalizedOverride := backend.NormalizePath(outputDirOverride)
 		absOverride, err := filepath.Abs(normalizedOverride)
 		if err != nil {
-			fmt.Printf("Warning: Failed to resolve absolute path for override: %v. Using as-is.\n", err)
-			finalOutputDir = normalizedOverride
-		} else {
-			finalOutputDir = absOverride
+			log.Fatalf("Failed to resolve absolute path for output directory override %q: %v", outputDirOverride, err)
 		}
+		finalOutputDir = absOverride
 	}
 
 	// Process downloads concurrently
