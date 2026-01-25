@@ -142,7 +142,8 @@ func handleSetOutput(path string) {
 func runCLI(app *App, spotifyURL string, outputDirOverride string, delay time.Duration, concurrency int) {
 	// Manually manage the app lifecycle for CLI mode: in the normal Wails GUI flow,
 	// Wails calls startup/shutdown for us and supplies the context; here we create
-	// a Cancel context and invoke startup/shutdown ourselves to handle signals.
+	// a signal-aware context that cancels on interrupt/termination signals and invoke
+	// startup/shutdown ourselves.
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
