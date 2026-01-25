@@ -68,6 +68,9 @@ func main() {
 		if u, err := url.Parse(arg); err == nil && u.Scheme == "https" && strings.Contains(u.Host, "spotify.com") {
 			runCLI(app, arg, *outputDir, *delay, *concurrency)
 			return
+		} else {
+			// Inform the user that the argument was not recognized as a Spotify URL
+			fmt.Fprintf(os.Stderr, "Warning: Unrecognized argument %q. Launching GUI instead.\n", arg)
 		}
 	}
 
