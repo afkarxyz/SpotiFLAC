@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -90,13 +91,15 @@ func main() {
 
 func handleSetOutput(path string) {
 	// Normalize path (absolute)
-	absPath := backend.NormalizePath(path)
+	normalizedPath := backend.NormalizePath(path)
+	absPath, err := filepath.Abs(normalizedPath)
+	if err != nil {
+		log.Fatalf("Failed to resolve absolute path: %v", err)
+	}
 	
-	// Create directory if it doesn't exist
-	if _, err := os.Stat(absPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(absPath, 0755); err != nil {
-			log.Fatalf("Failed to create directory %s: %v", absPath, err)
-		}
+	// Create directory (idempotent)
+	if err := os.MkdirAll(absPath, 0755); err != nil {
+		log.Fatalf("Failed to create directory %s: %v", absPath, err)
 	}
 
 	if err := backend.SetConfiguration("downloadPath", absPath); err != nil {
@@ -137,7 +140,7 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string) {
 		}
 
 	case backend.PlaylistResponsePayload:
-		fmt.Printf("Found Playlist: %s (%d tracks)\n", v.PlaylistInfo.Description, len(v.TrackList))
+		fmt.Printf("Found Playlist: %s (%d tracks)\n", v.PlaylistInfo.Owner.Name, len(v.TrackList))
 		for _, t := range v.TrackList {
 			req := mapAlbumTrackToDownloadRequest(t, backend.AlbumInfoMetadata{}) 
 			tracksToDownload = append(tracksToDownload, req)
@@ -153,17 +156,23 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string) {
 	successCount := 0
 	failCount := 0
 
+	// Determine output directory once
+	finalOutputDir := backend.GetDefaultMusicPath()
+	if outputDirOverride != "" {
+		normalizedOverride := backend.NormalizePath(outputDirOverride)
+		absOverride, err := filepath.Abs(normalizedOverride)
+		if err != nil {
+			fmt.Printf("Warning: Failed to resolve absolute path for override: %v. Using as-is.\n", err)
+			finalOutputDir = normalizedOverride
+		} else {
+			finalOutputDir = absOverride
+		}
+	}
+
 	for i, req := range tracksToDownload {
 		fmt.Printf("[%d/%d] Downloading: %s - %s\n", i+1, len(tracksToDownload), req.TrackName, req.ArtistName)
 		
-		// Set output directory
-		if outputDirOverride != "" {
-			req.OutputDir = outputDirOverride
-		}
-		
-		if req.OutputDir == "" {
-			req.OutputDir = backend.GetDefaultMusicPath()
-		}
+		req.OutputDir = finalOutputDir
 
 		// Set default service to Tidal if not specified (struct defaults are empty)
 		if req.Service == "" {
@@ -194,7 +203,7 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	fmt.Printf("\nSummary: %d Success, %d Failed. Output dir: %s\n", successCount, failCount, backend.GetDefaultMusicPath())
+	fmt.Printf("\nSummary: %d Success, %d Failed. Output dir: %s\n", successCount, failCount, finalOutputDir)
 }
 
 func mapTrackToDownloadRequest(t backend.TrackMetadata) DownloadRequest {
