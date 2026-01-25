@@ -547,6 +547,10 @@ func (a *App) SelectFile() (string, error) {
 	return backend.SelectFileDialog(a.ctx)
 }
 
+func (a *App) SelectTextFile() (string, error) {
+	return backend.SelectTextFileDialog(a.ctx)
+}
+
 func (a *App) GetDefaults() map[string]string {
 	return map[string]string{
 		"downloadPath": backend.GetDefaultMusicPath(),
