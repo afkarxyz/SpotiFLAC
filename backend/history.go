@@ -29,6 +29,7 @@ var historyDB *bolt.DB
 
 const (
 	historyBucket = "DownloadHistory"
+	configBucket  = "Config"
 	maxHistory    = 10000
 )
 
@@ -49,8 +50,13 @@ func InitHistoryDB(appName string) error {
 	}
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(historyBucket))
-		return err
+		if _, err := tx.CreateBucketIfNotExists([]byte(historyBucket)); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucketIfNotExists([]byte(configBucket)); err != nil {
+			return err
+		}
+		return nil
 	})
 
 	if err != nil {
@@ -60,6 +66,39 @@ func InitHistoryDB(appName string) error {
 
 	historyDB = db
 	return nil
+}
+
+func SetConfiguration(key, value string) error {
+	if historyDB == nil {
+		if err := InitHistoryDB("SpotiFLAC"); err != nil {
+			return err
+		}
+	}
+	return historyDB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(configBucket))
+		return b.Put([]byte(key), []byte(value))
+	})
+}
+
+func GetConfiguration(key string) (string, error) {
+	if historyDB == nil {
+		if err := InitHistoryDB("SpotiFLAC"); err != nil {
+			return "", err
+		}
+	}
+	var value string
+	err := historyDB.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(configBucket))
+		if b == nil {
+			return nil
+		}
+		v := b.Get([]byte(key))
+		if v != nil {
+			value = string(v)
+		}
+		return nil
+	})
+	return value, err
 }
 
 func CloseHistoryDB() {
