@@ -223,11 +223,11 @@ downloadLoop:
 		default:
 		}
 		wg.Add(1)
-		sem <- struct{}{} // Acquire token
 
 		go func(idx int, r DownloadRequest) {
-			defer wg.Done()
+			sem <- struct{}{} // Acquire token
 			defer func() { <-sem }() // Release token
+			defer wg.Done()
 
 			// Simulating delay for politeness if needed across threads,
 			// though less effective when strictly parallel, still helps stagger requests.
