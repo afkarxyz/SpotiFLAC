@@ -64,8 +64,8 @@ func main() {
 	// Handle CLI Download
 	if len(args) > 0 {
 		arg := args[0]
-		// Basic prefix check, full validation happens in runCLI
-		if strings.HasPrefix(arg, "http") && strings.Contains(arg, "spotify.com") {
+		// Validate as an HTTPS Spotify URL before invoking CLI mode
+		if u, err := url.Parse(arg); err == nil && u.Scheme == "https" && strings.Contains(u.Host, "spotify.com") {
 			runCLI(app, arg, *outputDir, *delay, *concurrency)
 			return
 		}
