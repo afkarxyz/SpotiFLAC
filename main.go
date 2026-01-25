@@ -243,7 +243,10 @@ downloadLoop:
 				r.AudioFormat = "LOSSLESS"
 			}
 
+			// Serialize DownloadTrack calls to avoid concurrent toggling of global download state.
+			mu.Lock()
 			resp, err := app.DownloadTrack(r)
+			mu.Unlock()
 
 			var resultMsg string
 			var isSuccess bool
