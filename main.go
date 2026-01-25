@@ -347,7 +347,10 @@ func mapAlbumTrackToDownloadRequest(t backend.AlbumTrackMetadata, albumInfo back
 		req.ReleaseDate = t.ReleaseDate
 	}
 
-	// TODO: Verify how playlist tracks populate AlbumTrackMetadata/AlbumInfoMetadata and extend this fallback logic if playlist tracks can legitimately lack album data.
+	// At this point, playlist items are expected to have AlbumName and ReleaseDate populated
+	// via AlbumTrackMetadata, with AlbumInfoMetadata used as a fallback when available.
+	// If new cases arise where playlist tracks legitimately lack album data, extend the
+	// fallback logic above to cover those scenarios.
 
 	return req
 }
