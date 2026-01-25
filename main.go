@@ -153,7 +153,7 @@ func runCLI(app *App, spotifyURL string, outputDirOverride string, delay time.Du
 	// Robust URL validation
 	u, err := url.Parse(spotifyURL)
 	if err != nil || u.Scheme == "" || u.Host == "" || !strings.Contains(u.Host, "spotify.com") {
-		log.Fatalf("Invalid Spotify URL: %s. Must be a valid http/https URL from spotify.com", spotifyURL)
+		log.Fatalf("Error: invalid Spotify URL: %s. Must be a valid http/https URL from spotify.com", spotifyURL)
 	}
 
 	fmt.Printf("Analyzing Spotify URL: %s\n", spotifyURL)
