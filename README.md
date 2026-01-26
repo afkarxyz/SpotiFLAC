@@ -24,16 +24,23 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 
 ## Other projects
 
-### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader) 
-Get Spotify tracks in MP3 and FLAC via the spotidownloader.com API.
+### [SpotiFLAC Next](https://github.com/spotiverse/SpotiFLAC-Next)
+
+Get Spotify tracks in Hi-Res lossless FLACs — no account required.
+
+### [SpotiDownloader](https://github.com/afkarxyz/SpotiDownloader)
+
+Get Spotify tracks in MP3 and FLAC via spotidownloader.com
 
 ### [SpotubeDL](https://spotubedl.com)
+
 Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
 
 ### [SpotiFLAC (Mobile)](https://github.com/zarzet/SpotiFLAC-Mobile)
+
 SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarzet)
 
-## FAQ (Frequently Asked Questions)
+## FAQ
 
 ### Is this software free?
 
@@ -78,6 +85,7 @@ This project is for **educational and private use only**. The developer does not
 **SpotiFLAC** is a third-party tool and is not affiliated with, endorsed by, or connected to Spotify, Tidal, Qobuz, Amazon Music, or any other streaming service.
 
 You are solely responsible for:
+
 1. Ensuring your use of this software complies with your local laws.
 2. Reading and adhering to the Terms of Service of the respective platforms.
 3. Any legal consequences resulting from the misuse of this tool.
@@ -87,8 +95,7 @@ The software is provided "as is", without warranty of any kind. The author assum
 ## API Credits
 
 - **Tidal**: [hifi-api](https://github.com/binimum/hifi-api)
-- **Qobuz**: [dabmusic.xyz](https://dabmusic.xyz), [squid.wtf](https://squid.wtf)
-- **Amazon Music**: [doubledouble.top](https://doubledouble.top), [lucida.to](https://lucida.to)
+- **Qobuz**: [dabmusic.xyz](https://dabmusic.xyz), [squid.wtf](https://squid.wtf), [jumo-dl](https://jumo-dl.pages.dev/)
 
 > [!TIP]
 >

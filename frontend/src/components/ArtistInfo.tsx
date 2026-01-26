@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Download, FolderOpen, ImageDown, FileText, BadgeCheck } from "lucide-react";
+import { Download, FolderOpen, ImageDown, FileText, BadgeCheck, XCircle, Filter } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SearchAndSort } from "./SearchAndSort";
@@ -10,7 +10,10 @@ import type { TrackMetadata, TrackAvailability } from "@/types/api";
 import { downloadHeader, downloadGalleryImage, downloadAvatar } from "@/lib/api";
 import { getSettings } from "@/lib/settings";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 interface ArtistInfoProps {
     artistInfo: {
         name: string;
@@ -31,6 +34,7 @@ interface ArtistInfoProps {
         release_date: string;
         album_type: string;
         external_urls: string;
+        total_tracks?: number;
     }>;
     trackList: TrackMetadata[];
     searchQuery: string;
@@ -87,12 +91,40 @@ interface ArtistInfoProps {
     }) => void;
     onPageChange: (page: number) => void;
     onTrackClick?: (track: TrackMetadata) => void;
+    onBack?: () => void;
 }
-export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, }: ArtistInfoProps) {
+export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, onBack, }: ArtistInfoProps) {
     const [downloadingHeader, setDownloadingHeader] = useState(false);
     const [downloadingAvatar, setDownloadingAvatar] = useState(false);
     const [downloadingGalleryIndex, setDownloadingGalleryIndex] = useState<number | null>(null);
     const [downloadingAllGallery, setDownloadingAllGallery] = useState(false);
+    const [activeTab, setActiveTab] = useState<"albums" | "tracks" | "gallery">("albums");
+    const filteredAlbumGroups = useMemo(() => {
+        const albumTypeMap = new Map(albumList.map(a => [a.name, a.album_type]));
+        const albumGroups = trackList.reduce((acc, track) => {
+            if (!track.album_name)
+                return acc;
+            if (!acc[track.album_name]) {
+                acc[track.album_name] = {
+                    count: 0,
+                    tracks: [],
+                    type: albumTypeMap.get(track.album_name) || "unknown"
+                };
+            }
+            acc[track.album_name].count++;
+            acc[track.album_name].tracks.push(track);
+            return acc;
+        }, {} as Record<string, {
+            count: number;
+            tracks: TrackMetadata[];
+            type: string;
+        }>);
+        return Object.entries(albumGroups).sort((a, b) => {
+            const dateA = a[1].tracks[0]?.release_date || "";
+            const dateB = b[1].tracks[0]?.release_date || "";
+            return dateB.localeCompare(dateA);
+        });
+    }, [trackList, albumList]);
     const handleDownloadHeader = async () => {
         if (!artistInfo.header)
             return;
@@ -238,13 +270,19 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
             setDownloadingAllGallery(false);
         }
     };
+    const hasGallery = artistInfo.gallery && artistInfo.gallery.length > 0;
     return (<div className="space-y-6">
-      <Card className="overflow-hidden p-0">
+      <Card className="overflow-hidden p-0 relative">
         {artistInfo.header ? (<>
             <div className="relative w-full h-64 bg-cover bg-center">
               <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${artistInfo.header})` }}/>
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"/>
-              <div className="absolute top-4 right-4 z-10">
+              {onBack && (<div className="absolute top-4 right-4 z-10">
+                  <Button variant="ghost" size="icon" onClick={onBack} className="text-white hover:bg-white/20 hover:text-white">
+                      <XCircle className="h-5 w-5"/>
+                  </Button>
+              </div>)}
+              <div className="absolute bottom-4 right-4 z-10">
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button onClick={handleDownloadHeader} size="sm" variant="secondary" disabled={downloadingHeader} className="bg-white/10 hover:bg-white/20 text-white border-white/20">
@@ -277,20 +315,21 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                     <p className="text-sm font-medium text-white/80">Artist</p>
                     <div className="flex items-center gap-2">
                       <h2 className="text-4xl font-bold text-white">{artistInfo.name}</h2>
-                      {artistInfo.verified && (<BadgeCheck className="h-6 w-6 text-blue-400 shrink-0"/>)}
+                      {artistInfo.verified && (<BadgeCheck className="h-6 w-6 text-white fill-blue-400 shrink-0"/>)}
                     </div>
                     {artistInfo.biography && (<p className="text-sm text-white/90">{artistInfo.biography}</p>)}
                     <div className="flex items-center gap-2 text-sm flex-wrap text-white/90">
-                      <span>{artistInfo.followers.toLocaleString()} followers</span>
+                      {artistInfo.rank && (<>
+                          <span>#{artistInfo.rank} rank</span>
+                          <span>•</span>
+                        </>)}
+                      <span>{artistInfo.followers.toLocaleString()} {artistInfo.followers === 1 ? "follower" : "followers"}</span>
                       {artistInfo.listeners && (<>
                           <span>•</span>
-                          <span>{artistInfo.listeners.toLocaleString()} listeners</span>
+                          <span>{artistInfo.listeners.toLocaleString()} {artistInfo.listeners === 1 ? "listener" : "listeners"}</span>
                         </>)}
-                      {artistInfo.rank && (<>
-                          <span>•</span>
-                          <span>#{artistInfo.rank} rank</span>
-                        </>)}
-                      <span>•</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm flex-wrap text-white/90">
                       <span>{albumList.length} {albumList.length === 1 ? "album" : "albums"}</span>
                       <span>•</span>
                       <span>{trackList.length} {trackList.length === 1 ? "track" : "tracks"}</span>
@@ -304,6 +343,11 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
               </div>
             </div>
           </>) : (<CardContent className="px-6 py-6">
+            {onBack && (<div className="absolute top-4 right-4 z-10">
+                <Button variant="ghost" size="icon" onClick={onBack}>
+                    <XCircle className="h-5 w-5"/>
+                </Button>
+            </div>)}
             <div className="flex gap-6 items-start">
               {artistInfo.images && (<div className="relative group">
                   <img src={artistInfo.images} alt={artistInfo.name} className="w-48 h-48 rounded-full shadow-lg object-cover border-4 border-white"/>
@@ -324,23 +368,24 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                 <p className="text-sm font-medium">Artist</p>
                 <div className="flex items-center gap-2">
                   <h2 className="text-4xl font-bold">{artistInfo.name}</h2>
-                  {artistInfo.verified && (<BadgeCheck className="h-6 w-6 text-blue-500 shrink-0"/>)}
+                  {artistInfo.verified && (<BadgeCheck className="h-6 w-6 text-white fill-blue-500 shrink-0"/>)}
                 </div>
                 {artistInfo.biography && (<p className="text-sm text-muted-foreground">{artistInfo.biography}</p>)}
                 <div className="flex items-center gap-2 text-sm flex-wrap">
-                  <span>{artistInfo.followers.toLocaleString()} followers</span>
+                  {artistInfo.rank && (<>
+                      <span>#{artistInfo.rank} rank</span>
+                      <span>•</span>
+                    </>)}
+                  <span>{artistInfo.followers.toLocaleString()} {artistInfo.followers === 1 ? "follower" : "followers"}</span>
                   {artistInfo.listeners && (<>
                       <span>•</span>
-                      <span>{artistInfo.listeners.toLocaleString()} listeners</span>
+                      <span>{artistInfo.listeners.toLocaleString()} {artistInfo.listeners === 1 ? "listener" : "listeners"}</span>
                     </>)}
-                  {artistInfo.rank && (<>
-                      <span>•</span>
-                      <span>#{artistInfo.rank} rank</span>
-                    </>)}
+                </div>
+                <div className="flex items-center gap-2 text-sm flex-wrap">
+                  <span>{albumList.length} {albumList.length === 1 ? "album" : "albums"}</span>
                   <span>•</span>
-                  <span>{albumList.length} albums</span>
-                  <span>•</span>
-                  <span>{trackList.length} tracks</span>
+                  <span>{trackList.length} {trackList.length === 1 ? "track" : "tracks"}</span>
                   {artistInfo.genres.length > 0 && (<>
                       <span>•</span>
                       <span>{artistInfo.genres.join(", ")}</span>
@@ -351,9 +396,23 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
           </CardContent>)}
       </Card>
 
-      {artistInfo.gallery && artistInfo.gallery.length > 0 && (<div className="space-y-4">
+      <div className="border-b">
+        <div className="flex gap-6">
+            <button onClick={() => setActiveTab("albums")} className={`pb-3 text-sm font-medium transition-colors border-b-2 -mb-px hover:text-foreground ${activeTab === "albums" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>
+                Albums
+            </button>
+            <button onClick={() => setActiveTab("tracks")} className={`pb-3 text-sm font-medium transition-colors border-b-2 -mb-px hover:text-foreground ${activeTab === "tracks" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>
+                All Tracks
+            </button>
+            {hasGallery && (<button onClick={() => setActiveTab("gallery")} className={`pb-3 text-sm font-medium transition-colors border-b-2 -mb-px hover:text-foreground ${activeTab === "gallery" ? "border-primary text-foreground" : "border-transparent text-muted-foreground"}`}>
+                    Gallery
+                </button>)}
+        </div>
+      </div>
+
+      {activeTab === "gallery" && hasGallery && (<div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-bold">Gallery ({artistInfo.gallery.length})</h3>
+            <h3 className="text-2xl font-bold">Gallery ({artistInfo.gallery!.length})</h3>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button onClick={handleDownloadAllGallery} size="sm" variant="outline" disabled={downloadingAllGallery}>
@@ -366,7 +425,7 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
             </Tooltip>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {artistInfo.gallery.map((imageUrl, index) => (<div key={index} className="relative group">
+            {artistInfo.gallery!.map((imageUrl, index) => (<div key={index} className="relative group">
                 <div className="relative aspect-square rounded-md overflow-hidden shadow-md">
                   <img src={imageUrl} alt={`${artistInfo.name} gallery ${index + 1}`} className="w-full h-full object-cover"/>
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/50 transition-colors flex items-center justify-center">
@@ -386,29 +445,76 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
           </div>
         </div>)}
 
-      {albumList.length > 0 && (<div className="space-y-4">
+      {activeTab === "albums" && albumList.length > 0 && (<div className="space-y-4">
           <h3 className="text-2xl font-bold">Discography</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {albumList.map((album) => (<div key={album.id} className="group cursor-pointer" onClick={() => onAlbumClick({
                     id: album.id,
                     name: album.name,
                     external_urls: album.external_urls,
                 })}>
-                <div className="relative mb-4">
+                <div className="relative mb-2">
                   {album.images && (<img src={album.images} alt={album.name} className="w-full aspect-square object-cover rounded-md shadow-md transition-shadow group-hover:shadow-xl"/>)}
+                  <div className="absolute bottom-2 right-2">
+                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-black/60 text-white backdrop-blur-[2px]">
+                        {album.album_type}
+                    </span>
+                  </div>
                 </div>
-                <h4 className="font-semibold truncate">{album.name}</h4>
-                <p className="text-sm text-muted-foreground">
-                  {album.release_date?.split("-")[0]}
-                </p>
+                <h4 className="font-semibold truncate text-sm">{album.name}</h4>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                    <span>{album.release_date?.split("-")[0]}</span>
+                    {album.total_tracks && (<>
+                            <span>•</span>
+                            <span>{album.total_tracks} {album.total_tracks === 1 ? "track" : "tracks"}</span>
+                        </>)}
+                </div>
               </div>))}
           </div>
         </div>)}
 
-      {trackList.length > 0 && (<div className="space-y-4">
+      {activeTab === "tracks" && trackList.length > 0 && (<div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-2xl font-bold">All Tracks</h3>
             <div className="flex gap-2 flex-wrap">
+              <Dialog>
+                  <DialogTrigger asChild>
+                      <Button variant="outline" size="sm">
+                          <Filter className="h-4 w-4"/>
+                          Filter Albums
+                      </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[500px] h-[80vh] flex flex-col">
+                      <DialogHeader>
+                          <DialogTitle>Select Albums</DialogTitle>
+                      </DialogHeader>
+                      <ScrollArea className="flex-1 pr-4">
+                          <div className="space-y-4">
+                              {filteredAlbumGroups.map(([albumName, data]) => {
+                const tracksWithIsrc = data.tracks.filter(t => t.isrc);
+                const isSelected = tracksWithIsrc.length > 0 && tracksWithIsrc.every(t => selectedTracks.includes(t.isrc!));
+                return (<div key={albumName} className="flex items-start space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
+                                          <Checkbox id={`album-select-${albumName}`} checked={isSelected} onCheckedChange={() => onToggleSelectAll(data.tracks)} className="mt-1"/>
+                                          <div className="grid gap-1.5 leading-none flex-1">
+                                              <label htmlFor={`album-select-${albumName}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer">
+                                                  {albumName}
+                                              </label>
+                                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                  <span className="capitalize bg-muted px-1.5 py-0.5 rounded text-[10px] font-semibold border">
+                                                      {data.type}
+                                                  </span>
+                                                  <span>•</span>
+                                                  <span>{data.count} tracks</span>
+                                                  <span>•</span>
+                                                  <span>{data.tracks[0]?.release_date?.split('-')[0] || 'Unknown Year'}</span>
+                                              </div>
+                                          </div>
+                                      </div>);
+            })}
+                          </div>
+                      </ScrollArea>
+                  </DialogContent>
+              </Dialog>
               <Button onClick={onDownloadAll} size="sm" disabled={isDownloading}>
                 {isDownloading && bulkDownloadType === "all" ? (<Spinner />) : (<Download className="h-4 w-4"/>)}
                 Download All
