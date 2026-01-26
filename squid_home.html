@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SQUID.WTF - Home</title>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      body {
+        font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+
+      #matrix {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        opacity: 0.15;
+        will-change: transform;
+      }
+
+      body > * {
+        position: relative;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body class="bg-black text-white min-h-screen flex flex-col overflow-x-hidden p-5">
+    <canvas id="matrix"></canvas>
+    
+    <header class="text-center my-10">
+      <h1 class="text-5xl font-bold mb-2.5 tracking-tighter">SQUID.WTF</h1>
+      <p class="text-base text-gray-400">Music Tools & Utilities</p>
+    </header>
+    
+    <div id="messageBlock" class="max-w-4xl mx-auto w-full mb-6">
+      <div class="message-item bg-transparent border border-yellow-500 border-opacity-20 rounded-xl p-4 text-center text-yellow-400 backdrop-blur">
+        <p class="text-sm font-medium">Beware Mobile Users ⚠️</p>
+        <p class="text-xs mt-1 text-yellow-300">Mobile devices lack sufficient RAM. Please use a desktop computer.</p>
+      </div>
+    </div>
+
+    <main class="flex-1 max-w-4xl mx-auto w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      <div class="service bg-transparent border border-emerald-500 border-opacity-20 rounded-xl p-7 text-center transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/30 hover:border-emerald-500/50 hover:-translate-y-0.5 backdrop-blur">
+        <img src="/assets/tidal-logo.png" alt="Tidal" class="w-24 h-auto mx-auto mb-3" />
+        <a href="https://tidal.squid.wtf/" class="inline-block text-gray-500 no-underline text-lg font-medium my-2 transition-colors duration-200 hover:text-emerald-500 hover:underline">Enter</a>
+        <div class="text-xs text-gray-500 my-2 font-mono">Lossy: AAC 320k<br>Lossless: 192k 24bits</div>
+      </div>
+		
+      <div class="service bg-transparent border border-emerald-500 border-opacity-20 rounded-xl p-7 text-center transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/30 hover:border-emerald-500/50 hover:-translate-y-0.5 backdrop-blur">
+        <img src="/assets/qobuz-logo.png" alt="Qobuz" class="w-24 h-auto mx-auto mb-3" />
+        <a href="https://qobuz.squid.wtf/" class="inline-block text-gray-500 no-underline text-lg font-medium my-2 transition-colors duration-200 hover:text-emerald-500 hover:underline">Enter</a>
+        <div class="text-xs text-gray-500 my-2 font-mono">Lossy: MP3 320k<br>Lossless: 192k 24bits</div>
+      </div>
+
+      <div class="service bg-transparent border border-emerald-500 border-opacity-20 rounded-xl p-7 text-center transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/30 hover:border-emerald-500/50 hover:-translate-y-0.5 backdrop-blur">
+        <img src="/assets/amazon-logo.png" alt="Amazon Music" class="w-24 h-auto mx-auto mb-3" />
+        <a href="https://amz.squid.wtf/" class="inline-block text-gray-500 no-underline text-lg font-medium my-2 transition-colors duration-200 hover:text-emerald-500 hover:underline">Enter</a>
+        <div class="text-xs text-gray-500 my-2 font-mono">Lossy: Opus 320k<br>Lossless: 192k 24bits</div>
+      </div>
+
+      <div class="service bg-transparent border border-emerald-500 border-opacity-20 rounded-xl p-7 text-center transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/30 hover:border-emerald-500/50 hover:-translate-y-0.5 backdrop-blur">
+        <img src="/assets/soundcloud-logo.png" alt="Soundcloud" class="w-24 h-auto mx-auto mb-3" />
+        <a href="https://sc.squid.wtf/" class="inline-block text-gray-500 no-underline text-lg font-medium my-2 transition-colors duration-200 hover:text-emerald-500 hover:underline">Enter</a>
+        <div class="text-xs text-gray-500 my-2 font-mono">Lossy: MP3 320k</div>
+      </div>
+
+      <div class="service bg-transparent border border-emerald-500 border-opacity-20 rounded-xl p-7 text-center transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/30 hover:border-emerald-500/50 hover:-translate-y-0.5 backdrop-blur">
+        <div class="text-base font-semibold mb-3">KHInsider</div>
+        <a href="https://khinsider.squid.wtf/" class="inline-block text-gray-500 no-underline text-lg font-medium my-2 transition-colors duration-200 hover:text-emerald-500 hover:underline">Enter</a>
+        <div class="text-xs text-gray-500 my-2 font-mono">Lossy: varies<br>Lossless: 44k 16bits</div>
+      </div>
+
+      <div class="service bg-transparent border border-emerald-500 border-opacity-20 rounded-xl p-7 text-center transition-all duration-300 hover:shadow-lg hover:shadow-emerald-500/30 hover:border-emerald-500/50 hover:-translate-y-0.5 backdrop-blur">
+        <img src="/assets/music-bars.svg" alt="Spectrum" class="w-24 h-auto mx-auto mb-3" />
+        <div class="text-base font-semibold mb-3">Spectrum Analyzer</div>
+        <a href="https://spec.squid.wtf/" class="inline-block text-gray-500 no-underline text-lg font-medium my-2 transition-colors duration-200 hover:text-emerald-500 hover:underline">Enter</a>
+        <div class="text-sm text-gray-600 mt-2">Audio spectrum analyzer</div>
+      </div>
+    </main>
+
+    <footer class="mt-16 pt-5 border-t border-emerald-500 border-opacity-20 flex justify-center gap-7 flex-wrap">
+      <a href="https://discord.gg/yuvnx7FS89" class="text-gray-500 no-underline text-sm transition-colors duration-200 hover:text-emerald-500">Discord</a>
+      <a href="https://status.squid.wtf/" class="text-gray-500 no-underline text-sm transition-colors duration-200 hover:text-emerald-500">Status</a>
+      <a href="https://console.calibour.com/donate/6c4ad0b2-1d4a-4e8e-8e7a-3d048025af54" class="text-gray-500 no-underline text-sm transition-colors duration-200 hover:text-emerald-500">Donate</a>
+    </footer>
+  </body>
+  <script>
+    function initMatrix() {
+      const canvas = document.getElementById('matrix');
+      if (!canvas) {
+        console.error('Canvas not found');
+        return;
+      }
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.error('Canvas context not available');
+        return;
+      }
+      
+      function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
+      
+      resizeCanvas();
+      
+      const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
+      const fontSize = 16;
+      let columns = Math.floor(canvas.width / fontSize);
+      
+      const drops = [];
+      const rows = Math.ceil(canvas.height / fontSize);
+      for (let i = 0; i < columns; i++) {
+        drops[i] = Math.floor(Math.random() * rows);
+      }
+      
+      let lastTime = 0;
+      const targetFPS = 30;
+      const frameInterval = 1000 / targetFPS;
+      
+      function draw(currentTime) {
+        requestAnimationFrame(draw);
+        
+        const elapsed = currentTime - lastTime;
+        if (elapsed < frameInterval) {
+          return;
+        }
+        lastTime = currentTime - (elapsed % frameInterval);
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#00c864';
+        ctx.font = 'bold ' + fontSize + 'px monospace';
+        ctx.globalAlpha = 1;
+        
+        for (let i = 0; i < drops.length; i++) {
+          const text = chars[Math.floor(Math.random() * chars.length)];
+          ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+          
+          if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+            drops[i] = 0;
+          }
+          drops[i]++;
+        }
+      }
+      
+      requestAnimationFrame(draw);
+      
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+        columns = Math.floor(canvas.width / fontSize);
+        const newRows = Math.ceil(canvas.height / fontSize);
+        drops.length = 0;
+        for (let i = 0; i < columns; i++) {
+          drops[i] = Math.floor(Math.random() * newRows);
+        }
+      });
+    }
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initMatrix);
+    } else {
+      initMatrix();
+    }
+  </script>
+</html>

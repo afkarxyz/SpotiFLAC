@@ -244,7 +244,7 @@ func (t *TidalDownloader) GetTrackInfoByID(trackID int64) (*TidalTrack, error) {
 	}
 
 	trackBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkudGlkYWwuY29tL3YxL3RyYWNrcy8=")
-	trackURL := fmt.Sprintf("%s%d?countryCode=US", string(trackBase), trackID)
+	trackURL := fmt.Sprintf("%s%d?countryCode=IN", string(trackBase), trackID)
 
 	req, err := http.NewRequest("GET", trackURL, nil)
 	if err != nil {

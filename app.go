@@ -301,7 +301,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	case "amazon":
 		downloader := backend.NewAmazonDownloader()
 		if req.ServiceURL != "" {
-
+			// Direct URL download - no fallback possible as we don't have Spotify ID usually
 			filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
 		} else {
 			if req.SpotifyID == "" {
@@ -310,7 +310,61 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 					Error:   "Spotify ID is required for Amazon Music",
 				}, fmt.Errorf("spotify ID is required for Amazon Music")
 			}
+			
+			// Attempt Amazon download first
+			fmt.Println("Attempting download via Amazon Music...")
 			filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
+			
+			// Fallback logic if Amazon fails
+			if err != nil {
+				fmt.Printf("Amazon download failed: %v. Initiating fallback strategy...\n", err)
+				
+				// Initialize SongLink client to find alternative links
+				songlinkClient := backend.NewSongLinkClient()
+				
+				// Try Tidal Fallback
+				fmt.Println("Fallback 1: Attempting Tidal...")
+				tidalURL, tidalErr := songlinkClient.GetTidalURLFromSpotify(req.SpotifyID)
+				if tidalErr == nil && tidalURL != "" {
+					fmt.Printf("Found Tidal URL: %s\n", tidalURL)
+					tidalDownloader := backend.NewTidalDownloader("") // Use default/auto API
+					filename, err = tidalDownloader.DownloadByURLWithFallback(tidalURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
+					if err == nil {
+						fmt.Println("✓ Fallback to Tidal successful")
+					} else {
+						fmt.Printf("✗ Tidal fallback failed: %v\n", err)
+					}
+				} else {
+					fmt.Println("✗ Tidal URL not found or error getting it")
+				}
+
+				// If Tidal failed or wasn't found, Try Qobuz Fallback
+				if err != nil {
+					fmt.Println("Fallback 2: Attempting Qobuz...")
+					deezerURL, deezerErr := songlinkClient.GetDeezerURLFromSpotify(req.SpotifyID)
+					if deezerErr == nil && deezerURL != "" {
+						deezerISRC, isrcErr := backend.GetDeezerISRC(deezerURL)
+						if isrcErr == nil && deezerISRC != "" {
+							fmt.Printf("Found Deezer ISRC for Qobuz: %s\n", deezerISRC)
+							qobuzDownloader := backend.NewQobuzDownloader()
+							quality := req.AudioFormat
+							if quality == "" {
+								quality = "6" // FLAC 16-bit default
+							}
+							filename, err = qobuzDownloader.DownloadByISRC(deezerISRC, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL)
+							if err == nil {
+								fmt.Println("✓ Fallback to Qobuz successful")
+							} else {
+								fmt.Printf("✗ Qobuz fallback failed: %v\n", err)
+							}
+						} else {
+							fmt.Println("✗ Could not get ISRC from Deezer for Qobuz")
+						}
+					} else {
+						fmt.Println("✗ Deezer URL (for Qobuz lookup) not found")
+					}
+				}
+			}
 		}
 
 	case "tidal":
