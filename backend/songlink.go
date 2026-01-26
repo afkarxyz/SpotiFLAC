@@ -448,3 +448,94 @@ func GetDeezerISRC(deezerURL string) (string, error) {
 	fmt.Printf("Found ISRC from Deezer: %s (track: %s)\n", deezerTrack.ISRC, deezerTrack.Title)
 	return deezerTrack.ISRC, nil
 }
+
+func (s *SongLinkClient) GetTidalURLFromSpotify(spotifyTrackID string) (string, error) {
+
+	now := time.Now()
+	if now.Sub(s.apiCallResetTime) >= time.Minute {
+		s.apiCallCount = 0
+		s.apiCallResetTime = now
+	}
+
+	if s.apiCallCount >= 9 {
+		waitTime := time.Minute - now.Sub(s.apiCallResetTime)
+		if waitTime > 0 {
+			fmt.Printf("Rate limit reached, waiting %v...\n", waitTime.Round(time.Second))
+			time.Sleep(waitTime)
+			s.apiCallCount = 0
+			s.apiCallResetTime = time.Now()
+		}
+	}
+
+	if !s.lastAPICallTime.IsZero() {
+		timeSinceLastCall := now.Sub(s.lastAPICallTime)
+		minDelay := 7 * time.Second
+		if timeSinceLastCall < minDelay {
+			waitTime := minDelay - timeSinceLastCall
+			fmt.Printf("Rate limiting: waiting %v...\n", waitTime.Round(time.Second))
+			time.Sleep(waitTime)
+		}
+	}
+
+	spotifyBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9vcGVuLnNwb3RpZnkuY29tL3RyYWNrLw==")
+	spotifyURL := fmt.Sprintf("%s%s", string(spotifyBase), spotifyTrackID)
+
+	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkuc29uZy5saW5rL3YxLWFscGhhLjEvbGlua3M/dXJsPQ==")
+	apiURL := fmt.Sprintf("%s%s", string(apiBase), url.QueryEscape(spotifyURL))
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	fmt.Println("Getting Tidal URL from song.link...")
+
+	maxRetries := 3
+	var resp *http.Response
+	for i := 0; i < maxRetries; i++ {
+		resp, err = s.client.Do(req)
+		if err != nil {
+			return "", fmt.Errorf("failed to get Tidal URL: %w", err)
+		}
+
+		s.lastAPICallTime = time.Now()
+		s.apiCallCount++
+
+		if resp.StatusCode == 429 {
+			resp.Body.Close()
+			if i < maxRetries-1 {
+				waitTime := 15 * time.Second
+				fmt.Printf("Rate limited by API, waiting %v before retry...\n", waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
+			return "", fmt.Errorf("API rate limit exceeded after %d retries", maxRetries)
+		}
+
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+			return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		break
+	}
+	defer resp.Body.Close()
+
+	var songLinkResp struct {
+		LinksByPlatform map[string]struct {
+			URL string `json:"url"`
+		} `json:"linksByPlatform"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]
+	if !ok || tidalLink.URL == "" {
+		return "", fmt.Errorf("tidal link not found")
+	}
+
+	tidalURL := tidalLink.URL
+	fmt.Printf("Found Tidal URL: %s\n", tidalURL)
+	return tidalURL, nil
+}

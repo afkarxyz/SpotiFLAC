@@ -68,7 +68,7 @@ func NewAmazonDownloader() *AmazonDownloader {
 		client: &http.Client{
 			Timeout: 120 * time.Second,
 		},
-		regions:          []string{"us", "eu"},
+		regions:          []string{"us", "eu", "in"},
 		apiCallResetTime: time.Now(),
 	}
 }
@@ -186,7 +186,7 @@ func (a *AmazonDownloader) GetAmazonURLFromSpotify(spotifyTrackID string) (strin
 		if len(parts) > 1 {
 			trackAsin := strings.Split(parts[1], "&")[0]
 			musicBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9tdXNpYy5hbWF6b24uY29tL3RyYWNrcy8=")
-			amazonURL = fmt.Sprintf("%s%s?musicTerritory=US", string(musicBase), trackAsin)
+			amazonURL = fmt.Sprintf("%s%s?musicTerritory=IN", string(musicBase), trackAsin)
 		}
 	}
 
