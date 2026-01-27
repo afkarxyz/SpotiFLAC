@@ -319,10 +319,14 @@ function App() {
 
     const toggleSelectAll = (tracks: any[]) => {
         const tracksWithIsrc = tracks.filter((track) => track.isrc).map((track) => track.isrc);
-        if (selectedTracks.length === tracksWithIsrc.length) {
-            setSelectedTracks([]);
+        if (tracksWithIsrc.length === 0) {
+            return;
+        }
+        const allSelected = tracksWithIsrc.every((isrc) => selectedTracks.includes(isrc));
+        if (allSelected) {
+            setSelectedTracks((prev) => prev.filter((isrc) => !tracksWithIsrc.includes(isrc)));
         } else {
-            setSelectedTracks(tracksWithIsrc);
+            setSelectedTracks((prev) => Array.from(new Set([...prev, ...tracksWithIsrc])));
         }
     };
 
@@ -757,7 +761,7 @@ function App() {
 
                 <DownloadQueue isOpen={downloadQueue.isOpen} onClose={downloadQueue.closeQueue} />
 
-                {/* Batch Download Dialog */}
+                {/* Batch Download Dialog*/}
                 <BatchDownloadDialog 
                     isOpen={isBatchDialogOpen} 
                     onClose={() => setIsBatchDialogOpen(false)} 

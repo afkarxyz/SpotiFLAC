@@ -36,7 +36,7 @@ export function Sidebar({ currentPage, onPageChange, onOpenBatch }: SidebarProps
                     </TooltipContent>
                 </Tooltip>
 
-                {/* Batch Download Button */}
+                {}
                 <Tooltip delayDuration={0}>
                     <TooltipTrigger asChild>
                         <Button 
@@ -119,7 +119,6 @@ export function Sidebar({ currentPage, onPageChange, onOpenBatch }: SidebarProps
                     </TooltipContent>
                 </Tooltip>
             </div>
-
 
             <div className="mt-auto flex flex-col gap-2">
                 <Tooltip delayDuration={0}>

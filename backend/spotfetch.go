@@ -112,7 +112,7 @@ func (c *SpotifyClient) getAccessToken() error {
 	q.Add("totpServer", totpCode)
 	req.URL.RawQuery = q.Encode()
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
 	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
 
 	resp, err := c.client.Do(req)
@@ -149,7 +149,7 @@ func (c *SpotifyClient) getSessionInfo() error {
 		return err
 	}
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
 
 	for name, value := range c.cookies {
 		req.AddCookie(&http.Cookie{Name: name, Value: value})
@@ -230,7 +230,7 @@ func (c *SpotifyClient) getClientToken() error {
 	req.Header.Set("Authority", "clienttoken.spotify.com")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -288,7 +288,7 @@ func (c *SpotifyClient) Query(payload map[string]interface{}) (map[string]interf
 	req.Header.Set("Client-Token", c.clientToken)
 	req.Header.Set("Spotify-App-Version", c.clientVersion)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -772,18 +772,22 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 		totalDiscs = discInfo["totalDiscs"].(int)
 	}
 
+	contentRating := getMap(trackData, "contentRating")
+	isExplicit := getString(contentRating, "label") == "EXPLICIT"
+
 	filtered := map[string]interface{}{
-		"id":        getString(trackData, "id"),
-		"name":      getString(trackData, "name"),
-		"artists":   artistsString,
-		"album":     albumInfo,
-		"duration":  durationString,
-		"track":     int(getFloat64(trackData, "trackNumber")),
-		"disc":      discNumber,
-		"discs":     totalDiscs,
-		"copyright": copyrightString,
-		"plays":     getString(trackData, "playcount"),
-		"cover":     cover,
+		"id":          getString(trackData, "id"),
+		"name":        getString(trackData, "name"),
+		"artists":     artistsString,
+		"album":       albumInfo,
+		"duration":    durationString,
+		"track":       int(getFloat64(trackData, "trackNumber")),
+		"disc":        discNumber,
+		"discs":       totalDiscs,
+		"copyright":   copyrightString,
+		"plays":       getString(trackData, "playcount"),
+		"cover":       cover,
+		"is_explicit": isExplicit,
 	}
 
 	return filtered
@@ -871,13 +875,17 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 				trackID = parts[len(parts)-1]
 			}
 
+			contentRating := getMap(track, "contentRating")
+			isExplicit := getString(contentRating, "label") == "EXPLICIT"
+
 			trackInfo := map[string]interface{}{
-				"id":        trackID,
-				"name":      getString(track, "name"),
-				"artists":   trackArtistsString,
-				"artistIds": artistIDs,
-				"duration":  durationString,
-				"plays":     getString(track, "playcount"),
+				"id":          trackID,
+				"name":        getString(track, "name"),
+				"artists":     trackArtistsString,
+				"artistIds":   artistIDs,
+				"duration":    durationString,
+				"plays":       getString(track, "playcount"),
+				"is_explicit": isExplicit,
 			}
 			tracks = append(tracks, trackInfo)
 		}
@@ -1092,6 +1100,9 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 				}
 			}
 
+			contentRating := getMap(trackData, "contentRating")
+			isExplicit := getString(contentRating, "label") == "EXPLICIT"
+
 			trackInfo := map[string]interface{}{
 				"id":          trackID,
 				"cover":       trackCover,
@@ -1104,6 +1115,7 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 				"albumArtist": albumArtistsString,
 				"albumId":     albumID,
 				"duration":    durationString,
+				"is_explicit": isExplicit,
 			}
 			tracks = append(tracks, trackInfo)
 		}
@@ -1197,12 +1209,20 @@ func extractRelease(release map[string]interface{}) map[string]interface{} {
 		year = yearVal
 	}
 
+	var totalTracks int
+	tracksInfo := getMap(release, "tracks")
+	if tracksInfo != nil {
+		totalTracks = int(getFloat64(tracksInfo, "totalCount"))
+	}
+
 	return map[string]interface{}{
-		"id":    releaseID,
-		"name":  getString(release, "name"),
-		"cover": cover,
-		"date":  releaseDate,
-		"year":  year,
+		"id":           releaseID,
+		"name":         getString(release, "name"),
+		"cover":        cover,
+		"date":         releaseDate,
+		"year":         year,
+		"total_tracks": totalTracks,
+		"type":         getString(release, "type"),
 	}
 }
 
@@ -1472,14 +1492,18 @@ func FilterSearch(data map[string]interface{}) map[string]interface{} {
 				albumName = getString(albumInfo, "name")
 			}
 
+			contentRating := getMap(track, "contentRating")
+			isExplicit := getString(contentRating, "label") == "EXPLICIT"
+
 			trackResults := results["tracks"].([]map[string]interface{})
 			trackResults = append(trackResults, map[string]interface{}{
-				"id":       trackID,
-				"name":     trackName,
-				"artists":  trackArtistsString,
-				"album":    albumName,
-				"duration": durationString,
-				"cover":    cover,
+				"id":          trackID,
+				"name":        trackName,
+				"artists":     trackArtistsString,
+				"album":       albumName,
+				"duration":    durationString,
+				"cover":       cover,
+				"is_explicit": isExplicit,
 			})
 			results["tracks"] = trackResults
 		}

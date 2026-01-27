@@ -19,6 +19,7 @@ interface CheckFileExistenceRequest {
     filename_format?: string;
     include_track_number?: boolean;
     audio_format?: string;
+    relative_path?: string;
 }
 interface FileExistenceResult {
     spotify_id: string;
@@ -29,7 +30,7 @@ interface FileExistenceResult {
 }
 const CheckFilesExistence = (outputDir: string, tracks: CheckFileExistenceRequest[]): Promise<FileExistenceResult[]> => (window as any)["go"]["main"]["App"]["CheckFilesExistence"](outputDir, tracks);
 const SkipDownloadItem = (itemID: string, filePath: string): Promise<void> => (window as any)["go"]["main"]["App"]["SkipDownloadItem"](itemID, filePath);
-export function useDownload() {
+export function useDownload(region: string) {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
@@ -141,7 +142,7 @@ export function useDownload() {
             if (spotifyId) {
                 try {
                     const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
-                    const urlsJson = await GetStreamingURLs(spotifyId);
+                    const urlsJson = await GetStreamingURLs(spotifyId, region);
                     streamingURLs = JSON.parse(urlsJson);
                 }
                 catch (err) {
@@ -372,8 +373,9 @@ export function useDownload() {
             year: yearValue,
             playlist: folderName?.replace(/\//g, placeholder),
         };
-        const useAlbumTag = settings.folderTemplate?.includes("{album}");
-        if (folderName && (!isAlbum || !useAlbumTag)) {
+        const folderTemplate = settings.folderTemplate || "";
+        const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
+        if (folderName && (!isAlbum || !useAlbumSubfolder)) {
             outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
         }
         if (settings.folderTemplate) {
@@ -391,7 +393,7 @@ export function useDownload() {
             if (spotifyId) {
                 try {
                     const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
-                    const urlsJson = await GetStreamingURLs(spotifyId);
+                    const urlsJson = await GetStreamingURLs(spotifyId, region);
                     streamingURLs = JSON.parse(urlsJson);
                 }
                 catch (err) {

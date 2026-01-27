@@ -74,3 +74,26 @@ func SelectFileDialog(ctx context.Context) (string, error) {
 
 	return selectedFile, nil
 }
+
+func SelectImageVideoDialog(ctx context.Context) ([]string, error) {
+	options := wailsRuntime.OpenDialogOptions{
+		Title: "Select Image or Video",
+		Filters: []wailsRuntime.FileFilter{
+			{
+				DisplayName: "Supported Files (*.jpg, *.png, *.mp4, *.mov, ...)",
+				Pattern:     "*.jpg;*.jpeg;*.png;*.gif;*.webp;*.mp4;*.mkv;*.webm;*.mov",
+			},
+			{
+				DisplayName: "All Files (*.*)",
+				Pattern:     "*.*",
+			},
+		},
+	}
+
+	selectedPaths, err := wailsRuntime.OpenMultipleFilesDialog(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return selectedPaths, nil
+}
