@@ -1,0 +1,20 @@
+version: '3'
+services:
+  spotiflac:
+    platform: linux/amd64
+    build: .
+    environment:
+      - PGID=1000
+      - PUID=1000
+      - TZ=America/Sao_Paulo
+    ports:
+      - 6090:6090
+    volumes:
+      - appdata:/data/appdata
+      - config:/data/config
+      - downloads:/data/Downloads
+
+volumes:
+  appdata:
+  config:
+  downloads:
