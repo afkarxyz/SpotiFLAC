@@ -40,6 +40,19 @@ Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
 
 SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarzet)
 
+## Telegram
+
+<p align="center">
+  <a href="https://t.me/spotiflac">
+    <img src="https://img.shields.io/badge/Telegram-Channel-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Channel">
+  </a>
+
+  <a href="https://t.me/spotiflac_chat">
+    <img src="https://img.shields.io/badge/Telegram-Community-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Community">
+  </a>
+</p>
+
+
 ## FAQ
 
 ### Is this software free?
