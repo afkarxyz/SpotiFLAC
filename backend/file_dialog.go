@@ -47,3 +47,30 @@ func SelectOutputDirectory(ctx context.Context) (string, error) {
 	}
 	return dir, nil
 }
+
+func SelectTextFileDialog(ctx context.Context) (string, error) {
+	options := runtime.OpenDialogOptions{
+		Title: "Select URL List File",
+		Filters: []runtime.FileFilter{
+			{
+				DisplayName: "Text Files (*.txt)",
+				Pattern:     "*.txt",
+			},
+			{
+				DisplayName: "All Files (*.*)",
+				Pattern:     "*.*",
+			},
+		},
+	}
+
+	selectedFile, err := runtime.OpenFileDialog(ctx, options)
+	if err != nil {
+		return "", err
+	}
+
+	if selectedFile == "" {
+		return "", nil
+	}
+
+	return selectedFile, nil
+}
