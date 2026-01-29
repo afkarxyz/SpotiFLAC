@@ -21,8 +21,8 @@ func main() {
 		Title:     "SpotiFLAC",
 		Width:     1024,
 		Height:    600,
-		MinWidth:  1024,
-		MinHeight: 600,
+		MinWidth:  400,
+		MinHeight: 300,
 		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
