@@ -329,6 +329,15 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
 
         <div className="border-t"/>
 
+        <div className="flex items-center gap-3">
+          <div className="flex items-center space-x-2">
+            <Switch id="group-singles" checked={tempSettings.groupSinglesInFolder} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, groupSinglesInFolder: checked }))}/>
+            <Label htmlFor="group-singles" className="text-sm font-normal cursor-pointer">Group single-track releases in "_SINGLES" folder</Label>
+          </div>
+        </div>
+
+        <div className="border-t"/>
+
 
         <div className="space-y-1">
           <div className="flex items-center gap-2">

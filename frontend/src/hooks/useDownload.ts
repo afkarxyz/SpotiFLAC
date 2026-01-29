@@ -390,6 +390,9 @@ export function useDownload(region: string) {
                 }
             }
         }
+        if (settings.groupSinglesInFolder && spotifyTotalTracks === 1 && spotifyTotalDiscs === 1) {
+            outputDir = joinPath(os, settings.downloadPath, "_SINGLES");
+        }
         if (service === "auto") {
             let streamingURLs: any = null;
             if (spotifyId) {
