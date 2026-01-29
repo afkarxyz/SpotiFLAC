@@ -26,7 +26,6 @@ export interface Settings {
     autoOrder: "tidal-qobuz-amazon" | "tidal-amazon-qobuz" | "qobuz-tidal-amazon" | "qobuz-amazon-tidal" | "amazon-tidal-qobuz" | "amazon-qobuz-tidal" | "tidal-qobuz" | "tidal-amazon" | "qobuz-tidal" | "qobuz-amazon" | "amazon-tidal" | "amazon-qobuz";
     autoQuality: "16" | "24";
     allowFallback: boolean;
-    groupSinglesInFolder: boolean;
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -102,8 +101,7 @@ export const DEFAULT_SETTINGS: Settings = {
     amazonQuality: "original",
     autoOrder: "tidal-qobuz-amazon",
     autoQuality: "16",
-    allowFallback: true,
-    groupSinglesInFolder: false
+    allowFallback: true
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
@@ -213,9 +211,6 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('allowFallback' in parsed)) {
                 parsed.allowFallback = true;
             }
-            if (!('groupSinglesInFolder' in parsed)) {
-                parsed.groupSinglesInFolder = false;
-            }
             return { ...DEFAULT_SETTINGS, ...parsed };
         }
     }
@@ -294,9 +289,6 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('allowFallback' in parsed)) {
                 parsed.allowFallback = true;
-            }
-            if (!('groupSinglesInFolder' in parsed)) {
-                parsed.groupSinglesInFolder = false;
             }
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
             return cachedSettings!;
