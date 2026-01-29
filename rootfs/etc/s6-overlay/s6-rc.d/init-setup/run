@@ -1,0 +1,31 @@
+#!/command/with-contenv bash
+
+touch /tmp/.Xauthority
+mkdir -p /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix
+
+ensure_ownership_and_permissions() {
+  dir=$1
+  
+  if [ "${MODIFY_VOLUMES,,}" != "false" ]; then
+    chown -R "$PUID:$PGID" "$dir"
+
+    chmod_file=$(printf "%03o" $((8#666 - 8#${UMASK})))
+    find "$dir" -type f -exec chmod $chmod_file {} +
+
+    chmod_dir=$(printf "%03o" $((8#777 - 8#${UMASK})))
+    find "$dir" -type d -exec chmod $chmod_dir {} +
+  fi
+}
+
+if [ "$PGID" != 0 ] && [ "$PUID" != 0 ]; then
+  groupmod -o -g "$PGID" spotiflac
+  usermod -o -u "$PUID" spotiflac
+fi
+
+ensure_ownership_and_permissions /data
+ensure_ownership_and_permissions /tmp/.Xauthority
+
+if [ -n "$TZ" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
+  ln -sf "/usr/share/zoneinfo/$TZ" /etc/localtime
+fi
