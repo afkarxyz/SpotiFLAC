@@ -70,8 +70,9 @@ export function useDownload(region: string) {
         }
         const yearValue = releaseYear || finalReleaseDate?.substring(0, 4);
         const hasSubfolder = settings.folderTemplate && settings.folderTemplate.trim() !== "";
-        const trackNumberForTemplate = (hasSubfolder && finalTrackNumber > 0) ? finalTrackNumber : (position || 0);
-        if (hasSubfolder) {
+        const filenameHasTrack = settings.filenameTemplate && settings.filenameTemplate.includes("{track}");
+        const trackNumberForTemplate = ((hasSubfolder || filenameHasTrack) && finalTrackNumber > 0) ? finalTrackNumber : (position || 0);
+        if (hasSubfolder || filenameHasTrack) {
             useAlbumTrackNumber = true;
         }
         const templateData: TemplateData = {
@@ -360,8 +361,9 @@ export function useDownload(region: string) {
         }
         const yearValue = releaseYear || finalReleaseDate?.substring(0, 4);
         const hasSubfolder = settings.folderTemplate && settings.folderTemplate.trim() !== "";
-        const trackNumberForTemplate = (hasSubfolder && finalTrackNumber > 0) ? finalTrackNumber : (position || 0);
-        if (hasSubfolder) {
+        const filenameHasTrack = settings.filenameTemplate && settings.filenameTemplate.includes("{track}");
+        const trackNumberForTemplate = ((hasSubfolder || filenameHasTrack) && finalTrackNumber > 0) ? finalTrackNumber : (position || 0);
+        if (hasSubfolder || filenameHasTrack) {
             useAlbumTrackNumber = true;
         }
         const templateData: TemplateData = {
