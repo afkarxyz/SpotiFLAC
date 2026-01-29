@@ -855,8 +855,6 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 }
 
 func buildTidalFilename(title, artist, album, albumArtist, releaseDate string, trackNumber, discNumber int, format string, includeTrackNumber bool, position int, useAlbumTrackNumber bool) string {
-	var filename string
-
 	numberToUse := position
 	if useAlbumTrackNumber && trackNumber > 0 {
 		numberToUse = trackNumber
@@ -867,27 +865,73 @@ func buildTidalFilename(title, artist, album, albumArtist, releaseDate string, t
 		year = releaseDate[:4]
 	}
 
+	var filename string
+
 	if strings.Contains(format, "{") {
 		filename = format
-		filename = strings.ReplaceAll(filename, "{title}", title)
-		filename = strings.ReplaceAll(filename, "{artist}", artist)
-		filename = strings.ReplaceAll(filename, "{album}", album)
-		filename = strings.ReplaceAll(filename, "{album_artist}", albumArtist)
-		filename = strings.ReplaceAll(filename, "{year}", year)
-
-		if discNumber > 0 {
-			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
-		} else {
-			filename = strings.ReplaceAll(filename, "{disc}", "")
+		
+		// Handle path separators - split, process parts, and rejoin
+		parts := []string{}
+		current := ""
+		for i, r := range filename {
+			if r == '/' || r == '\\' {
+				if current != "" {
+					parts = append(parts, current)
+					current = ""
+				}
+				if i+1 < len(filename) {
+					current = string(r)
+				}
+			} else {
+				current += string(r)
+			}
 		}
+		if current != "" {
+			parts = append(parts, current)
+		}
+		
+		processedParts := []string{}
+		for _, part := range parts {
+			if part == "/" || part == "\\" {
+				processedParts = append(processedParts, string(filepath.Separator))
+				continue
+			}
+			
+			if strings.HasPrefix(part, "/") || strings.HasPrefix(part, "\\") {
+				processedParts = append(processedParts, string(filepath.Separator))
+				part = part[1:]
+			}
+			
+			processed := part
+			processed = strings.ReplaceAll(processed, "{title}", title)
+			processed = strings.ReplaceAll(processed, "{artist}", artist)
+			processed = strings.ReplaceAll(processed, "{album}", album)
+			processed = strings.ReplaceAll(processed, "{album_artist}", albumArtist)
+			processed = strings.ReplaceAll(processed, "{year}", year)
 
-		if numberToUse > 0 {
-			filename = strings.ReplaceAll(filename, "{track}", fmt.Sprintf("%02d", numberToUse))
+			if discNumber > 0 {
+				processed = strings.ReplaceAll(processed, "{disc}", fmt.Sprintf("%d", discNumber))
+			} else {
+				processed = strings.ReplaceAll(processed, "{disc}", "")
+			}
+
+			if numberToUse > 0 {
+				processed = strings.ReplaceAll(processed, "{track}", fmt.Sprintf("%02d", numberToUse))
+			} else {
+				processed = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(processed, "")
+				processed = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(processed, "")
+				processed = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(processed, "")
+			}
+			
+			if processed != "" && processed != "/" && processed != "\\" {
+				processedParts = append(processedParts, processed)
+			}
+		}
+		
+		if len(processedParts) > 0 {
+			filename = filepath.Join(processedParts...)
 		} else {
-
-			filename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(filename, "")
-			filename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(filename, "")
-			filename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(filename, "")
+			filename = fmt.Sprintf("%s - %s", title, artist)
 		}
 	} else {
 
