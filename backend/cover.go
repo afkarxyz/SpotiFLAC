@@ -198,6 +198,17 @@ func (c *CoverClient) DownloadCover(req CoverDownloadRequest) (*CoverDownloadRes
 	filename := buildCoverFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, filenameFormat, req.TrackNumber, req.Position, req.DiscNumber)
 	filePath := filepath.Join(outputDir, filename)
 
+	// Create any subdirectories if the filename contains paths
+	fileDir := filepath.Dir(filePath)
+	if fileDir != outputDir && fileDir != "." {
+		if err := os.MkdirAll(fileDir, 0755); err != nil {
+			return &CoverDownloadResponse{
+				Success: false,
+				Error:   fmt.Sprintf("failed to create subdirectory: %v", err),
+			}, err
+		}
+	}
+
 	if fileInfo, err := os.Stat(filePath); err == nil && fileInfo.Size() > 0 {
 		return &CoverDownloadResponse{
 			Success:       true,

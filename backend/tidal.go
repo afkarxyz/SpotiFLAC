@@ -417,6 +417,14 @@ func (t *TidalDownloader) DownloadByURL(tidalURL, outputDir, quality, filenameFo
 	filename := buildTidalFilename(trackTitleForFile, artistNameForFile, albumTitleForFile, albumArtistForFile, spotifyReleaseDate, spotifyTrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	outputFilename := filepath.Join(outputDir, filename)
 
+	// Create any subdirectories if the filename contains paths
+	fileDir := filepath.Dir(outputFilename)
+	if fileDir != outputDir && fileDir != "." {
+		if err := os.MkdirAll(fileDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create subdirectory: %w", err)
+		}
+	}
+
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
 		fmt.Printf("File already exists: %s (%.2f MB)\n", outputFilename, float64(fileInfo.Size())/(1024*1024))
 		return "EXISTS:" + outputFilename, nil
@@ -522,6 +530,14 @@ func (t *TidalDownloader) DownloadByURLWithFallback(tidalURL, outputDir, quality
 
 	filename := buildTidalFilename(trackTitleForFile, artistNameForFile, albumTitleForFile, albumArtistForFile, spotifyReleaseDate, spotifyTrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	outputFilename := filepath.Join(outputDir, filename)
+
+	// Create any subdirectories if the filename contains paths
+	fileDir := filepath.Dir(outputFilename)
+	if fileDir != outputDir && fileDir != "." {
+		if err := os.MkdirAll(fileDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create subdirectory: %w", err)
+		}
+	}
 
 	if fileInfo, err := os.Stat(outputFilename); err == nil && fileInfo.Size() > 0 {
 		fmt.Printf("File already exists: %s (%.2f MB)\n", outputFilename, float64(fileInfo.Size())/(1024*1024))

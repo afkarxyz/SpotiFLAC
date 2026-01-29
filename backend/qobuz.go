@@ -472,24 +472,32 @@ func (q *QobuzDownloader) DownloadByISRC(deezerISRC, outputDir, quality, filenam
 	safeAlbumArtist := sanitizeFilename(spotifyAlbumArtist)
 
 	filename := buildQobuzFilename(safeTitle, safeArtist, safeAlbum, safeAlbumArtist, spotifyReleaseDate, spotifyTrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
-	filepath := filepath.Join(outputDir, filename)
+	filePath := filepath.Join(outputDir, filename)
 
-	if fileInfo, err := os.Stat(filepath); err == nil && fileInfo.Size() > 0 {
-		fmt.Printf("File already exists: %s (%.2f MB)\n", filepath, float64(fileInfo.Size())/(1024*1024))
-		return "EXISTS:" + filepath, nil
+	// Create any subdirectories if the filename contains paths
+	fileDir := filepath.Dir(filePath)
+	if fileDir != outputDir && fileDir != "." {
+		if err := os.MkdirAll(fileDir, 0755); err != nil {
+			return "", fmt.Errorf("failed to create subdirectory: %w", err)
+		}
 	}
 
-	fmt.Printf("Downloading FLAC file to: %s\n", filepath)
-	if err := q.DownloadFile(downloadURL, filepath); err != nil {
+	if fileInfo, err := os.Stat(filePath); err == nil && fileInfo.Size() > 0 {
+		fmt.Printf("File already exists: %s (%.2f MB)\n", filePath, float64(fileInfo.Size())/(1024*1024))
+		return "EXISTS:" + filePath, nil
+	}
+
+	fmt.Printf("Downloading FLAC file to: %s\n", filePath)
+	if err := q.DownloadFile(downloadURL, filePath); err != nil {
 		return "", fmt.Errorf("failed to download file: %w", err)
 	}
 
-	fmt.Printf("Downloaded: %s\n", filepath)
+	fmt.Printf("Downloaded: %s\n", filePath)
 
 	coverPath := ""
 
 	if spotifyCoverURL != "" {
-		coverPath = filepath + ".cover.jpg"
+		coverPath = filePath + ".cover.jpg"
 		coverClient := NewCoverClient()
 		if err := coverClient.DownloadCoverToPath(spotifyCoverURL, coverPath, embedMaxQualityCover); err != nil {
 			fmt.Printf("Warning: Failed to download Spotify cover: %v\n", err)
@@ -523,10 +531,10 @@ func (q *QobuzDownloader) DownloadByISRC(deezerISRC, outputDir, quality, filenam
 		Description: "https://github.com/afkarxyz/SpotiFLAC",
 	}
 
-	if err := EmbedMetadata(filepath, metadata, coverPath); err != nil {
+	if err := EmbedMetadata(filePath, metadata, coverPath); err != nil {
 		return "", fmt.Errorf("failed to embed metadata: %w", err)
 	}
 
 	fmt.Println("Metadata embedded successfully!")
-	return filepath, nil
+	return filePath, nil
 }

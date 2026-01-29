@@ -188,6 +188,14 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, quality, filename
 		expectedFilename := BuildExpectedFilename(spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, filenameFormat, playlistName, playlistOwner, includeTrackNumber, position, spotifyDiscNumber, false)
 		expectedPath := filepath.Join(outputDir, expectedFilename)
 
+		// Create any subdirectories if the filename contains paths
+		fileDir := filepath.Dir(expectedPath)
+		if fileDir != outputDir && fileDir != "." {
+			if err := os.MkdirAll(fileDir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create subdirectory: %w", err)
+			}
+		}
+
 		if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 0 {
 			fmt.Printf("File already exists: %s (%.2f MB)\n", expectedPath, float64(fileInfo.Size())/(1024*1024))
 			return "EXISTS:" + expectedPath, nil
@@ -202,58 +210,16 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, quality, filename
 	}
 
 	if spotifyTrackName != "" && spotifyArtistName != "" {
-		safeArtist := sanitizeFilename(spotifyArtistName)
-		safeTitle := sanitizeFilename(spotifyTrackName)
-		safeAlbum := sanitizeFilename(spotifyAlbumName)
-		safeAlbumArtist := sanitizeFilename(spotifyAlbumArtist)
-
-		year := ""
-		if len(spotifyReleaseDate) >= 4 {
-			year = spotifyReleaseDate[:4]
-		}
-
-		var newFilename string
-
-		if strings.Contains(filenameFormat, "{") {
-			newFilename = filenameFormat
-			newFilename = strings.ReplaceAll(newFilename, "{title}", safeTitle)
-			newFilename = strings.ReplaceAll(newFilename, "{artist}", safeArtist)
-			newFilename = strings.ReplaceAll(newFilename, "{album}", safeAlbum)
-			newFilename = strings.ReplaceAll(newFilename, "{album_artist}", safeAlbumArtist)
-			newFilename = strings.ReplaceAll(newFilename, "{year}", year)
-
-			if spotifyDiscNumber > 0 {
-				newFilename = strings.ReplaceAll(newFilename, "{disc}", fmt.Sprintf("%d", spotifyDiscNumber))
-			} else {
-				newFilename = strings.ReplaceAll(newFilename, "{disc}", "")
-			}
-
-			if position > 0 {
-				newFilename = strings.ReplaceAll(newFilename, "{track}", fmt.Sprintf("%02d", position))
-			} else {
-
-				newFilename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(newFilename, "")
-				newFilename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(newFilename, "")
-				newFilename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(newFilename, "")
-			}
-		} else {
-
-			switch filenameFormat {
-			case "artist-title":
-				newFilename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
-			case "title":
-				newFilename = safeTitle
-			default:
-				newFilename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
-			}
-
-			if includeTrackNumber && position > 0 {
-				newFilename = fmt.Sprintf("%02d. %s", position, newFilename)
-			}
-		}
-
-		newFilename = newFilename + ".flac"
+		newFilename := BuildExpectedFilename(spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, filenameFormat, playlistName, playlistOwner, includeTrackNumber, position, spotifyDiscNumber, false)
 		newFilePath := filepath.Join(outputDir, newFilename)
+
+		// Create any subdirectories if the filename contains paths
+		fileDir := filepath.Dir(newFilePath)
+		if fileDir != outputDir && fileDir != "." {
+			if err := os.MkdirAll(fileDir, 0755); err != nil {
+				return "", fmt.Errorf("failed to create subdirectory: %w", err)
+			}
+		}
 
 		if err := os.Rename(filePath, newFilePath); err != nil {
 			fmt.Printf("Warning: Failed to rename file: %v\n", err)
