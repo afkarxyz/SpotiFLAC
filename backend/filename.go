@@ -11,14 +11,6 @@ import (
 
 func BuildExpectedFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat, playlistName, playlistOwner string, includeTrackNumber bool, position, discNumber int, useAlbumTrackNumber bool) string {
 
-	safeTitle := SanitizeFilename(trackName)
-	safeArtist := SanitizeFilename(artistName)
-	safeAlbum := SanitizeFilename(albumName)
-	safeAlbumArtist := SanitizeFilename(albumArtist)
-
-	safePlaylist := SanitizeFilename(playlistName)
-	safeCreator := SanitizeFilename(playlistOwner)
-
 	year := ""
 	if len(releaseDate) >= 4 {
 		year = releaseDate[:4]
@@ -28,37 +20,87 @@ func BuildExpectedFilename(trackName, artistName, albumName, albumArtist, releas
 
 	if strings.Contains(filenameFormat, "{") {
 		filename = filenameFormat
-		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
-		filename = strings.ReplaceAll(filename, "{artist}", safeArtist)
-		filename = strings.ReplaceAll(filename, "{album}", safeAlbum)
-		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
-		filename = strings.ReplaceAll(filename, "{year}", year)
-		filename = strings.ReplaceAll(filename, "{playlist}", safePlaylist)
-		filename = strings.ReplaceAll(filename, "{creator}", safeCreator)
-
-		if discNumber > 0 {
-			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
-		} else {
-			filename = strings.ReplaceAll(filename, "{disc}", "")
+		
+		// First, split by path separators to handle each part separately
+		// Support both forward slash and backslash
+		parts := []string{}
+		current := ""
+		for i, r := range filename {
+			if r == '/' || r == '\\' {
+				if current != "" {
+					parts = append(parts, current)
+					current = ""
+				}
+				// Preserve the separator type
+				if i+1 < len(filename) {
+					current = string(r)
+				}
+			} else {
+				current += string(r)
+			}
 		}
+		if current != "" {
+			parts = append(parts, current)
+		}
+		
+		// Process each part
+		processedParts := []string{}
+		for _, part := range parts {
+			if part == "/" || part == "\\" {
+				processedParts = append(processedParts, string(filepath.Separator))
+				continue
+			}
+			
+			// Skip separator markers
+			if strings.HasPrefix(part, "/") || strings.HasPrefix(part, "\\") {
+				processedParts = append(processedParts, string(filepath.Separator))
+				part = part[1:]
+			}
+			
+			// Sanitize the part but preserve path structure
+			processed := part
+			processed = strings.ReplaceAll(processed, "{title}", SanitizeFilename(trackName))
+			processed = strings.ReplaceAll(processed, "{artist}", SanitizeFilename(artistName))
+			processed = strings.ReplaceAll(processed, "{album}", SanitizeFilename(albumName))
+			processed = strings.ReplaceAll(processed, "{album_artist}", SanitizeFilename(albumArtist))
+			processed = strings.ReplaceAll(processed, "{year}", year)
+			processed = strings.ReplaceAll(processed, "{playlist}", SanitizeFilename(playlistName))
+			processed = strings.ReplaceAll(processed, "{creator}", SanitizeFilename(playlistOwner))
 
-		if position > 0 {
-			filename = strings.ReplaceAll(filename, "{track}", fmt.Sprintf("%02d", position))
+			if discNumber > 0 {
+				processed = strings.ReplaceAll(processed, "{disc}", fmt.Sprintf("%d", discNumber))
+			} else {
+				processed = strings.ReplaceAll(processed, "{disc}", "")
+			}
+
+			if position > 0 {
+				processed = strings.ReplaceAll(processed, "{track}", fmt.Sprintf("%02d", position))
+			} else {
+				processed = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(processed, "")
+				processed = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(processed, "")
+				processed = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(processed, "")
+			}
+			
+			if processed != "" && processed != "/" && processed != "\\" {
+				processedParts = append(processedParts, processed)
+			}
+		}
+		
+		// Join the parts back together using filepath.Join to handle OS-specific separators
+		if len(processedParts) > 0 {
+			filename = filepath.Join(processedParts...)
 		} else {
-
-			filename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(filename, "")
-			filename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(filename, "")
-			filename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(filename, "")
+			filename = fmt.Sprintf("%s - %s", SanitizeFilename(trackName), SanitizeFilename(artistName))
 		}
 	} else {
 
 		switch filenameFormat {
 		case "artist-title":
-			filename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
+			filename = fmt.Sprintf("%s - %s", SanitizeFilename(artistName), SanitizeFilename(trackName))
 		case "title":
-			filename = safeTitle
+			filename = SanitizeFilename(trackName)
 		default:
-			filename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
+			filename = fmt.Sprintf("%s - %s", SanitizeFilename(trackName), SanitizeFilename(artistName))
 		}
 
 		if includeTrackNumber && position > 0 {

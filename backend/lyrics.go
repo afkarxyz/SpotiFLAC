@@ -294,11 +294,6 @@ func msToLRCTimestamp(msStr string) string {
 }
 
 func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat string, includeTrackNumber bool, position, discNumber int) string {
-	safeTitle := sanitizeFilename(trackName)
-	safeArtist := sanitizeFilename(artistName)
-	safeAlbum := sanitizeFilename(albumName)
-	safeAlbumArtist := sanitizeFilename(albumArtist)
-
 	year := ""
 	if len(releaseDate) >= 4 {
 		year = releaseDate[:4]
@@ -308,35 +303,79 @@ func buildLyricsFilename(trackName, artistName, albumName, albumArtist, releaseD
 
 	if strings.Contains(filenameFormat, "{") {
 		filename = filenameFormat
-		filename = strings.ReplaceAll(filename, "{title}", safeTitle)
-		filename = strings.ReplaceAll(filename, "{artist}", safeArtist)
-		filename = strings.ReplaceAll(filename, "{album}", safeAlbum)
-		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
-		filename = strings.ReplaceAll(filename, "{year}", year)
-
-		if discNumber > 0 {
-			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
-		} else {
-			filename = strings.ReplaceAll(filename, "{disc}", "")
+		
+		// Handle path separators - split, process parts, and rejoin
+		parts := []string{}
+		current := ""
+		for i, r := range filename {
+			if r == '/' || r == '\\' {
+				if current != "" {
+					parts = append(parts, current)
+					current = ""
+				}
+				if i+1 < len(filename) {
+					current = string(r)
+				}
+			} else {
+				current += string(r)
+			}
 		}
+		if current != "" {
+			parts = append(parts, current)
+		}
+		
+		processedParts := []string{}
+		for _, part := range parts {
+			if part == "/" || part == "\\" {
+				processedParts = append(processedParts, string(filepath.Separator))
+				continue
+			}
+			
+			if strings.HasPrefix(part, "/") || strings.HasPrefix(part, "\\") {
+				processedParts = append(processedParts, string(filepath.Separator))
+				part = part[1:]
+			}
+			
+			processed := part
+			processed = strings.ReplaceAll(processed, "{title}", sanitizeFilename(trackName))
+			processed = strings.ReplaceAll(processed, "{artist}", sanitizeFilename(artistName))
+			processed = strings.ReplaceAll(processed, "{album}", sanitizeFilename(albumName))
+			processed = strings.ReplaceAll(processed, "{album_artist}", sanitizeFilename(albumArtist))
+			processed = strings.ReplaceAll(processed, "{year}", year)
 
-		if position > 0 {
-			filename = strings.ReplaceAll(filename, "{track}", fmt.Sprintf("%02d", position))
+			if discNumber > 0 {
+				processed = strings.ReplaceAll(processed, "{disc}", fmt.Sprintf("%d", discNumber))
+			} else {
+				processed = strings.ReplaceAll(processed, "{disc}", "")
+			}
+
+			if position > 0 {
+				processed = strings.ReplaceAll(processed, "{track}", fmt.Sprintf("%02d", position))
+			} else {
+				processed = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(processed, "")
+				processed = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(processed, "")
+				processed = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(processed, "")
+			}
+			
+			if processed != "" && processed != "/" && processed != "\\" {
+				processedParts = append(processedParts, processed)
+			}
+		}
+		
+		if len(processedParts) > 0 {
+			filename = filepath.Join(processedParts...)
 		} else {
-
-			filename = regexp.MustCompile(`\{track\}\.\s*`).ReplaceAllString(filename, "")
-			filename = regexp.MustCompile(`\{track\}\s*-\s*`).ReplaceAllString(filename, "")
-			filename = regexp.MustCompile(`\{track\}\s*`).ReplaceAllString(filename, "")
+			filename = fmt.Sprintf("%s - %s", sanitizeFilename(trackName), sanitizeFilename(artistName))
 		}
 	} else {
 
 		switch filenameFormat {
 		case "artist-title":
-			filename = fmt.Sprintf("%s - %s", safeArtist, safeTitle)
+			filename = fmt.Sprintf("%s - %s", sanitizeFilename(artistName), sanitizeFilename(trackName))
 		case "title":
-			filename = safeTitle
+			filename = sanitizeFilename(trackName)
 		default:
-			filename = fmt.Sprintf("%s - %s", safeTitle, safeArtist)
+			filename = fmt.Sprintf("%s - %s", sanitizeFilename(trackName), sanitizeFilename(artistName))
 		}
 
 		if includeTrackNumber && position > 0 {
@@ -435,6 +474,17 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 	}
 	filename := buildLyricsFilename(req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, filenameFormat, req.TrackNumber, req.Position, req.DiscNumber)
 	filePath := filepath.Join(outputDir, filename)
+
+	// Create any subdirectories if the filename contains paths
+	fileDir := filepath.Dir(filePath)
+	if fileDir != outputDir && fileDir != "." {
+		if err := os.MkdirAll(fileDir, 0755); err != nil {
+			return &LyricsDownloadResponse{
+				Success: false,
+				Error:   fmt.Sprintf("failed to create subdirectory: %v", err),
+			}, err
+		}
+	}
 
 	if fileInfo, err := os.Stat(filePath); err == nil && fileInfo.Size() > 0 {
 		return &LyricsDownloadResponse{
