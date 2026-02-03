@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,7 @@ type TrackMetadata struct {
 	Plays       string `json:"plays,omitempty"`
 	PreviewURL  string `json:"preview_url,omitempty"`
 	IsExplicit  bool   `json:"is_explicit,omitempty"`
+	Genre       string `json:"genre,omitempty"`
 }
 
 type ArtistSimple struct {
@@ -200,7 +202,8 @@ type apiTrackResponse struct {
 		Medium string `json:"medium"`
 		Large  string `json:"large"`
 	} `json:"cover"`
-	IsExplicit bool `json:"is_explicit"`
+	IsExplicit bool   `json:"is_explicit"`
+	Genre      string `json:"genre"`
 }
 
 type apiAlbumResponse struct {
@@ -338,18 +341,18 @@ type SearchResponse struct {
 	Playlists []SearchResult `json:"playlists"`
 }
 
-func GetFilteredSpotifyData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration) (interface{}, error) {
+func GetFilteredSpotifyData(ctx context.Context, spotifyURL string, batch bool, fetchGenre bool, delay time.Duration) (interface{}, error) {
 	client := NewSpotifyMetadataClient()
-	return client.GetFilteredData(ctx, spotifyURL, batch, delay)
+	return client.GetFilteredData(ctx, spotifyURL, batch, fetchGenre, delay)
 }
 
-func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL string, batch bool, delay time.Duration) (interface{}, error) {
+func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL string, batch bool, fetchGenre bool, delay time.Duration) (interface{}, error) {
 	parsed, err := parseSpotifyURI(spotifyURL)
 	if err != nil {
 		return nil, err
 	}
 
-	raw, err := c.getRawSpotifyData(ctx, parsed, batch, delay)
+	raw, err := c.getRawSpotifyData(ctx, parsed, batch, fetchGenre, delay)
 	if err != nil {
 		return nil, err
 	}
@@ -357,14 +360,14 @@ func (c *SpotifyMetadataClient) GetFilteredData(ctx context.Context, spotifyURL 
 	return c.processSpotifyData(ctx, raw)
 }
 
-func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed spotifyURI, batch bool, delay time.Duration) (interface{}, error) {
+func (c *SpotifyMetadataClient) getRawSpotifyData(ctx context.Context, parsed spotifyURI, batch bool, fetchGenre bool, delay time.Duration) (interface{}, error) {
 	switch parsed.Type {
 	case "playlist":
 		return c.fetchPlaylist(ctx, parsed.ID)
 	case "album":
 		return c.fetchAlbum(ctx, parsed.ID)
 	case "track":
-		return c.fetchTrack(ctx, parsed.ID)
+		return c.fetchTrack(ctx, parsed.ID, fetchGenre)
 	case "artist_discography":
 		return c.fetchArtistDiscography(ctx, parsed)
 	case "artist":
@@ -391,7 +394,7 @@ func (c *SpotifyMetadataClient) processSpotifyData(ctx context.Context, raw inte
 	}
 }
 
-func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) (*apiTrackResponse, error) {
+func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string, fetchGenre bool) (*apiTrackResponse, error) {
 	client := NewSpotifyClient()
 	if err := client.Initialize(); err != nil {
 		return nil, fmt.Errorf("failed to initialize spotify client: %w", err)
@@ -454,6 +457,20 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 	}
 
 	filteredData := FilterTrack(data, albumFetchData)
+
+    // Attempt to fetch genre using MusicBrainz API
+    if fetchGenre {
+        if trackName, ok := filteredData["name"].(string); ok && trackName != "" {
+            artists := ""
+            if artistStr, ok := filteredData["artists"].(string); ok {
+                artists = artistStr
+            }
+            
+            if genre, err := fetchGenreFromMusicBrainz(artists, trackName); err == nil && genre != "" {
+                filteredData["genre"] = genre
+            }
+        }
+    }
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -863,6 +880,7 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 		Publisher:   raw.Album.Label,
 		Plays:       raw.Plays,
 		IsExplicit:  raw.IsExplicit,
+		Genre:       raw.Genre,
 	}
 
 	return TrackResponse{
@@ -1488,4 +1506,168 @@ func GetPreviewURL(trackID string) (string, error) {
 	}
 
 	return match, nil
+}
+
+type MBRecordingResponse struct {
+	Recordings []struct {
+		ID            string `json:"id"`
+		Tags []struct {
+			Count int    `json:"count"`
+			Name  string `json:"name"`
+		} `json:"tags"`
+		Genres []struct {
+			Count int    `json:"count"`
+			Name  string `json:"name"`
+		} `json:"genres"`
+		ArtistCredit []struct {
+			Artist struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"artist"`
+		} `json:"artist-credit"`
+		Releases []struct {
+			ReleaseGroup struct {
+				ID string `json:"id"`
+			} `json:"release-group"`
+		} `json:"releases"`
+	} `json:"recordings"`
+}
+
+type MBEntityResponse struct {
+	Tags []struct {
+		Count int    `json:"count"`
+		Name  string `json:"name"`
+	} `json:"tags"`
+	Genres []struct {
+		Count int    `json:"count"`
+		Name  string `json:"name"`
+	} `json:"genres"`
+	ArtistCredit []struct {
+		Artist struct {
+			ID string `json:"id"`
+		} `json:"artist"`
+	} `json:"artist-credit"`
+}
+
+func fetchGenreFromMusicBrainz(artist, track string) (string, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	userAgent := "SpotiFLAC/1.0 ( https://github.com/afkarxyz/SpotiFLAC )"
+
+	// Clean up strings for better search
+	artist = strings.Split(artist, ",")[0] // Use first artist
+	
+	// Remove common "feat." or "ft." from track title for search
+	reg := regexp.MustCompile(`(?i)\s+\(?(feat|ft)\.?\s+.*`)
+	cleanTrack := reg.ReplaceAllString(track, "")
+
+	searchQuery := fmt.Sprintf("artist:\"%s\" AND recording:\"%s\"", artist, cleanTrack)
+	searchURL := fmt.Sprintf("https://musicbrainz.org/ws/2/recording/?query=%s&fmt=json", url.QueryEscape(searchQuery))
+
+	req, err := http.NewRequest("GET", searchURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("search status %d", resp.StatusCode)
+	}
+
+	var searchData MBRecordingResponse
+	if err := json.NewDecoder(resp.Body).Decode(&searchData); err != nil {
+		return "", err
+	}
+
+	if len(searchData.Recordings) == 0 {
+		return "", errors.New("recording not found on MusicBrainz")
+	}
+
+	recording := searchData.Recordings[0]
+
+	// 1. Check Recording Genres/Tags
+	if genre := getTopGenre(recording.Genres, recording.Tags); genre != "" {
+		return genre, nil
+	}
+
+	// 2. Fallback: Fetch Release Group (Album) Genres
+	// Rate limit: Sleep 1.1s
+	time.Sleep(1100 * time.Millisecond)
+
+	var releaseGroupID string
+	if len(recording.Releases) > 0 {
+		releaseGroupID = recording.Releases[0].ReleaseGroup.ID
+	}
+
+	if releaseGroupID != "" {
+		rgURL := fmt.Sprintf("https://musicbrainz.org/ws/2/release-group/%s?inc=genres+tags&fmt=json", releaseGroupID)
+		if genre, err := fetchMBEntityGenre(client, rgURL, userAgent); err == nil && genre != "" {
+			return genre, nil
+		}
+	}
+
+	// 3. Fallback: Fetch Artist Genres
+	if len(recording.ArtistCredit) > 0 {
+		artistID := recording.ArtistCredit[0].Artist.ID
+		// Rate limit: Sleep 1.1s (cumulative with previous if rg fetch happened, or independent)
+		// We slept before RG fetch. If RG fetch happened, we need another sleep.
+		// To be safe, always sleep before request.
+		time.Sleep(1100 * time.Millisecond)
+
+		artistURL := fmt.Sprintf("https://musicbrainz.org/ws/2/artist/%s?inc=genres+tags&fmt=json", artistID)
+		if genre, err := fetchMBEntityGenre(client, artistURL, userAgent); err == nil && genre != "" {
+			return genre, nil
+		}
+	}
+
+	return "", errors.New("no genres found on MusicBrainz")
+}
+
+func fetchMBEntityGenre(client *http.Client, url, userAgent string) (string, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+
+	var data MBEntityResponse
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return "", err
+	}
+
+	return getTopGenre(data.Genres, data.Tags), nil
+}
+
+func getTopGenre(genres, tags []struct {
+	Count int    `json:"count"`
+	Name  string `json:"name"`
+}) string {
+	if len(genres) > 0 {
+		sort.Slice(genres, func(i, j int) bool {
+			return genres[i].Count > genres[j].Count
+		})
+		return strings.Title(genres[0].Name)
+	}
+	if len(tags) > 0 {
+		sort.Slice(tags, func(i, j int) bool {
+			return tags[i].Count > tags[j].Count
+		})
+		return strings.Title(tags[0].Name)
+	}
+	return ""
 }

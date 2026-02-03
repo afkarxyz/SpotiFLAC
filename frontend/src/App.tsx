@@ -88,6 +88,7 @@ function App() {
             }
         };
         initSettings();
+        
         const checkFFmpeg = async () => {
             try {
                 const installed = await CheckFFmpegInstalled();

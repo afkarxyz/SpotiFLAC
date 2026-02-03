@@ -31,6 +31,7 @@ type Metadata struct {
 	Publisher   string
 	Lyrics      string
 	Description string
+	Genre       string
 }
 
 func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
@@ -84,6 +85,9 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	}
 	if metadata.Description != "" {
 		_ = cmt.Add("DESCRIPTION", metadata.Description)
+	}
+	if metadata.Genre != "" {
+		_ = cmt.Add("GENRE", metadata.Genre)
 	}
 
 	if metadata.Lyrics != "" {
@@ -777,6 +781,8 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 			if metadata.Description == "" {
 				metadata.Description = value
 			}
+		case "genre":
+			metadata.Genre = value
 		}
 	}
 
@@ -856,6 +862,11 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 	if metadata.Publisher != "" {
 		tag.DeleteFrames("TPUB")
 		tag.AddTextFrame("TPUB", id3v2.EncodingUTF8, metadata.Publisher)
+	}
+
+	if metadata.Genre != "" {
+		tag.DeleteFrames("TCON")
+		tag.AddTextFrame("TCON", id3v2.EncodingUTF8, metadata.Genre)
 	}
 
 	if coverPath != "" && fileExists(coverPath) {
@@ -940,6 +951,9 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	}
 	if metadata.Publisher != "" {
 		args = append(args, "-metadata", "publisher="+metadata.Publisher)
+	}
+	if metadata.Genre != "" {
+		args = append(args, "-metadata", "genre="+metadata.Genre)
 	}
 
 	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)
