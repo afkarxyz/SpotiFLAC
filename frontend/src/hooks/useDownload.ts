@@ -52,16 +52,20 @@ export function useDownload(region: string) {
         const placeholder = "__SLASH_PLACEHOLDER__";
         let finalReleaseDate = releaseDate;
         let finalTrackNumber = spotifyTrackNumber || 0;
+        let finalGenre = "";
         if (spotifyId) {
             try {
                 const trackURL = `https://open.spotify.com/track/${spotifyId}`;
-                const trackMetadata = await fetchSpotifyMetadata(trackURL, false, 0, 10);
+                const trackMetadata = await fetchSpotifyMetadata(trackURL, false, 0, 10, settings.enableGenreFetching);
                 if ("track" in trackMetadata && trackMetadata.track) {
                     if (trackMetadata.track.release_date) {
                         finalReleaseDate = trackMetadata.track.release_date;
                     }
                     if (trackMetadata.track.track_number > 0) {
                         finalTrackNumber = trackMetadata.track.track_number;
+                    }
+                    if (trackMetadata.track.genre) {
+                        finalGenre = trackMetadata.track.genre;
                     }
                 }
             }
@@ -146,7 +150,7 @@ export function useDownload(region: string) {
                     streamingURLs = JSON.parse(urlsJson);
                 }
                 catch (err) {
-                    console.error("Failed to get streaming URLs:", err);
+                    logger.error(`Failed to get streaming URLs: ${err}`);
                 }
             }
             const durationSeconds = durationMs ? Math.round(durationMs / 1000) : undefined;
@@ -187,6 +191,7 @@ export function useDownload(region: string) {
                             spotify_total_discs: spotifyTotalDiscs,
                             copyright: copyright,
                             publisher: publisher,
+                            genre: finalGenre,
                         });
                         if (response.success) {
                             logger.success(`tidal: ${trackName} - ${artistName}`);
@@ -229,6 +234,7 @@ export function useDownload(region: string) {
                             spotify_total_discs: spotifyTotalDiscs,
                             copyright: copyright,
                             publisher: publisher,
+                            genre: finalGenre,
                         });
                         if (response.success) {
                             logger.success(`amazon: ${trackName} - ${artistName}`);
@@ -271,6 +277,7 @@ export function useDownload(region: string) {
                             spotify_total_discs: spotifyTotalDiscs,
                             copyright: copyright,
                             publisher: publisher,
+                            genre: finalGenre,
                         });
                         if (response.success) {
                             logger.success(`qobuz: ${trackName} - ${artistName}`);
@@ -326,6 +333,7 @@ export function useDownload(region: string) {
             spotify_total_discs: spotifyTotalDiscs,
             copyright: copyright,
             publisher: publisher,
+            genre: finalGenre,
         });
         if (!singleServiceResponse.success && itemID) {
             const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
@@ -333,7 +341,7 @@ export function useDownload(region: string) {
         }
         return singleServiceResponse;
     };
-    const downloadWithItemID = async (isrc: string, settings: any, itemID: string, trackName?: string, artistName?: string, albumName?: string, folderName?: string, position?: number, spotifyId?: string, durationMs?: number, isAlbum?: boolean, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
+    const downloadWithItemID = async (isrc: string, settings: any, itemID: string, trackName?: string, artistName?: string, albumName?: string, folderName?: string, position?: number, spotifyId?: string, durationMs?: number, isAlbum?: boolean, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string, genre?: string) => {
         const service = settings.downloader;
         const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
         const os = settings.operatingSystem;
@@ -342,16 +350,20 @@ export function useDownload(region: string) {
         const placeholder = "__SLASH_PLACEHOLDER__";
         let finalReleaseDate = releaseDate;
         let finalTrackNumber = spotifyTrackNumber || 0;
+        let finalGenre = genre || "";
         if (spotifyId) {
             try {
                 const trackURL = `https://open.spotify.com/track/${spotifyId}`;
-                const trackMetadata = await fetchSpotifyMetadata(trackURL, false, 0, 10);
+                const trackMetadata = await fetchSpotifyMetadata(trackURL, false, 0, 10, settings.enableGenreFetching);
                 if ("track" in trackMetadata && trackMetadata.track) {
                     if (trackMetadata.track.release_date) {
                         finalReleaseDate = trackMetadata.track.release_date;
                     }
                     if (trackMetadata.track.track_number > 0) {
                         finalTrackNumber = trackMetadata.track.track_number;
+                    }
+                    if (trackMetadata.track.genre && !finalGenre) {
+                        finalGenre = trackMetadata.track.genre;
                     }
                 }
             }
@@ -397,7 +409,7 @@ export function useDownload(region: string) {
                     streamingURLs = JSON.parse(urlsJson);
                 }
                 catch (err) {
-                    console.error("Failed to get streaming URLs:", err);
+                    logger.error(`Failed to get streaming URLs: ${err}`);
                 }
             }
             const durationSeconds = durationMs ? Math.round(durationMs / 1000) : undefined;
@@ -437,6 +449,7 @@ export function useDownload(region: string) {
                             spotify_total_discs: spotifyTotalDiscs,
                             copyright: copyright,
                             publisher: publisher,
+                            genre: finalGenre,
                         });
                         if (response.success) {
                             return response;
@@ -476,6 +489,7 @@ export function useDownload(region: string) {
                             spotify_total_discs: spotifyTotalDiscs,
                             copyright: copyright,
                             publisher: publisher,
+                            genre: finalGenre,
                         });
                         if (response.success) {
                             return response;
@@ -516,6 +530,7 @@ export function useDownload(region: string) {
                             spotify_total_discs: spotifyTotalDiscs,
                             copyright: copyright,
                             publisher: publisher,
+                            genre: finalGenre,
                         });
                         if (response.success) {
                             return response;
@@ -569,6 +584,7 @@ export function useDownload(region: string) {
             spotify_total_discs: spotifyTotalDiscs,
             copyright: copyright,
             publisher: publisher,
+            genre: finalGenre,
         });
         if (!singleServiceResponse.success && itemID) {
             const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
@@ -700,7 +716,7 @@ export function useDownload(region: string) {
             setCurrentDownloadInfo({ name: track.name, artists: track.artists });
             try {
                 const releaseYear = track.release_date?.substring(0, 4);
-                const response = await downloadWithItemID(isrc, settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
+                const response = await downloadWithItemID(isrc, settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher, track.genre);
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
@@ -844,7 +860,7 @@ export function useDownload(region: string) {
             setCurrentDownloadInfo({ name: track.name, artists: track.artists });
             try {
                 const releaseYear = track.release_date?.substring(0, 4);
-                const response = await downloadWithItemID(track.isrc, settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
+                const response = await downloadWithItemID(track.isrc, settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher, track.genre);
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;

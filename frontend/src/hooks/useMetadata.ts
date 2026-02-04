@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fetchSpotifyMetadata } from "@/lib/api";
+import { getSettings } from "@/lib/settings";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { logger } from "@/lib/logger";
 import { AddFetchHistory } from "../../wailsjs/go/main/App";
@@ -85,7 +86,8 @@ export function useMetadata() {
         try {
             const startTime = Date.now();
             const timeout = urlType === "artist" ? 60 : 300;
-            const data = await fetchSpotifyMetadata(url, true, 1.0, timeout);
+            const settings = getSettings();
+            const data = await fetchSpotifyMetadata(url, true, 1.0, timeout, settings.enableGenreFetching);
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
             if ("playlist_info" in data) {
                 const playlistInfo = data.playlist_info;
@@ -199,7 +201,8 @@ export function useMetadata() {
         setMetadata(null);
         try {
             const startTime = Date.now();
-            const data = await fetchSpotifyMetadata(albumUrl);
+            const settings = getSettings();
+            const data = await fetchSpotifyMetadata(albumUrl, true, 1.0, 300.0, settings.enableGenreFetching);
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
             if ("album_info" in data) {
                 const albumInfo = data.album_info;

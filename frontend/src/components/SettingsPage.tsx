@@ -325,6 +325,18 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
             <Label htmlFor="embed-max-quality-cover" className="cursor-pointer text-sm">Embed Max Quality Cover</Label>
             <Switch id="embed-max-quality-cover" checked={tempSettings.embedMaxQualityCover} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, embedMaxQualityCover: checked }))}/>
           </div>
+          <div className="flex items-center gap-3">
+            <Label htmlFor="enable-genre-fetching" className="cursor-pointer text-sm">Embed Genre</Label>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help"/>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                <p className="text-xs whitespace-nowrap">Embeds genre information gathed from the MusicBrainz API in the metadata of downloaded tracks, if available.</p>
+              </TooltipContent>
+            </Tooltip>
+            <Switch id="enable-genre-fetching" checked={tempSettings.enableGenreFetching} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, enableGenreFetching: checked }))}/>
+          </div>
         </div>
 
         <div className="border-t"/>

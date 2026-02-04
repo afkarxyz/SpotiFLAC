@@ -29,6 +29,7 @@ export interface TrackMetadata {
     plays?: string;
     status?: string;
     is_explicit?: boolean;
+    genre?: string;
 }
 export interface TrackResponse {
     track: TrackMetadata;
@@ -139,6 +140,7 @@ export interface DownloadRequest {
     copyright?: string;
     publisher?: string;
     spotify_url?: string;
+    genre?: string;
 }
 export interface DownloadResponse {
     success: boolean;

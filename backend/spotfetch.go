@@ -375,8 +375,19 @@ func extractArtists(artistsData map[string]interface{}) []map[string]interface{}
 			continue
 		}
 		profile := getMap(itemMap, "profile")
+
+		id := getString(itemMap, "id")
+		if id == "" {
+			uri := getString(itemMap, "uri")
+			if strings.Contains(uri, ":") {
+				parts := strings.Split(uri, ":")
+				id = parts[len(parts)-1]
+			}
+		}
+
 		artistInfo := map[string]interface{}{
 			"name": getString(profile, "name"),
+			"id":   id,
 		}
 		artists = append(artists, artistInfo)
 	}
@@ -550,8 +561,17 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 				if profile, exists := itemMap["profile"]; exists {
 					profileMap, ok := profile.(map[string]interface{})
 					if ok {
+						id := getString(itemMap, "id")
+						if id == "" {
+							uri := getString(itemMap, "uri")
+							if strings.Contains(uri, ":") {
+								parts := strings.Split(uri, ":")
+								id = parts[len(parts)-1]
+							}
+						}
 						artistInfo := map[string]interface{}{
 							"name": getString(profileMap, "name"),
+							"id":   id,
 						}
 						artists = append(artists, artistInfo)
 					}
@@ -569,8 +589,17 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 				if profile, exists := itemMap["profile"]; exists {
 					profileMap, ok := profile.(map[string]interface{})
 					if ok {
+						id := getString(itemMap, "id")
+						if id == "" {
+							uri := getString(itemMap, "uri")
+							if strings.Contains(uri, ":") {
+								parts := strings.Split(uri, ":")
+								id = parts[len(parts)-1]
+							}
+						}
 						artistInfo := map[string]interface{}{
 							"name": getString(profileMap, "name"),
+							"id":   id,
 						}
 						artists = append(artists, artistInfo)
 					}
@@ -752,8 +781,12 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 	durationString := getString(durationObj, "formatted")
 
 	artistNames := []string{}
+	artistIDs := []string{}
 	for _, artist := range artists {
 		artistNames = append(artistNames, getString(artist, "name"))
+		if id := getString(artist, "id"); id != "" {
+			artistIDs = append(artistIDs, id)
+		}
 	}
 	artistsString := strings.Join(artistNames, ", ")
 
@@ -779,6 +812,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 		"id":          getString(trackData, "id"),
 		"name":        getString(trackData, "name"),
 		"artists":     artistsString,
+		"artist_ids":  artistIDs,
 		"album":       albumInfo,
 		"duration":    durationString,
 		"track":       int(getFloat64(trackData, "trackNumber")),
