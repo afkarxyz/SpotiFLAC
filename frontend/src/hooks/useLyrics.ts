@@ -25,11 +25,13 @@ export function useLyrics() {
             const os = settings.operatingSystem;
             let outputDir = settings.downloadPath;
             const placeholder = "__SLASH_PLACEHOLDER__";
+            const yearValue = releaseDate?.substring(0, 4);
             const templateData: TemplateData = {
                 artist: artistName?.replace(/\//g, placeholder),
                 album: albumName?.replace(/\//g, placeholder),
                 title: trackName?.replace(/\//g, placeholder),
                 track: position,
+                year: yearValue,
                 playlist: playlistName?.replace(/\//g, placeholder),
             };
             const folderTemplate = settings.folderTemplate || "";
@@ -120,11 +122,13 @@ export function useLyrics() {
                 const placeholder = "__SLASH_PLACEHOLDER__";
                 const useAlbumTrackNumber = settings.folderTemplate?.includes("{album}") || false;
                 const trackPosition = useAlbumTrackNumber ? (track.track_number || i + 1) : (i + 1);
+                const yearValue = track.release_date?.substring(0, 4);
                 const templateData: TemplateData = {
                     artist: track.artists?.replace(/\//g, placeholder),
                     album: track.album_name?.replace(/\//g, placeholder),
                     title: track.name?.replace(/\//g, placeholder),
                     track: trackPosition,
+                    year: yearValue,
                     playlist: playlistName?.replace(/\//g, placeholder),
                 };
                 const folderTemplate = settings.folderTemplate || "";
