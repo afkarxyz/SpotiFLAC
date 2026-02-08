@@ -1,5 +1,5 @@
 {
-  description = "SpotiFLAC Flake - Extracted Method";
+  description = "SpotiFLAC Flake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -21,7 +21,7 @@
         pkgs-stable = import nixpkgs-stable { inherit system; };
 
         pname = "spotiflac";
-        version = "7.0.6";
+        version = "7.0.7";
 
         src = pkgs.fetchurl {
           url = "https://github.com/afkarxyz/SpotiFLAC/releases/download/v${version}/SpotiFLAC.AppImage";
@@ -72,7 +72,6 @@
 
             cp usr/bin/SpotiFLAC $out/bin/spotiflac
 
-            # Icons und Desktop-File
             [ -f spotiflac.png ] && cp spotiflac.png $out/share/icons/hicolor/256x256/apps/spotiflac.png
             cp spotiflac.desktop $out/share/applications/spotiflac.desktop
 
