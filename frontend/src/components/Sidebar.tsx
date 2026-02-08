@@ -37,7 +37,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right">
-          <p>Download History</p>
+          <p>History</p>
         </TooltipContent>
       </Tooltip>
 

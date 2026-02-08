@@ -9,12 +9,15 @@ import (
 	"unicode/utf8"
 )
 
-func BuildExpectedFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat string, includeTrackNumber bool, position, discNumber int, useAlbumTrackNumber bool) string {
+func BuildExpectedFilename(trackName, artistName, albumName, albumArtist, releaseDate, filenameFormat, playlistName, playlistOwner string, includeTrackNumber bool, position, discNumber int, useAlbumTrackNumber bool) string {
 
-	safeTitle := sanitizeFilename(trackName)
-	safeArtist := sanitizeFilename(artistName)
-	safeAlbum := sanitizeFilename(albumName)
-	safeAlbumArtist := sanitizeFilename(albumArtist)
+	safeTitle := SanitizeFilename(trackName)
+	safeArtist := SanitizeFilename(artistName)
+	safeAlbum := SanitizeFilename(albumName)
+	safeAlbumArtist := SanitizeFilename(albumArtist)
+
+	safePlaylist := SanitizeFilename(playlistName)
+	safeCreator := SanitizeFilename(playlistOwner)
 
 	year := ""
 	if len(releaseDate) >= 4 {
@@ -30,6 +33,8 @@ func BuildExpectedFilename(trackName, artistName, albumName, albumArtist, releas
 		filename = strings.ReplaceAll(filename, "{album}", safeAlbum)
 		filename = strings.ReplaceAll(filename, "{album_artist}", safeAlbumArtist)
 		filename = strings.ReplaceAll(filename, "{year}", year)
+		filename = strings.ReplaceAll(filename, "{playlist}", safePlaylist)
+		filename = strings.ReplaceAll(filename, "{creator}", safeCreator)
 
 		if discNumber > 0 {
 			filename = strings.ReplaceAll(filename, "{disc}", fmt.Sprintf("%d", discNumber))
@@ -64,7 +69,7 @@ func BuildExpectedFilename(trackName, artistName, albumName, albumArtist, releas
 	return filename + ".flac"
 }
 
-func sanitizeFilename(name string) string {
+func SanitizeFilename(name string) string {
 
 	sanitized := strings.ReplaceAll(name, "/", " ")
 
@@ -148,7 +153,8 @@ func SanitizeFolderPath(folderPath string) string {
 	return strings.Join(sanitizedParts, sep)
 }
 
-func sanitizeFolderName(name string) string {
+func sanitizeFolderName(name string) string { return SanitizeFilename(name) }
 
-	return sanitizeFilename(name)
+func sanitizeFilename(name string) string {
+	return SanitizeFilename(name)
 }
