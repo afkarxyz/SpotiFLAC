@@ -25,7 +25,7 @@
 
         src = pkgs.fetchurl {
           url = "https://github.com/afkarxyz/SpotiFLAC/releases/download/v${version}/SpotiFLAC.AppImage";
-          sha256 = "sha256-y27eQYNi+ysScaOymPPJAW92uKAIQQLOSdwy7LaD5U4=";
+          sha256 = "sha256-GVNRMXr8rwiuksU7oKiOPrDDEiQdJinWO139IFXkkfw=";
         };
 
         appContents = pkgs.appimageTools.extractType2 {
