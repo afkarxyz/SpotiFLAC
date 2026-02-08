@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { GetPreviewURL } from "@/../wailsjs/go/main/App";
 import { toast } from "sonner";
 export function usePreview() {
     const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
     const [currentAudio, setCurrentAudio] = useState<HTMLAudioElement | null>(null);
     const [playingTrack, setPlayingTrack] = useState<string | null>(null);
+    useEffect(() => {
+        return () => {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+        };
+    }, [currentAudio]);
     const playPreview = async (trackId: string, trackName: string) => {
         try {
             if (playingTrack === trackId && currentAudio) {

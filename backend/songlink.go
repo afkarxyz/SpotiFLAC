@@ -42,7 +42,7 @@ func NewSongLinkClient() *SongLinkClient {
 	}
 }
 
-func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLinkURLs, error) {
+func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region string) (*SongLinkURLs, error) {
 
 	now := time.Now()
 	if now.Sub(s.apiCallResetTime) >= time.Minute {
@@ -75,6 +75,10 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string) (*SongLink
 
 	apiBase, _ := base64.StdEncoding.DecodeString("aHR0cHM6Ly9hcGkuc29uZy5saW5rL3YxLWFscGhhLjEvbGlua3M/dXJsPQ==")
 	apiURL := fmt.Sprintf("%s%s", string(apiBase), url.QueryEscape(spotifyURL))
+
+	if region != "" {
+		apiURL += fmt.Sprintf("&userCountry=%s", region)
+	}
 
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {

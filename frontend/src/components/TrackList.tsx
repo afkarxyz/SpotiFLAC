@@ -221,6 +221,8 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                       {onTrackClick ? (<span className="font-medium cursor-pointer hover:underline" onClick={() => onTrackClick(track)}>
                         {track.name}
                       </span>) : (<span className="font-medium">{track.name}</span>)}
+                      {track.is_explicit && (<span className="inline-flex items-center justify-center bg-red-600 text-white text-[10px] h-4 w-4 rounded shrink-0" title="Explicit">E</span>)}
+
                       {skippedTracks.has(track.isrc) ? (<FileCheck className="h-4 w-4 text-yellow-500 shrink-0"/>) : downloadedTracks.has(track.isrc) ? (<CheckCircle className="h-4 w-4 text-green-500 shrink-0"/>) : failedTracks.has(track.isrc) ? (<XCircle className="h-4 w-4 text-red-500 shrink-0"/>) : null}
                     </div>
                     <span className="text-sm text-muted-foreground">

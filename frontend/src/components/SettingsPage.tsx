@@ -39,11 +39,6 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
     const [tempSettings, setTempSettings] = useState<SettingsType>(savedSettings);
     const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
     const [showResetConfirm, setShowResetConfirm] = useState(false);
-    const [showHiResWarning, setShowHiResWarning] = useState(false);
-    const [pendingQuality, setPendingQuality] = useState<{
-        type: 'tidal' | 'qobuz' | 'auto';
-        value: string;
-    } | null>(null);
     const hasUnsavedChanges = JSON.stringify(savedSettings) !== JSON.stringify(tempSettings);
     const resetToSaved = useCallback(() => {
         const freshSavedSettings = getSettings();
@@ -121,53 +116,22 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         }
     };
     const handleTidalQualityChange = async (value: "LOSSLESS" | "HI_RES_LOSSLESS") => {
-        if (value === "HI_RES_LOSSLESS") {
-            setPendingQuality({ type: 'tidal', value });
-            setShowHiResWarning(true);
-            return;
-        }
         setTempSettings((prev) => ({ ...prev, tidalQuality: value }));
     };
     const handleQobuzQualityChange = (value: "6" | "7") => {
-        if (value === "7") {
-            setPendingQuality({ type: 'qobuz', value });
-            setShowHiResWarning(true);
-        }
-        else {
-            setTempSettings((prev) => ({ ...prev, qobuzQuality: value }));
-        }
+        setTempSettings((prev) => ({ ...prev, qobuzQuality: value }));
     };
     const handleAutoQualityChange = async (value: "16" | "24") => {
-        if (value === "24") {
-            setPendingQuality({ type: 'auto', value });
-            setShowHiResWarning(true);
-            return;
-        }
         setTempSettings((prev) => ({ ...prev, autoQuality: value }));
     };
-    const handleConfirmHiRes = () => {
-        if (pendingQuality) {
-            if (pendingQuality.type === 'tidal') {
-                setTempSettings((prev) => ({ ...prev, tidalQuality: pendingQuality.value as "LOSSLESS" | "HI_RES_LOSSLESS" }));
-            }
-            else if (pendingQuality.type === 'qobuz') {
-                setTempSettings((prev) => ({ ...prev, qobuzQuality: pendingQuality.value as "6" | "7" }));
-            }
-            else if (pendingQuality.type === 'auto') {
-                setTempSettings((prev) => ({ ...prev, autoQuality: pendingQuality.value as "16" | "24" }));
-            }
-        }
-        setShowHiResWarning(false);
-        setPendingQuality(null);
-    };
-    return (<div className="space-y-6">
+    return (<div className="space-y-4">
     <h1 className="text-2xl font-bold">Settings</h1>
 
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-      <div className="space-y-4">
+      <div className="space-y-3">
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="download-path">Download Path</Label>
           <div className="flex gap-2">
             <InputWithContext id="download-path" value={tempSettings.downloadPath} onChange={(e) => setTempSettings((prev) => ({ ...prev, downloadPath: e.target.value }))} placeholder="C:\Users\YourUsername\Music"/>
@@ -179,7 +143,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         </div>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="theme-mode">Mode</Label>
           <Select value={tempSettings.themeMode} onValueChange={(value: "auto" | "light" | "dark") => setTempSettings((prev) => ({ ...prev, themeMode: value }))}>
             <SelectTrigger id="theme-mode">
@@ -194,7 +158,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         </div>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="theme">Accent</Label>
           <Select value={tempSettings.theme} onValueChange={(value) => setTempSettings((prev) => ({ ...prev, theme: value }))}>
             <SelectTrigger id="theme">
@@ -214,7 +178,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         </div>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="font">Font</Label>
           <Select value={tempSettings.fontFamily} onValueChange={(value: FontFamily) => setTempSettings((prev) => ({ ...prev, fontFamily: value }))}>
             <SelectTrigger id="font">
@@ -236,9 +200,9 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
       </div>
 
 
-      <div className="space-y-4">
+      <div className="space-y-3">
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Label htmlFor="downloader" className="text-sm">Source</Label>
           <div className="flex gap-2">
             <Select value={tempSettings.downloader} onValueChange={(value: "auto" | "tidal" | "qobuz" | "amazon") => setTempSettings((prev) => ({ ...prev, downloader: value }))}>
@@ -341,6 +305,16 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
           </div>
         </div>
 
+        
+        {((tempSettings.downloader === "tidal" && tempSettings.tidalQuality === "HI_RES_LOSSLESS") ||
+            (tempSettings.downloader === "qobuz" && tempSettings.qobuzQuality === "7") ||
+            (tempSettings.downloader === "auto" && tempSettings.autoQuality === "24")) && (<div className="flex items-center gap-3 pl-1">
+             <div className="flex items-center space-x-2">
+                <Switch id="allow-fallback" checked={tempSettings.allowFallback} onCheckedChange={(checked) => setTempSettings(prev => ({ ...prev, allowFallback: checked }))}/>
+                <Label htmlFor="allow-fallback" className="text-sm font-normal">Allow Quality Fallback (16-bit)</Label>
+             </div>
+          </div>)}
+
 
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
@@ -356,7 +330,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         <div className="border-t"/>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Label className="text-sm">Folder Structure</Label>
             <Tooltip>
@@ -394,7 +368,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
         <div className="border-t"/>
 
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Label className="text-sm">Filename Format</Label>
             <Tooltip>
@@ -432,7 +406,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
     </div>
 
 
-    <div className="flex gap-2 justify-between pt-4 border-t">
+    <div className="flex gap-2 justify-between pt-3 border-t">
       <Button variant="outline" onClick={() => setShowResetConfirm(true)} className="gap-1.5">
         <RotateCcw className="h-4 w-4"/>
         Reset to Default
@@ -459,19 +433,6 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest }: Setting
       </DialogContent>
     </Dialog>
 
-    <Dialog open={showHiResWarning} onOpenChange={setShowHiResWarning}>
-      <DialogContent className="max-w-md [&>button]:hidden">
-        <DialogHeader>
-          <DialogTitle>24-bit Quality Warning</DialogTitle>
-          <DialogDescription className="pt-2">
-            If 24-bit is unavailable, downloads will automatically fallback to 16-bit.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setShowHiResWarning(false)}>Disagree</Button>
-          <Button onClick={handleConfirmHiRes}>Agree</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
   </div>);
 }
