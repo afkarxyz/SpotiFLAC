@@ -130,8 +130,10 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
             }
         });
         setFilteredDownloadHistory(result);
-        setDownloadCurrentPage(1);
     }, [downloadHistory, downloadSearchQuery, downloadSortBy]);
+    useEffect(() => {
+        setDownloadCurrentPage(1);
+    }, [downloadSearchQuery, downloadSortBy]);
     useEffect(() => {
         let result = [...fetchHistory];
         if (activeFetchTab !== "all") {
@@ -144,8 +146,10 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
         }
         result.sort((a, b) => b.timestamp - a.timestamp);
         setFilteredFetchHistory(result);
-        setFetchCurrentPage(1);
     }, [fetchHistory, fetchSearchQuery, activeFetchTab]);
+    useEffect(() => {
+        setFetchCurrentPage(1);
+    }, [fetchSearchQuery, activeFetchTab]);
     const handlePreview = async (id: string, spotifyId: string) => {
         if (playingPreviewId === id) {
             audioRef.current?.pause();

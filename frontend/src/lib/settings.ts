@@ -26,6 +26,11 @@ export interface Settings {
     autoOrder: "tidal-qobuz-amazon" | "tidal-amazon-qobuz" | "qobuz-tidal-amazon" | "qobuz-amazon-tidal" | "amazon-tidal-qobuz" | "amazon-qobuz-tidal" | "tidal-qobuz" | "tidal-amazon" | "qobuz-tidal" | "qobuz-amazon" | "amazon-tidal" | "amazon-qobuz";
     autoQuality: "16" | "24";
     allowFallback: boolean;
+    useSpotFetchAPI: boolean;
+    spotFetchAPIUrl: string;
+    createPlaylistFolder: boolean;
+    createM3u8File: boolean;
+    useFirstArtistOnly: boolean;
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -101,7 +106,12 @@ export const DEFAULT_SETTINGS: Settings = {
     amazonQuality: "original",
     autoOrder: "tidal-qobuz-amazon",
     autoQuality: "16",
-    allowFallback: true
+    allowFallback: true,
+    useSpotFetchAPI: false,
+    spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
+    createPlaylistFolder: true,
+    createM3u8File: false,
+    useFirstArtistOnly: false
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
@@ -289,6 +299,15 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('allowFallback' in parsed)) {
                 parsed.allowFallback = true;
+            }
+            if (!('createPlaylistFolder' in parsed)) {
+                parsed.createPlaylistFolder = true;
+            }
+            if (!('createM3u8File' in parsed)) {
+                parsed.createM3u8File = false;
+            }
+            if (!('useFirstArtistOnly' in parsed)) {
+                parsed.useFirstArtistOnly = false;
             }
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
             return cachedSettings!;

@@ -145,10 +145,19 @@ func (q *QobuzDownloader) mapJumoQuality(quality string) int {
 func (q *QobuzDownloader) DownloadFromJumo(trackID int64, quality string) (string, error) {
 	formatID := q.mapJumoQuality(quality)
 	region := "US"
-	url := fmt.Sprintf("https://jumo-dl.pages.dev/file?track_id=%d&format_id=%d&region=%s", trackID, formatID, region)
+	url := fmt.Sprintf("https://jumo-dl.pages.dev/get?track_id=%d&format_id=%d&region=%s", trackID, formatID, region)
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "https://jumo-dl.pages.dev/")
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -163,7 +172,9 @@ func (q *QobuzDownloader) DownloadFromJumo(trackID int64, quality string) (strin
 		return "", err
 	}
 
-	var result map[string]interface{}
+	var result struct {
+		URL string `json:"url"`
+	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
 
@@ -173,18 +184,8 @@ func (q *QobuzDownloader) DownloadFromJumo(trackID int64, quality string) (strin
 		}
 	}
 
-	if urlVal, ok := result["url"].(string); ok && urlVal != "" {
-		return urlVal, nil
-	}
-
-	if data, ok := result["data"].(map[string]interface{}); ok {
-		if urlVal, ok := data["url"].(string); ok && urlVal != "" {
-			return urlVal, nil
-		}
-	}
-
-	if linkVal, ok := result["link"].(string); ok && linkVal != "" {
-		return linkVal, nil
+	if result.URL != "" {
+		return result.URL, nil
 	}
 
 	return "", fmt.Errorf("URL not found in Jumo response")
@@ -214,6 +215,15 @@ func (q *QobuzDownloader) DownloadFromStandard(apiBase string, trackID int64, qu
 	var streamResp QobuzStreamResponse
 	if err := json.Unmarshal(body, &streamResp); err == nil && streamResp.URL != "" {
 		return streamResp.URL, nil
+	}
+
+	var nestedResp struct {
+		Data struct {
+			URL string `json:"url"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &nestedResp); err == nil && nestedResp.Data.URL != "" {
+		return nestedResp.Data.URL, nil
 	}
 
 	return "", fmt.Errorf("invalid response")

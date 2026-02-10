@@ -10,6 +10,9 @@ import { BadgeAlertIcon } from "@/components/ui/badge-alert";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { openExternal } from "@/lib/utils";
+import BmcLogo from "@/assets/bmc-logo-side.svg";
+import BmcLogoWhite from "@/assets/bmc-logo-side-white.svg";
+import KofiLogo from "@/assets/kofi_symbol.svg";
 export type PageType = "main" | "settings" | "debug" | "audio-analysis" | "audio-converter" | "file-manager" | "about" | "history";
 interface SidebarProps {
     currentPage: PageType;
@@ -109,16 +112,26 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
           <p>About</p>
         </TooltipContent>
       </Tooltip>
-      <Tooltip delayDuration={0}>
-        <TooltipTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-primary/10 hover:text-primary" onClick={() => openExternal("https://ko-fi.com/afkarxyz")}>
+      <div className="relative group">
+          <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-primary/10 hover:text-primary">
             <CoffeeIcon size={20} loop={true}/>
           </Button>
-        </TooltipTrigger>
-        <TooltipContent side="right">
-          <p>Every coffee helps me keep going</p>
-        </TooltipContent>
-      </Tooltip>
+
+          
+          <div className="absolute left-10 bottom-0 w-4 h-full bg-transparent"/>
+
+          <div className="absolute left-10 bottom-0 mb-0 ml-3 hidden group-hover:flex flex-col gap-1 p-1 bg-popover border border-border rounded-md shadow-md z-50 w-max animate-in fade-in zoom-in-95 duration-200 origin-bottom-left">
+               <button onClick={() => openExternal("https://ko-fi.com/afkarxyz")} className="flex items-center gap-2 px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground rounded-sm transition-colors text-left w-full">
+                  <img src={KofiLogo} className="h-4 w-4" alt="Ko-fi"/>
+                  Support me on Ko-fi
+               </button>
+               <button onClick={() => openExternal("https://buymeacoffee.com/afkarxyz")} className="flex items-center gap-2 px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground rounded-sm transition-colors text-left w-full">
+                  <img src={BmcLogo} className="h-4 w-4 dark:hidden" alt="BMC"/>
+                  <img src={BmcLogoWhite} className="h-4 w-4 hidden dark:block" alt="BMC"/>
+                  Buy Me a Coffee
+               </button>
+          </div>
+      </div>
     </div>
   </div>);
 }

@@ -767,8 +767,57 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 	if discNumber == 0 {
 		discNumber = 1
 	}
+
+	maxDiscFromAlbum := 0
+	totalDiscsFromAlbum := 0
+
+	if len(albumFetchData) > 0 && albumFetchData[0] != nil {
+		albumUnion := getMap(getMap(albumFetchData[0], "data"), "albumUnion")
+		if len(albumUnion) > 0 {
+			discsData := getMap(albumUnion, "discs")
+			if len(discsData) > 0 {
+				totalDiscsFromAlbum = int(getFloat64(discsData, "totalCount"))
+			}
+
+			albumTracks := getMap(albumUnion, "tracks")
+			if len(albumTracks) > 0 {
+				albumTrackItems := getSlice(albumTracks, "items")
+				currentTrackID := getString(trackData, "id")
+				for idx, item := range albumTrackItems {
+					itemMap, ok := item.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					trackItem := getMap(itemMap, "track")
+					if len(trackItem) > 0 {
+						dNum := int(getFloat64(trackItem, "discNumber"))
+						if dNum > maxDiscFromAlbum {
+							maxDiscFromAlbum = dNum
+						}
+
+						trackURI := getString(trackItem, "uri")
+						if strings.Contains(trackURI, currentTrackID) || getString(trackItem, "id") == currentTrackID {
+							if dNum > 0 {
+								discNumber = dNum
+							}
+						}
+
+						trackNum := int(getFloat64(trackData, "trackNumber"))
+						itemTrackNum := idx + 1
+						if trackNum == itemTrackNum && dNum > 0 {
+						}
+					}
+				}
+			}
+		}
+	}
+
 	totalDiscs := 1
-	if discInfo["totalDiscs"] != nil {
+	if totalDiscsFromAlbum > 0 {
+		totalDiscs = totalDiscsFromAlbum
+	} else if maxDiscFromAlbum > 0 {
+		totalDiscs = maxDiscFromAlbum
+	} else if discInfo["totalDiscs"] != nil {
 		totalDiscs = discInfo["totalDiscs"].(int)
 	}
 
@@ -878,6 +927,11 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 			contentRating := getMap(track, "contentRating")
 			isExplicit := getString(contentRating, "label") == "EXPLICIT"
 
+			discNumber := int(getFloat64(track, "discNumber"))
+			if discNumber == 0 {
+				discNumber = 1
+			}
+
 			trackInfo := map[string]interface{}{
 				"id":          trackID,
 				"name":        getString(track, "name"),
@@ -886,6 +940,7 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 				"duration":    durationString,
 				"plays":       getString(track, "playcount"),
 				"is_explicit": isExplicit,
+				"disc_number": discNumber,
 			}
 			tracks = append(tracks, trackInfo)
 		}
@@ -905,6 +960,12 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 		albumID = parts[len(parts)-1]
 	}
 
+	totalDiscs := 1
+	discsData := getMap(albumData, "discs")
+	if len(discsData) > 0 {
+		totalDiscs = int(getFloat64(discsData, "totalCount"))
+	}
+
 	filtered := map[string]interface{}{
 		"id":          albumID,
 		"name":        getString(albumData, "name"),
@@ -913,6 +974,9 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 		"releaseDate": releaseDate,
 		"count":       len(tracks),
 		"tracks":      tracks,
+		"discs": map[string]interface{}{
+			"totalCount": totalDiscs,
+		},
 	}
 
 	return filtered
@@ -1103,10 +1167,15 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 			contentRating := getMap(trackData, "contentRating")
 			isExplicit := getString(contentRating, "label") == "EXPLICIT"
 
+			trackName := getString(trackData, "name")
+			if trackName == "" {
+				continue
+			}
+
 			trackInfo := map[string]interface{}{
 				"id":          trackID,
 				"cover":       trackCover,
-				"title":       getString(trackData, "name"),
+				"title":       trackName,
 				"artist":      artistsString,
 				"artistIds":   artistIDs,
 				"plays":       rank,
@@ -1116,6 +1185,7 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 				"albumId":     albumID,
 				"duration":    durationString,
 				"is_explicit": isExplicit,
+				"disc_number": int(getFloat64(trackData, "discNumber")),
 			}
 			tracks = append(tracks, trackInfo)
 		}

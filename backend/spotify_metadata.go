@@ -210,7 +210,10 @@ type apiAlbumResponse struct {
 	Cover       string `json:"cover"`
 	ReleaseDate string `json:"releaseDate"`
 	Count       int    `json:"count"`
-	Tracks      []struct {
+	Discs       struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"discs"`
+	Tracks []struct {
 		ID         string   `json:"id"`
 		Name       string   `json:"name"`
 		Artists    string   `json:"artists"`
@@ -218,6 +221,7 @@ type apiAlbumResponse struct {
 		Duration   string   `json:"duration"`
 		Plays      string   `json:"plays"`
 		IsExplicit bool     `json:"is_explicit"`
+		DiscNumber int      `json:"disc_number"`
 	} `json:"tracks"`
 }
 
@@ -245,6 +249,7 @@ type apiPlaylistResponse struct {
 		AlbumID     string   `json:"albumId"`
 		Duration    string   `json:"duration"`
 		IsExplicit  bool     `json:"is_explicit"`
+		DiscNumber  int      `json:"disc_number"`
 	} `json:"tracks"`
 }
 
@@ -432,22 +437,45 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 				}
 
 				if albumID != "" {
-					albumPayload := map[string]interface{}{
-						"variables": map[string]interface{}{
-							"uri":    fmt.Sprintf("spotify:album:%s", albumID),
-							"locale": "",
-							"offset": 0,
-							"limit":  1,
-						},
-						"operationName": "getAlbum",
-						"extensions": map[string]interface{}{
-							"persistedQuery": map[string]interface{}{
-								"version":    1,
-								"sha256Hash": "b9bfabef66ed756e5e13f68a942deb60bd4125ec1f1be8cc42769dc0259b4b10",
+
+					albumResponse, err := c.fetchAlbumWithClient(ctx, client, albumID)
+					if err == nil && albumResponse != nil {
+
+						albumJSON, _ := json.Marshal(albumResponse)
+						var albumMap map[string]interface{}
+						json.Unmarshal(albumJSON, &albumMap)
+
+						tracksItems := []interface{}{}
+						if albumMap["tracks"] != nil {
+							if trackList, ok := albumMap["tracks"].([]interface{}); ok {
+								for _, t := range trackList {
+									if trackMap, ok := t.(map[string]interface{}); ok {
+										tracksItems = append(tracksItems, map[string]interface{}{
+											"track": map[string]interface{}{
+												"discNumber": trackMap["disc_number"],
+												"id":         trackMap["id"],
+												"uri":        fmt.Sprintf("spotify:track:%s", trackMap["id"]),
+											},
+										})
+									}
+								}
+							}
+						}
+
+						albumFetchData = map[string]interface{}{
+							"data": map[string]interface{}{
+								"albumUnion": map[string]interface{}{
+									"discs": map[string]interface{}{
+										"totalCount": albumResponse.Discs.TotalCount,
+									},
+									"tracks": map[string]interface{}{
+										"items":      tracksItems,
+										"totalCount": albumResponse.Count,
+									},
+								},
 							},
-						},
+						}
 					}
-					albumFetchData, _ = client.Query(albumPayload)
 				}
 			}
 		}
@@ -914,8 +942,8 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse) (*AlbumRe
 			ReleaseDate: raw.ReleaseDate,
 			TrackNumber: trackNumber,
 			TotalTracks: raw.Count,
-			DiscNumber:  1,
-			TotalDiscs:  0,
+			DiscNumber:  item.DiscNumber,
+			TotalDiscs:  raw.Discs.TotalCount,
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", item.ID),
 			ISRC:        item.ID,
 			AlbumID:     raw.ID,
@@ -974,7 +1002,7 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse) Pla
 			ReleaseDate: "",
 			TrackNumber: 0,
 			TotalTracks: 0,
-			DiscNumber:  1,
+			DiscNumber:  item.DiscNumber,
 			TotalDiscs:  0,
 			ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", item.ID),
 			ISRC:        item.ID,
@@ -1094,7 +1122,7 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 					ReleaseDate: albumData.ReleaseDate,
 					TrackNumber: trackNumber,
 					TotalTracks: albumData.Count,
-					DiscNumber:  1,
+					DiscNumber:  tr.DiscNumber,
 					ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", tr.ID),
 					ISRC:        tr.ID,
 					AlbumID:     albumID,

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Bug, Lightbulb, ExternalLink, Star, GitFork, Clock, Download, CircleHelp, Blocks } from "lucide-react";
+import { Bug, Lightbulb, ExternalLink, Star, GitFork, Clock, Download, CircleHelp, Blocks, Heart } from "lucide-react";
 import AudioTTSProIcon from "@/assets/audiotts-pro.webp";
 import ChatGPTTTSIcon from "@/assets/chatgpt-tts.webp";
 import XProIcon from "@/assets/x-pro.webp";
@@ -15,6 +15,8 @@ import SpotubeDLIcon from "@/assets/icons/spotubedl.svg";
 import SpotiDownloaderIcon from "@/assets/icons/spotidownloader.svg";
 import XBatchDLIcon from "@/assets/icons/xbatchdl.svg";
 import SpotiFLACNextIcon from "@/assets/icons/next.svg";
+import BmcLogo from "@/assets/bmc-logo.svg";
+import KofiLogo from "@/assets/kofi_symbol.svg";
 import { langColors } from "@/assets/github-lang-colors";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DragDropMedia } from "./DragDropTextarea";
@@ -24,7 +26,7 @@ interface AboutPageProps {
 export function AboutPage({ version }: AboutPageProps) {
     const [os, setOs] = useState("Unknown");
     const [location, setLocation] = useState("Unknown");
-    const [activeTab, setActiveTab] = useState<"bug_report" | "feature_request" | "faq" | "projects">("bug_report");
+    const [activeTab, setActiveTab] = useState<"bug_report" | "feature_request" | "faq" | "projects" | "support">("bug_report");
     const [bugType, setBugType] = useState("Track");
     const [problem, setProblem] = useState("");
     const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -266,6 +268,10 @@ ${contextContent}`;
                 <Blocks className="h-4 w-4"/>
                 Other Projects
             </Button>
+            <Button variant={activeTab === "support" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("support")} className="rounded-b-none">
+                <Heart className="h-4 w-4"/>
+                Support Us
+            </Button>
         </div>
 
         <div className={`flex-1 min-h-0 ${activeTab === "faq" ? "overflow-hidden" : ""}`}>
@@ -433,6 +439,28 @@ ${contextContent}`;
                             </Card>
                         </div>
                     </div>)}
+
+            
+            {activeTab === "support" && (<div className="flex flex-col items-center justify-center p-8 space-y-8">
+                <div className="text-center space-y-2">
+                    <h3 className="text-2xl font-bold tracking-tight">Support Our Work</h3>
+                    <p className="text-muted-foreground max-w-[500px]">
+                        If this software is useful and brings you value, consider supporting the project by buying me a coffee. Your support helps keep development going.
+                    </p>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4 w-full max-w-lg">
+                    <Button size="lg" className="h-16 text-lg font-semibold text-white gap-3 group" style={{ backgroundColor: "#72a4f2" }} onClick={() => openExternal("https://ko-fi.com/afkarxyz")}>
+                        <img src={KofiLogo} className="h-8 w-8 transition-transform group-hover:scale-110" alt="Ko-fi"/>
+                        Support me on Ko-fi
+                    </Button>
+
+                    <Button size="lg" className="h-16 text-lg font-semibold text-black gap-3 group" style={{ backgroundColor: "#ffdd00" }} onClick={() => openExternal("https://buymeacoffee.com/afkarxyz")}>
+                        <img src={BmcLogo} className="h-6 w-6 transition-transform group-hover:scale-110" alt="Buy Me a Coffee"/>
+                        Buy Me a Coffee
+                    </Button>
+                </div>
+            </div>)}
         </div>
     </div>);
 }

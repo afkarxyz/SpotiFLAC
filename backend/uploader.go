@@ -66,7 +66,12 @@ func uploadToService(filename string, fileReader io.Reader) (string, error) {
 
 	writer.Close()
 
-	req, err := http.NewRequest("POST", "https://u1112.send.now/cgi-bin/upload.cgi?upload_type=file&utype=anon", body)
+	uploadURL, err := getUploadURL()
+	if err != nil {
+		return "", fmt.Errorf("failed to get upload server: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", uploadURL, body)
 	if err != nil {
 		return "", err
 	}
@@ -111,6 +116,45 @@ func uploadToService(filename string, fileReader io.Reader) (string, error) {
 	}
 
 	return fetchDirectImageLink(downloadLink)
+}
+
+func getUploadURL() (string, error) {
+	req, err := http.NewRequest("GET", "https://send.now/", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("failed to fetch main page: status %d", resp.StatusCode)
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	body := string(bodyBytes)
+
+	re := regexp.MustCompile(`action=["'](https://[^"']+/cgi-bin/upload\.cgi\?upload_type=file[^"']*)["']`)
+	matches := re.FindStringSubmatch(body)
+	if len(matches) > 1 {
+		return matches[1], nil
+	}
+
+	reFallback := regexp.MustCompile(`action=["'](https://[^"']+/cgi-bin/upload\.cgi)`)
+	matchesFallback := reFallback.FindStringSubmatch(body)
+	if len(matchesFallback) > 1 {
+		return matchesFallback[1] + "?upload_type=file&utype=anon", nil
+	}
+
+	return "", fmt.Errorf("upload URL not found in main page")
 }
 
 func fetchDirectImageLink(url string) (string, error) {

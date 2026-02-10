@@ -5,6 +5,13 @@ import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
+function getFirstArtist(artistString: string): string {
+    if (!artistString)
+        return artistString;
+    const delimiters = /[,&]|(?:\s+(?:feat\.?|ft\.?|featuring)\s+)/i;
+    const parts = artistString.split(delimiters);
+    return parts[0].trim();
+}
 interface CheckFileExistenceRequest {
     spotify_id: string;
     track_name: string;
@@ -28,8 +35,9 @@ interface FileExistenceResult {
     track_name?: string;
     artist_name?: string;
 }
-const CheckFilesExistence = (outputDir: string, tracks: CheckFileExistenceRequest[]): Promise<FileExistenceResult[]> => (window as any)["go"]["main"]["App"]["CheckFilesExistence"](outputDir, tracks);
+const CheckFilesExistence = (outputDir: string, rootDir: string, tracks: CheckFileExistenceRequest[]): Promise<FileExistenceResult[]> => (window as any)["go"]["main"]["App"]["CheckFilesExistence"](outputDir, rootDir, tracks);
 const SkipDownloadItem = (itemID: string, filePath: string): Promise<void> => (window as any)["go"]["main"]["App"]["SkipDownloadItem"](itemID, filePath);
+const CreateM3U8File = (playlistName: string, outputDir: string, filePaths: string[]): Promise<void> => (window as any)["go"]["main"]["App"]["CreateM3U8File"](playlistName, outputDir, filePaths);
 export function useDownload(region: string) {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -74,10 +82,16 @@ export function useDownload(region: string) {
         if (hasSubfolder) {
             useAlbumTrackNumber = true;
         }
+        const displayArtist = settings.useFirstArtistOnly && artistName
+            ? getFirstArtist(artistName)
+            : artistName;
+        const displayAlbumArtist = settings.useFirstArtistOnly && albumArtist
+            ? getFirstArtist(albumArtist)
+            : albumArtist;
         const templateData: TemplateData = {
-            artist: artistName?.replace(/\//g, placeholder),
+            artist: displayArtist?.replace(/\//g, placeholder),
             album: albumName?.replace(/\//g, placeholder),
-            album_artist: albumArtist?.replace(/\//g, placeholder) || artistName?.replace(/\//g, placeholder),
+            album_artist: displayAlbumArtist?.replace(/\//g, placeholder) || displayArtist?.replace(/\//g, placeholder),
             title: trackName?.replace(/\//g, placeholder),
             track: trackNumberForTemplate,
             year: yearValue,
@@ -85,7 +99,7 @@ export function useDownload(region: string) {
         };
         const folderTemplate = settings.folderTemplate || "";
         const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
-        if (playlistName && !useAlbumSubfolder) {
+        if (settings.createPlaylistFolder && playlistName && !useAlbumSubfolder) {
             outputDir = joinPath(os, outputDir, sanitizePath(playlistName.replace(/\//g, " "), os));
         }
         if (settings.folderTemplate) {
@@ -105,9 +119,9 @@ export function useDownload(region: string) {
                 const checkRequest: CheckFileExistenceRequest = {
                     spotify_id: spotifyId || isrc,
                     track_name: trackName,
-                    artist_name: artistName,
+                    artist_name: displayArtist || "",
                     album_name: albumName,
-                    album_artist: albumArtist,
+                    album_artist: displayAlbumArtist,
                     release_date: finalReleaseDate || releaseDate,
                     track_number: finalTrackNumber || spotifyTrackNumber || 0,
                     disc_number: spotifyDiscNumber || 0,
@@ -117,7 +131,7 @@ export function useDownload(region: string) {
                     include_track_number: settings.trackNumber || false,
                     audio_format: serviceForCheck,
                 };
-                const existenceResults = await CheckFilesExistence(outputDir, [checkRequest]);
+                const existenceResults = await CheckFilesExistence(outputDir, settings.downloadPath, [checkRequest]);
                 if (existenceResults.length > 0 && existenceResults[0].exists) {
                     fileExists = true;
                     return {
@@ -135,7 +149,7 @@ export function useDownload(region: string) {
         const { AddToDownloadQueue } = await import("../../wailsjs/go/main/App");
         let itemID: string | undefined;
         if (!fileExists) {
-            itemID = await AddToDownloadQueue(isrc, trackName || "", artistName || "", albumName || "");
+            itemID = await AddToDownloadQueue(isrc, trackName || "", displayArtist || "", albumName || "");
         }
         if (service === "auto") {
             let streamingURLs: any = null;
@@ -375,7 +389,7 @@ export function useDownload(region: string) {
         };
         const folderTemplate = settings.folderTemplate || "";
         const useAlbumSubfolder = folderTemplate.includes("{album}") || folderTemplate.includes("{album_artist}") || folderTemplate.includes("{playlist}");
-        if (folderName && (!isAlbum || !useAlbumSubfolder)) {
+        if (settings.createPlaylistFolder && folderName && (!isAlbum || !useAlbumSubfolder)) {
             outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
         }
         if (settings.folderTemplate) {
@@ -628,7 +642,7 @@ export function useDownload(region: string) {
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
         const useAlbumTag = settings.folderTemplate?.includes("{album}");
-        if (folderName && (!isAlbum || !useAlbumTag)) {
+        if (settings.createPlaylistFolder && folderName && (!isAlbum || !useAlbumTag)) {
             outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
         }
         const selectedTrackObjects = selectedTracks
@@ -654,13 +668,15 @@ export function useDownload(region: string) {
                 audio_format: audioFormat,
             };
         });
-        const existenceResults = await CheckFilesExistence(outputDir, existenceChecks);
+        const existenceResults = await CheckFilesExistence(outputDir, settings.downloadPath, existenceChecks);
         const existingSpotifyIDs = new Set<string>();
         const existingFilePaths = new Map<string, string>();
+        const finalFilePaths = new Map<string, string>();
         for (const result of existenceResults) {
             if (result.exists) {
                 existingSpotifyIDs.add(result.spotify_id);
                 existingFilePaths.set(result.spotify_id, result.file_path || "");
+                finalFilePaths.set(result.spotify_id, result.file_path || "");
             }
         }
         logger.info(`found ${existingSpotifyIDs.size} existing files`);
@@ -711,6 +727,10 @@ export function useDownload(region: string) {
                         successCount++;
                         logger.success(`downloaded: ${track.name} - ${track.artists}`);
                     }
+                    if (response.file) {
+                        finalFilePaths.set(isrc, response.file);
+                        finalFilePaths.set(track.spotify_id || isrc, response.file);
+                    }
                     setDownloadedTracks((prev) => new Set(prev).add(isrc));
                     setFailedTracks((prev) => {
                         const newSet = new Set(prev);
@@ -743,6 +763,20 @@ export function useDownload(region: string) {
         shouldStopDownloadRef.current = false;
         const { CancelAllQueuedItems } = await import("../../wailsjs/go/main/App");
         await CancelAllQueuedItems();
+        if (settings.createM3u8File && folderName) {
+            const paths = selectedTrackObjects.map((t) => finalFilePaths.get(t.spotify_id || t.isrc) || "").filter((p) => p !== "");
+            if (paths.length > 0) {
+                try {
+                    logger.info(`creating m3u8 playlist: ${folderName}`);
+                    await CreateM3U8File(folderName, outputDir, paths);
+                    toast.success("M3U8 playlist created");
+                }
+                catch (err) {
+                    logger.error(`failed to create m3u8 playlist: ${err}`);
+                    toast.error(`Failed to create M3U8 playlist: ${err}`);
+                }
+            }
+        }
         logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
         if (errorCount === 0 && skippedCount === 0) {
             toast.success(`Downloaded ${successCount} tracks successfully`);
@@ -777,7 +811,7 @@ export function useDownload(region: string) {
         let outputDir = settings.downloadPath;
         const os = settings.operatingSystem;
         const useAlbumTag = settings.folderTemplate?.includes("{album}");
-        if (folderName && (!isAlbum || !useAlbumTag)) {
+        if (settings.createPlaylistFolder && folderName && (!isAlbum || !useAlbumTag)) {
             outputDir = joinPath(os, outputDir, sanitizePath(folderName.replace(/\//g, " "), os));
         }
         logger.info(`checking existing files in parallel...`);
@@ -800,13 +834,16 @@ export function useDownload(region: string) {
                 audio_format: audioFormat,
             };
         });
-        const existenceResults = await CheckFilesExistence(outputDir, existenceChecks);
+        const existenceResults = await CheckFilesExistence(outputDir, settings.downloadPath, existenceChecks);
+        const finalFilePaths: string[] = new Array(tracksWithIsrc.length).fill("");
         const existingSpotifyIDs = new Set<string>();
         const existingFilePaths = new Map<string, string>();
-        for (const result of existenceResults) {
+        for (let i = 0; i < existenceResults.length; i++) {
+            const result = existenceResults[i];
             if (result.exists) {
                 existingSpotifyIDs.add(result.spotify_id);
                 existingFilePaths.set(result.spotify_id, result.file_path || "");
+                finalFilePaths[i] = result.file_path || "";
             }
         }
         logger.info(`found ${existingSpotifyIDs.size} existing files`);
@@ -861,6 +898,9 @@ export function useDownload(region: string) {
                         newSet.delete(track.isrc);
                         return newSet;
                     });
+                    if (response.file) {
+                        finalFilePaths[originalIndex] = response.file;
+                    }
                 }
                 else {
                     errorCount++;
@@ -885,6 +925,17 @@ export function useDownload(region: string) {
         shouldStopDownloadRef.current = false;
         const { CancelAllQueuedItems: CancelQueued } = await import("../../wailsjs/go/main/App");
         await CancelQueued();
+        if (settings.createM3u8File && folderName) {
+            try {
+                logger.info(`creating m3u8 playlist: ${folderName}`);
+                await CreateM3U8File(folderName, outputDir, finalFilePaths.filter(p => p !== ""));
+                toast.success("M3U8 playlist created");
+            }
+            catch (err) {
+                logger.error(`failed to create m3u8 playlist: ${err}`);
+                toast.error(`Failed to create M3U8 playlist: ${err}`);
+            }
+        }
         logger.info(`batch complete: ${successCount} downloaded, ${skippedCount} skipped, ${errorCount} failed`);
         if (errorCount === 0 && skippedCount === 0) {
             toast.success(`Downloaded ${successCount} tracks successfully`);

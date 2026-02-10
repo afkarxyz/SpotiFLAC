@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 export function sanitizePath(input: string, os: string): string {
-    let sanitized = input.trim();
+    const sanitized = input.trim();
     if (os === "Windows") {
         return sanitized.replace(/[<>:"/\\|?*]/g, "_");
     }

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { X, Download, CheckCircle2, XCircle, Clock, FileCheck, Trash2, HardDrive, Zap, Timer } from "lucide-react";
+import { X, Download, CheckCircle2, XCircle, Clock, FileCheck, Trash2, HardDrive, Zap, Timer, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { GetDownloadQueue, ClearCompletedDownloads, ClearAllDownloads } from "../../wailsjs/go/main/App";
+import { GetDownloadQueue, ClearCompletedDownloads, ClearAllDownloads, ExportFailedDownloads } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { backend } from "../../wailsjs/go/models";
 interface DownloadQueueProps {
@@ -59,6 +59,21 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
             console.error("Failed to reset queue:", error);
         }
     };
+    const handleExportFailed = async () => {
+        try {
+            const message = await ExportFailedDownloads();
+            if (message.startsWith("Successfully")) {
+                toast.success(message);
+            }
+            else if (message !== "Export cancelled") {
+                toast.info(message);
+            }
+        }
+        catch (error) {
+            console.error("Failed to export:", error);
+            toast.error(`Failed to export: ${error}`);
+        }
+    };
     const getStatusIcon = (status: string) => {
         switch (status) {
             case "downloading":
@@ -105,6 +120,15 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
             return `${seconds}s`;
         }
     };
+    const [filterStatus, setFilterStatus] = useState<string>("all");
+    const toggleFilter = (status: string) => {
+        setFilterStatus(prev => prev === status ? "all" : status);
+    };
+    const filteredQueue = queueInfo.queue.filter((item: any) => {
+        if (filterStatus === "all")
+            return true;
+        return item.status === filterStatus;
+    });
     return (<Dialog open={isOpen} onOpenChange={onClose}>
     <DialogContent className="max-w-[1200px] w-[95vw] max-h-[80vh] flex flex-col p-0 gap-0 [&>button]:hidden">
       <DialogHeader className="px-6 pt-6 pb-4 border-b space-y-0">
@@ -115,6 +139,10 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
               <Trash2 className="h-3 w-3"/>
               Clear History
             </Button>)}
+            {queueInfo.failed_count > 0 && (<Button variant="ghost" size="sm" className="h-7 text-xs gap-1.5" onClick={handleExportFailed}>
+              <FileDown className="h-3 w-3"/>
+              Export Failures
+            </Button>)}
             <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full hover:bg-muted" onClick={onClose}>
               <X className="h-4 w-4"/>
             </Button>
@@ -123,22 +151,22 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
 
 
         <div className="flex items-center gap-4 text-sm">
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-all select-none ${filterStatus === 'queued' ? 'bg-secondary px-2 py-0.5 rounded-md ring-1 ring-border' : ''}`} onClick={() => toggleFilter('queued')}>
             <Clock className="h-3.5 w-3.5 text-muted-foreground"/>
             <span className="text-muted-foreground">Queued:</span>
             <span className="font-semibold">{queueInfo.queued_count}</span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-all select-none ${filterStatus === 'completed' ? 'bg-green-500/10 px-2 py-0.5 rounded-md ring-1 ring-green-500/20' : ''}`} onClick={() => toggleFilter('completed')}>
             <CheckCircle2 className="h-3.5 w-3.5 text-green-500"/>
             <span className="text-muted-foreground">Completed:</span>
             <span className="font-semibold">{queueInfo.completed_count}</span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-all select-none ${filterStatus === 'skipped' ? 'bg-yellow-500/10 px-2 py-0.5 rounded-md ring-1 ring-yellow-500/20' : ''}`} onClick={() => toggleFilter('skipped')}>
             <FileCheck className="h-3.5 w-3.5 text-yellow-500"/>
             <span className="text-muted-foreground">Skipped:</span>
             <span className="font-semibold">{queueInfo.skipped_count}</span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-all select-none ${filterStatus === 'failed' ? 'bg-red-500/10 px-2 py-0.5 rounded-md ring-1 ring-red-500/20' : ''}`} onClick={() => toggleFilter('failed')}>
             <XCircle className="h-3.5 w-3.5 text-red-500"/>
             <span className="text-muted-foreground">Failed:</span>
             <span className="font-semibold">{queueInfo.failed_count}</span>
@@ -180,7 +208,10 @@ export function DownloadQueue({ isOpen, onClose }: DownloadQueueProps) {
           {queueInfo.queue.length === 0 ? (<div className="text-center py-12 text-muted-foreground">
             <Download className="h-12 w-12 mx-auto mb-3 opacity-20"/>
             <p>No downloads in queue</p>
-          </div>) : (queueInfo.queue.map((item) => (<div key={item.id} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
+          </div>) : filteredQueue.length === 0 ? (<div className="text-center py-12 text-muted-foreground">
+             <p>No downloads with status "{filterStatus}"</p>
+             <Button variant="link" onClick={() => setFilterStatus("all")}>Clear filter</Button>
+            </div>) : (filteredQueue.map((item: any) => (<div key={item.id} className="border rounded-lg p-3 hover:bg-muted/30 transition-colors">
             <div className="flex items-start gap-3">
               <div className="mt-1">{getStatusIcon(item.status)}</div>
 

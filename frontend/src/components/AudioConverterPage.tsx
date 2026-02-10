@@ -243,7 +243,7 @@ export function AudioConverterPage() {
                 codec: outputFormat === "m4a" ? m4aCodec : "",
             });
             setFiles((prev) => prev.map((f) => {
-                const result = results.find((r) => r.input_file === f.path);
+                const result = results.find((r) => r.input_file === f.path || r.input_file.toLowerCase() === f.path.toLowerCase());
                 if (result) {
                     return {
                         ...f,
