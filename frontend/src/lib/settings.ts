@@ -363,6 +363,7 @@ export async function saveSettings(settings: Settings): Promise<void> {
         cachedSettings = settings;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
         await SaveToBackend(settings as any);
+        window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: settings }));
     }
     catch (error) {
         console.error("Failed to save settings:", error);

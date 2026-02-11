@@ -67,9 +67,9 @@ interface ArtistInfoProps {
     isBulkDownloadingLyrics?: boolean;
     onSearchChange: (value: string) => void;
     onSortChange: (value: string) => void;
-    onToggleTrack: (isrc: string) => void;
+    onToggleTrack: (id: string) => void;
     onToggleSelectAll: (tracks: TrackMetadata[]) => void;
-    onDownloadTrack: (isrc: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => void;
+    onDownloadTrack: (id: string, name: string, artists: string, albumName: string, spotifyId?: string, folderName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => void;
     onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
     onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName: string, folderName?: string, isArtistDiscography?: boolean, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
     onCheckAvailability?: (spotifyId: string) => void;
@@ -491,8 +491,8 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                       <ScrollArea className="flex-1 pr-4">
                           <div className="space-y-4">
                               {filteredAlbumGroups.map(([albumName, data]) => {
-                const tracksWithIsrc = data.tracks.filter(t => t.isrc);
-                const isSelected = tracksWithIsrc.length > 0 && tracksWithIsrc.every(t => selectedTracks.includes(t.isrc!));
+                const tracksWithId = data.tracks.filter(t => t.spotify_id);
+                const isSelected = tracksWithId.length > 0 && tracksWithId.every(t => selectedTracks.includes(t.spotify_id!));
                 return (<div key={albumName} className="flex items-start space-x-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
                                           <Checkbox id={`album-select-${albumName}`} checked={isSelected} onCheckedChange={() => onToggleSelectAll(data.tracks)} className="mt-1"/>
                                           <div className="grid gap-1.5 leading-none flex-1">

@@ -77,7 +77,7 @@ func NewQobuzDownloader() *QobuzDownloader {
 	}
 }
 
-func (q *QobuzDownloader) SearchByISRC(isrc string) (*QobuzTrack, error) {
+func (q *QobuzDownloader) searchByISRC(isrc string) (*QobuzTrack, error) {
 	apiBase := "https://www.qobuz.com/api.json/0.2/track/search?query="
 	url := fmt.Sprintf("%s%s&limit=1&app_id=%s", apiBase, isrc, q.appID)
 
@@ -433,7 +433,23 @@ func buildQobuzFilename(title, artist, album, albumArtist, releaseDate string, t
 	return filename + ".flac"
 }
 
-func (q *QobuzDownloader) DownloadByISRC(deezerISRC, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool) (string, error) {
+func (q *QobuzDownloader) DownloadTrack(spotifyID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool) (string, error) {
+	var deezerISRC string
+	if spotifyID != "" {
+		songlinkClient := NewSongLinkClient()
+		isrc, err := songlinkClient.GetISRC(spotifyID)
+		if err != nil {
+			return "", fmt.Errorf("failed to get ISRC: %v", err)
+		}
+		deezerISRC = isrc
+	} else {
+		return "", fmt.Errorf("spotify ID is required for Qobuz download")
+	}
+
+	return q.DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyURL, allowFallback, useFirstArtistOnly)
+}
+
+func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool) (string, error) {
 	fmt.Printf("Fetching track info for ISRC: %s\n", deezerISRC)
 
 	if outputDir != "." {
@@ -442,7 +458,7 @@ func (q *QobuzDownloader) DownloadByISRC(deezerISRC, outputDir, quality, filenam
 		}
 	}
 
-	track, err := q.SearchByISRC(deezerISRC)
+	track, err := q.searchByISRC(deezerISRC)
 	if err != nil {
 		return "", err
 	}
@@ -477,9 +493,15 @@ func (q *QobuzDownloader) DownloadByISRC(deezerISRC, outputDir, quality, filenam
 	fmt.Printf("Download URL obtained: %s\n", urlPreview)
 
 	safeArtist := sanitizeFilename(artists)
+	safeAlbumArtist := sanitizeFilename(spotifyAlbumArtist)
+
+	if useFirstArtistOnly {
+		safeArtist = sanitizeFilename(GetFirstArtist(artists))
+		safeAlbumArtist = sanitizeFilename(GetFirstArtist(spotifyAlbumArtist))
+	}
+
 	safeTitle := sanitizeFilename(trackTitle)
 	safeAlbum := sanitizeFilename(albumTitle)
-	safeAlbumArtist := sanitizeFilename(spotifyAlbumArtist)
 
 	filename := buildQobuzFilename(safeTitle, safeArtist, safeAlbum, safeAlbumArtist, spotifyReleaseDate, spotifyTrackNumber, spotifyDiscNumber, filenameFormat, includeTrackNumber, position, useAlbumTrackNumber)
 	filepath := filepath.Join(outputDir, filename)
@@ -531,6 +553,7 @@ func (q *QobuzDownloader) DownloadByISRC(deezerISRC, outputDir, quality, filenam
 		Copyright:   spotifyCopyright,
 		Publisher:   spotifyPublisher,
 		Description: "https://github.com/afkarxyz/SpotiFLAC",
+		ISRC:        deezerISRC,
 	}
 
 	if err := EmbedMetadata(filepath, metadata, coverPath); err != nil {

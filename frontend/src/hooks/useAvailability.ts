@@ -7,7 +7,7 @@ export function useAvailability() {
     const [checkingTrackId, setCheckingTrackId] = useState<string | null>(null);
     const [availabilityMap, setAvailabilityMap] = useState<Map<string, TrackAvailability>>(new Map());
     const [error, setError] = useState<string | null>(null);
-    const checkAvailability = useCallback(async (spotifyId: string, isrc?: string) => {
+    const checkAvailability = useCallback(async (spotifyId: string) => {
         if (!spotifyId) {
             setError("No Spotify ID provided");
             return null;
@@ -20,7 +20,7 @@ export function useAvailability() {
         setError(null);
         try {
             logger.info(`Checking availability for track: ${spotifyId}`);
-            const response = await CheckTrackAvailability(spotifyId, isrc || "");
+            const response = await CheckTrackAvailability(spotifyId);
             const availability: TrackAvailability = JSON.parse(response);
             setAvailabilityMap((prev) => {
                 const newMap = new Map(prev);

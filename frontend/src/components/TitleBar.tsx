@@ -11,6 +11,14 @@ export function TitleBar() {
         if (settings) {
             setUseSpotFetchAPI(settings.useSpotFetchAPI || false);
         }
+        const handleSettingsUpdate = (event: any) => {
+            const updatedSettings = event.detail;
+            if (updatedSettings && typeof updatedSettings.useSpotFetchAPI !== 'undefined') {
+                setUseSpotFetchAPI(updatedSettings.useSpotFetchAPI);
+            }
+        };
+        window.addEventListener('settingsUpdated', handleSettingsUpdate);
+        return () => window.removeEventListener('settingsUpdated', handleSettingsUpdate);
     }, []);
     const handleSpotFetchAPIToggle = () => {
         const newValue = !useSpotFetchAPI;

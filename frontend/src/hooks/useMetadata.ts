@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getSettings } from "@/lib/settings";
 import { fetchSpotifyMetadata } from "@/lib/api";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { logger } from "@/lib/logger";
@@ -7,6 +8,7 @@ import type { SpotifyMetadataResponse } from "@/types/api";
 export function useMetadata() {
     const [loading, setLoading] = useState(false);
     const [metadata, setMetadata] = useState<SpotifyMetadataResponse | null>(null);
+    const [showApiModal, setShowApiModal] = useState(false);
     const [showAlbumDialog, setShowAlbumDialog] = useState(false);
     const [selectedAlbum, setSelectedAlbum] = useState<{
         id: string;
@@ -109,7 +111,7 @@ export function useMetadata() {
             saveToHistory(url, data);
             if ("track" in data) {
                 logger.success(`fetched track: ${data.track.name} - ${data.track.artists}`);
-                logger.debug(`isrc: ${data.track.isrc}, duration: ${data.track.duration_ms}ms`);
+                logger.debug(`duration: ${data.track.duration_ms}ms`);
             }
             else if ("album_info" in data) {
                 logger.success(`fetched album: ${data.album_info.name}`);
@@ -129,7 +131,13 @@ export function useMetadata() {
         catch (err) {
             const errorMsg = err instanceof Error ? err.message : "Failed to fetch metadata";
             logger.error(`fetch failed: ${errorMsg}`);
-            toast.error(errorMsg);
+            const settings = getSettings();
+            if (!settings.useSpotFetchAPI) {
+                setShowApiModal(true);
+            }
+            else {
+                toast.error(errorMsg);
+            }
         }
         finally {
             setLoading(false);
@@ -224,7 +232,13 @@ export function useMetadata() {
         catch (err) {
             const errorMsg = err instanceof Error ? err.message : "Failed to fetch album metadata";
             logger.error(`fetch failed: ${errorMsg}`);
-            toast.error(errorMsg);
+            const settings = getSettings();
+            if (!settings.useSpotFetchAPI) {
+                setShowApiModal(true);
+            }
+            else {
+                toast.error(errorMsg);
+            }
         }
         finally {
             setLoading(false);
@@ -243,6 +257,8 @@ export function useMetadata() {
         handleConfirmAlbumFetch,
         handleArtistClick,
         loadFromCache,
+        showApiModal,
+        setShowApiModal,
         resetMetadata: () => setMetadata(null),
     };
 }

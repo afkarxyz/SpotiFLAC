@@ -31,6 +31,7 @@ type Metadata struct {
 	Publisher   string
 	Lyrics      string
 	Description string
+	ISRC        string
 }
 
 func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
@@ -84,6 +85,10 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	}
 	if metadata.Description != "" {
 		_ = cmt.Add("DESCRIPTION", metadata.Description)
+	}
+
+	if metadata.ISRC != "" {
+		_ = cmt.Add("ISRC", metadata.ISRC)
 	}
 
 	if metadata.Lyrics != "" {
@@ -504,6 +509,13 @@ func EmbedLyricsOnlyUniversal(filepath string, lyrics string) error {
 		return nil
 	}
 
+	validatedLyrics, err := validateLyricsDuration(lyrics, filepath)
+	if err != nil {
+		fmt.Printf("[EmbedLyricsOnlyUniversal] Warning: Failed to validate lyrics duration: %v, using original lyrics\n", err)
+		validatedLyrics = lyrics
+	}
+	lyrics = validatedLyrics
+
 	ext := strings.ToLower(pathfilepath.Ext(filepath))
 	switch ext {
 	case ".mp3":
@@ -635,27 +647,22 @@ func validateLyricsDuration(lyrics string, filepath string) (string, error) {
 
 		if strings.HasPrefix(trimmedLine, "[") {
 
-			if strings.Index(trimmedLine, ":") > 0 {
-
-				validLines = append(validLines, line)
-				continue
-			}
-
 			closeBracket := strings.Index(trimmedLine, "]")
 			if closeBracket > 0 {
 				timestampStr := trimmedLine[1:closeBracket]
 
 				ms := parseLRCTimestamp(timestampStr)
-				if ms >= 0 && ms <= durationMs {
-
-					validLines = append(validLines, line)
+				if ms >= 0 {
+					if ms <= durationMs {
+						validLines = append(validLines, line)
+					} else {
+						fmt.Printf("[ValidateLyrics] Filtered out line with timestamp %s (exceeds duration %d ms): %s\n", timestampStr, durationMs, trimmedLine)
+					}
 				} else {
 
-					fmt.Printf("[ValidateLyrics] Filtered out line with timestamp %s (exceeds duration %d ms): %s\n", timestampStr, durationMs, trimmedLine)
+					validLines = append(validLines, line)
 				}
-			} else {
-
-				validLines = append(validLines, line)
+				continue
 			}
 		} else {
 
@@ -858,6 +865,11 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 		tag.AddTextFrame("TPUB", id3v2.EncodingUTF8, metadata.Publisher)
 	}
 
+	if metadata.ISRC != "" {
+		tag.DeleteFrames("TSRC")
+		tag.AddTextFrame("TSRC", id3v2.EncodingUTF8, metadata.ISRC)
+	}
+
 	if coverPath != "" && fileExists(coverPath) {
 
 		tag.DeleteFrames(tag.CommonID("Attached picture"))
@@ -940,6 +952,9 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	}
 	if metadata.Publisher != "" {
 		args = append(args, "-metadata", "publisher="+metadata.Publisher)
+	}
+	if metadata.ISRC != "" {
+		args = append(args, "-metadata", "isrc="+metadata.ISRC)
 	}
 
 	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)

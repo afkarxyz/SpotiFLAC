@@ -21,6 +21,7 @@ type SongLinkClient struct {
 type SongLinkURLs struct {
 	TidalURL  string `json:"tidal_url"`
 	AmazonURL string `json:"amazon_url"`
+	ISRC      string `json:"isrc"`
 }
 
 type TrackAvailability struct {
@@ -158,6 +159,12 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region str
 		}
 	}
 
+	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
+		if isrc, err := getDeezerISRC(deezerLink.URL); err == nil && isrc != "" {
+			urls.ISRC = isrc
+		}
+	}
+
 	if urls.TidalURL == "" && urls.AmazonURL == "" {
 		return nil, fmt.Errorf("no streaming URLs found")
 	}
@@ -165,7 +172,7 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region str
 	return urls, nil
 }
 
-func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string, isrc string) (*TrackAvailability, error) {
+func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string) (*TrackAvailability, error) {
 
 	now := time.Now()
 	if now.Sub(s.apiCallResetTime) >= time.Minute {
@@ -278,7 +285,7 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string, isrc stri
 	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
 		deezerURL := deezerLink.URL
 
-		deezerISRC, err := GetDeezerISRC(deezerURL)
+		deezerISRC, err := getDeezerISRC(deezerURL)
 		if err == nil && deezerISRC != "" {
 			qobuzAvailable := checkQobuzAvailability(deezerISRC)
 			availability.Qobuz = qobuzAvailable
@@ -408,7 +415,7 @@ func (s *SongLinkClient) GetDeezerURLFromSpotify(spotifyTrackID string) (string,
 	return deezerURL, nil
 }
 
-func GetDeezerISRC(deezerURL string) (string, error) {
+func getDeezerISRC(deezerURL string) (string, error) {
 
 	var trackID string
 	if strings.Contains(deezerURL, "/track/") {
@@ -451,4 +458,12 @@ func GetDeezerISRC(deezerURL string) (string, error) {
 
 	fmt.Printf("Found ISRC from Deezer: %s (track: %s)\n", deezerTrack.ISRC, deezerTrack.Title)
 	return deezerTrack.ISRC, nil
+}
+
+func (s *SongLinkClient) GetISRC(spotifyID string) (string, error) {
+	deezerURL, err := s.GetDeezerURLFromSpotify(spotifyID)
+	if err != nil {
+		return "", err
+	}
+	return getDeezerISRC(deezerURL)
 }

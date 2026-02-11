@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Search, X, ArrowUp } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont } from "@/lib/settings";
+import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont, updateSettings } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
 import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg } from "../wailsjs/go/main/App";
 import { EventsOn, EventsOff, Quit } from "../wailsjs/runtime/runtime";
@@ -119,6 +119,17 @@ function App() {
             window.removeEventListener("scroll", handleScroll);
         };
     }, []);
+    const handleEnableSpotFetchApi = async () => {
+        try {
+            await updateSettings({ useSpotFetchAPI: true });
+            metadata.setShowApiModal(false);
+            toast.success("SpotFetch API enabled! You can now try fetching again.");
+        }
+        catch (err) {
+            console.error("Failed to enable SpotFetch API:", err);
+            toast.error("Failed to update settings");
+        }
+    };
     const scrollToTop = useCallback(() => {
         window.scrollTo({ top: 0, behavior: "smooth" });
     }, []);
@@ -290,19 +301,19 @@ function App() {
         setSearchQuery(value);
         setCurrentListPage(1);
     };
-    const toggleTrackSelection = (isrc: string) => {
-        setSelectedTracks((prev) => prev.includes(isrc) ? prev.filter((id) => id !== isrc) : [...prev, isrc]);
+    const toggleTrackSelection = (id: string) => {
+        setSelectedTracks((prev) => prev.includes(id) ? prev.filter((prevId) => prevId !== id) : [...prev, id]);
     };
     const toggleSelectAll = (tracks: any[]) => {
-        const tracksWithIsrc = tracks.filter((track) => track.isrc).map((track) => track.isrc);
-        if (tracksWithIsrc.length === 0)
+        const tracksWithId = tracks.filter((track) => track.spotify_id).map((track) => track.spotify_id || "");
+        if (tracksWithId.length === 0)
             return;
-        const allSelected = tracksWithIsrc.every(isrc => selectedTracks.includes(isrc));
+        const allSelected = tracksWithId.every(id => selectedTracks.includes(id));
         if (allSelected) {
-            setSelectedTracks(prev => prev.filter(isrc => !tracksWithIsrc.includes(isrc)));
+            setSelectedTracks(prev => prev.filter(id => !tracksWithId.includes(id)));
         }
         else {
-            setSelectedTracks(prev => Array.from(new Set([...prev, ...tracksWithIsrc])));
+            setSelectedTracks(prev => Array.from(new Set([...prev, ...tracksWithId])));
         }
     };
     const handleOpenFolder = async () => {
@@ -324,7 +335,8 @@ function App() {
             return null;
         if ("track" in metadata.metadata) {
             const { track } = metadata.metadata;
-            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(track.isrc)} isFailed={download.failedTracks.has(track.isrc)} isSkipped={download.skippedTracks.has(track.isrc)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics.has(track.spotify_id || "")} failedLyrics={lyrics.failedLyrics.has(track.spotify_id || "")} skippedLyrics={lyrics.skippedLyrics.has(track.spotify_id || "")} checkingAvailability={availability.checkingTrackId === track.spotify_id} availability={availability.availabilityMap.get(track.spotify_id || "")} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} failedCover={cover.failedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} skippedCover={cover.skippedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, track.album_name, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, track.album_name, undefined, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onOpenFolder={handleOpenFolder} onBack={metadata.resetMetadata}/>);
+            const trackId = track.spotify_id || "";
+            return (<TrackInfo track={track} isDownloading={download.isDownloading} downloadingTrack={download.downloadingTrack} isDownloaded={download.downloadedTracks.has(trackId)} isFailed={download.failedTracks.has(trackId)} isSkipped={download.skippedTracks.has(trackId)} downloadingLyricsTrack={lyrics.downloadingLyricsTrack} downloadedLyrics={lyrics.downloadedLyrics.has(track.spotify_id || "")} failedLyrics={lyrics.failedLyrics.has(track.spotify_id || "")} skippedLyrics={lyrics.skippedLyrics.has(track.spotify_id || "")} checkingAvailability={availability.checkingTrackId === track.spotify_id} availability={availability.availabilityMap.get(track.spotify_id || "")} downloadingCover={cover.downloadingCoverTrack === (track.spotify_id || `${track.name}-${track.artists}`)} downloadedCover={cover.downloadedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} failedCover={cover.failedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} skippedCover={cover.skippedCovers.has(track.spotify_id || `${track.name}-${track.artists}`)} onDownload={download.handleDownloadTrack} onDownloadLyrics={(spotifyId, name, artists, albumName, albumArtist, releaseDate, discNumber) => lyrics.handleDownloadLyrics(spotifyId, name, artists, albumName, track.album_name, undefined, albumArtist, releaseDate, discNumber)} onDownloadCover={(coverUrl, trackName, artistName, albumName, _playlistName, _position, trackId, albumArtist, releaseDate, discNumber) => cover.handleDownloadCover(coverUrl, trackName, artistName, albumName, track.album_name, undefined, trackId, albumArtist, releaseDate, discNumber)} onCheckAvailability={availability.checkAvailability} onOpenFolder={handleOpenFolder} onBack={metadata.resetMetadata}/>);
         }
         if ("album_info" in metadata.metadata) {
             const { album_info, track_list } = metadata.metadata;
@@ -551,6 +563,25 @@ function App() {
                             </Button>)}
                         <Button className={`${isInstallingFFmpeg ? 'w-full' : 'flex-1'} h-11 text-sm font-bold shadow-lg shadow-primary/10`} onClick={handleInstallFFmpeg} disabled={isInstallingFFmpeg}>
                             {isInstallingFFmpeg ? "Installing..." : "Install now"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={metadata.showApiModal} onOpenChange={metadata.setShowApiModal}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>SpotFetch API Recommended</DialogTitle>
+                        <DialogDescription>
+                            Direct fetch failed. This usually happens when your <span className="text-foreground font-bold">country is blocked</span> by Spotify or your IP is restricted. Would you like to enable the <span className="text-foreground font-bold">SpotFetch API</span> to bypass this?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => metadata.setShowApiModal(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleEnableSpotFetchApi}>
+                            Enable SpotFetch API
                         </Button>
                     </DialogFooter>
                 </DialogContent>
