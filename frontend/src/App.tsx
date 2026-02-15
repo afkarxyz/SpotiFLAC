@@ -114,9 +114,20 @@ function App() {
             setShowScrollTop(window.scrollY > 300);
         };
         window.addEventListener("scroll", handleScroll);
+        EventsOn("spotiflac:fetch-url", (url: string) => {
+            setCurrentPage("main");
+            setIsSearchMode(false);
+            setSpotifyUrl(url);
+            metadata.handleFetchMetadata(url).then((updatedUrl) => {
+                if (updatedUrl) {
+                    setSpotifyUrl(updatedUrl);
+                }
+            });
+        });
         return () => {
             mediaQuery.removeEventListener("change", handleChange);
             window.removeEventListener("scroll", handleScroll);
+            EventsOff("spotiflac:fetch-url");
         };
     }, []);
     const handleEnableSpotFetchApi = async () => {

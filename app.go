@@ -43,6 +43,8 @@ func (a *App) startup(ctx context.Context) {
 	if err := backend.InitHistoryDB("SpotiFLAC"); err != nil {
 		fmt.Printf("Failed to init history DB: %v\n", err)
 	}
+
+	StartServer(a)
 }
 
 func (a *App) shutdown(ctx context.Context) {
