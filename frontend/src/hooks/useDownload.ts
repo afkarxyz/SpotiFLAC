@@ -34,6 +34,7 @@ const CreateM3U8File = (playlistName: string, outputDir: string, filePaths: stri
 export function useDownload(region: string) {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
     const [downloadingTrack, setDownloadingTrack] = useState<string | null>(null);
     const [bulkDownloadType, setBulkDownloadType] = useState<"all" | "selected" | null>(null);
     const [downloadedTracks, setDownloadedTracks] = useState<Set<string>>(new Set());
@@ -44,6 +45,7 @@ export function useDownload(region: string) {
         artists: string;
     } | null>(null);
     const shouldStopDownloadRef = useRef(false);
+    const isPausedRef = useRef(false);
     const downloadWithAutoFallback = async (id: string, settings: any, trackName?: string, artistName?: string, albumName?: string, playlistName?: string, position?: number, spotifyId?: string, durationMs?: number, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
         const service = settings.downloader;
         const query = trackName && artistName ? `${trackName} ${artistName} ` : undefined;
@@ -854,65 +856,81 @@ export function useDownload(region: string) {
         let skippedCount = existingSpotifyIDs.size;
         const total = selectedTracks.length;
         setDownloadProgress(Math.round((skippedCount / total) * 100));
-        for (let i = 0; i < tracksToDownload.length; i++) {
-            if (shouldStopDownloadRef.current) {
-                toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`);
-                break;
-            }
-            const track = tracksToDownload[i];
-            const id = track.spotify_id || "";
-            const originalIndex = selectedTracks.indexOf(id);
-            const itemID = itemIDs[originalIndex];
-            setDownloadingTrack(id);
-            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
-            setCurrentDownloadInfo({ name: track.name, artists: displayArtist || "" });
-            try {
-                const releaseYear = track.release_date?.substring(0, 4);
-                const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
-                if (response.success) {
-                    if (response.already_exists) {
-                        skippedCount++;
-                        logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
-                        setSkippedTracks((prev) => new Set(prev).add(id));
+        let completedCount = skippedCount;
+        const concurrency = Math.min(Math.max(1, settings.concurrentDownloads || 3), 6);
+        let trackIndex = 0;
+        const runWorker = async () => {
+            while (true) {
+                if (shouldStopDownloadRef.current) break;
+                // Wait while paused
+                while (isPausedRef.current && !shouldStopDownloadRef.current) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                if (shouldStopDownloadRef.current) break;
+                const i = trackIndex++;
+                if (i >= tracksToDownload.length) break;
+                const track = tracksToDownload[i];
+                const id = track.spotify_id || "";
+                const originalIndex = selectedTracks.indexOf(id);
+                const itemID = itemIDs[originalIndex];
+                setDownloadingTrack(id);
+                const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
+                setCurrentDownloadInfo({ name: track.name, artists: displayArtist || "" });
+                try {
+                    const releaseYear = track.release_date?.substring(0, 4);
+                    const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
+                    if (response.success) {
+                        if (response.already_exists) {
+                            skippedCount++;
+                            logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
+                            setSkippedTracks((prev) => new Set(prev).add(id));
+                        }
+                        else {
+                            successCount++;
+                            logger.success(`downloaded: ${track.name} - ${displayArtist}`);
+                        }
+                        if (response.file) {
+                            finalFilePaths.set(id, response.file);
+                            finalFilePaths.set(track.spotify_id || id, response.file);
+                        }
+                        setDownloadedTracks((prev) => new Set(prev).add(id));
+                        setFailedTracks((prev) => {
+                            const newSet = new Set(prev);
+                            newSet.delete(id);
+                            return newSet;
+                        });
                     }
                     else {
-                        successCount++;
-                        logger.success(`downloaded: ${track.name} - ${displayArtist}`);
+                        errorCount++;
+                        logger.error(`failed: ${track.name} - ${displayArtist}`);
+                        setFailedTracks((prev) => new Set(prev).add(id));
                     }
-                    if (response.file) {
-                        finalFilePaths.set(id, response.file);
-                        finalFilePaths.set(track.spotify_id || id, response.file);
-                    }
-                    setDownloadedTracks((prev) => new Set(prev).add(id));
-                    setFailedTracks((prev) => {
-                        const newSet = new Set(prev);
-                        newSet.delete(id);
-                        return newSet;
-                    });
                 }
-                else {
+                catch (err) {
                     errorCount++;
-                    logger.error(`failed: ${track.name} - ${displayArtist}`);
+                    logger.error(`error: ${track.name} - ${err}`);
                     setFailedTracks((prev) => new Set(prev).add(id));
+                    if (itemID) {
+                        const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+                        await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
+                    }
                 }
+                completedCount = skippedCount + successCount + errorCount;
+                setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
             }
-            catch (err) {
-                errorCount++;
-                logger.error(`error: ${track.name} - ${err}`);
-                setFailedTracks((prev) => new Set(prev).add(id));
-                if (itemID) {
-                    const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
-                    await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
-                }
-            }
-            const completedCount = skippedCount + successCount + errorCount;
-            setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+        };
+        const workers = Array.from({ length: concurrency }, () => runWorker());
+        await Promise.all(workers);
+        if (shouldStopDownloadRef.current) {
+            toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - (completedCount - skippedCount)} remaining.`);
         }
         setDownloadingTrack(null);
         setCurrentDownloadInfo(null);
         setIsDownloading(false);
+        setIsPaused(false);
         setBulkDownloadType(null);
         shouldStopDownloadRef.current = false;
+        isPausedRef.current = false;
         const { CancelAllQueuedItems } = await import("../../wailsjs/go/main/App");
         await CancelAllQueuedItems();
         if (settings.createM3u8File && folderName) {
@@ -1024,62 +1042,78 @@ export function useDownload(region: string) {
         let skippedCount = existingSpotifyIDs.size;
         const total = tracksWithId.length;
         setDownloadProgress(Math.round((skippedCount / total) * 100));
-        for (let i = 0; i < tracksToDownload.length; i++) {
-            if (shouldStopDownloadRef.current) {
-                toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - i} remaining.`);
-                break;
-            }
-            const track = tracksToDownload[i];
-            const originalIndex = tracksWithId.findIndex((t) => t.spotify_id === track.spotify_id);
-            const itemID = itemIDs[originalIndex];
-            const trackId = track.spotify_id || "";
-            setDownloadingTrack(trackId);
-            const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
-            setCurrentDownloadInfo({ name: track.name || "", artists: displayArtist || "" });
-            try {
-                const releaseYear = track.release_date?.substring(0, 4);
-                const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
-                if (response.success) {
-                    if (response.already_exists) {
-                        skippedCount++;
-                        logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
-                        setSkippedTracks((prev) => new Set(prev).add(trackId));
+        let completedCount = skippedCount;
+        const concurrency = Math.min(Math.max(1, settings.concurrentDownloads || 3), 6);
+        let trackIndex = 0;
+        const runWorker = async () => {
+            while (true) {
+                if (shouldStopDownloadRef.current) break;
+                // Wait while paused
+                while (isPausedRef.current && !shouldStopDownloadRef.current) {
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+                if (shouldStopDownloadRef.current) break;
+                const i = trackIndex++;
+                if (i >= tracksToDownload.length) break;
+                const track = tracksToDownload[i];
+                const originalIndex = tracksWithId.findIndex((t) => t.spotify_id === track.spotify_id);
+                const itemID = itemIDs[originalIndex];
+                const trackId = track.spotify_id || "";
+                setDownloadingTrack(trackId);
+                const displayArtist = settings.useFirstArtistOnly && track.artists ? getFirstArtist(track.artists) : track.artists;
+                setCurrentDownloadInfo({ name: track.name || "", artists: displayArtist || "" });
+                try {
+                    const releaseYear = track.release_date?.substring(0, 4);
+                    const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
+                    if (response.success) {
+                        if (response.already_exists) {
+                            skippedCount++;
+                            logger.info(`skipped: ${track.name} - ${displayArtist} (already exists)`);
+                            setSkippedTracks((prev) => new Set(prev).add(trackId));
+                        }
+                        else {
+                            successCount++;
+                            logger.success(`downloaded: ${track.name} - ${displayArtist}`);
+                        }
+                        setDownloadedTracks((prev) => new Set(prev).add(trackId));
+                        setFailedTracks((prev) => {
+                            const newSet = new Set(prev);
+                            newSet.delete(trackId);
+                            return newSet;
+                        });
+                        if (response.file) {
+                            finalFilePaths[originalIndex] = response.file;
+                        }
                     }
                     else {
-                        successCount++;
-                        logger.success(`downloaded: ${track.name} - ${displayArtist}`);
-                    }
-                    setDownloadedTracks((prev) => new Set(prev).add(trackId));
-                    setFailedTracks((prev) => {
-                        const newSet = new Set(prev);
-                        newSet.delete(trackId);
-                        return newSet;
-                    });
-                    if (response.file) {
-                        finalFilePaths[originalIndex] = response.file;
+                        errorCount++;
+                        logger.error(`failed: ${track.name} - ${displayArtist}`);
+                        setFailedTracks((prev) => new Set(prev).add(trackId));
                     }
                 }
-                else {
+                catch (err) {
                     errorCount++;
-                    logger.error(`failed: ${track.name} - ${displayArtist}`);
+                    logger.error(`error: ${track.name} - ${err}`);
                     setFailedTracks((prev) => new Set(prev).add(trackId));
+                    const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
+                    await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
                 }
+                completedCount = skippedCount + successCount + errorCount;
+                setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
             }
-            catch (err) {
-                errorCount++;
-                logger.error(`error: ${track.name} - ${err}`);
-                setFailedTracks((prev) => new Set(prev).add(trackId));
-                const { MarkDownloadItemFailed } = await import("../../wailsjs/go/main/App");
-                await MarkDownloadItemFailed(itemID, err instanceof Error ? err.message : String(err));
-            }
-            const completedCount = skippedCount + successCount + errorCount;
-            setDownloadProgress(Math.min(100, Math.round((completedCount / total) * 100)));
+        };
+        const workers = Array.from({ length: concurrency }, () => runWorker());
+        await Promise.all(workers);
+        if (shouldStopDownloadRef.current) {
+            toast.info(`Download stopped. ${successCount} tracks downloaded, ${tracksToDownload.length - successCount - errorCount} remaining.`);
         }
         setDownloadingTrack(null);
         setCurrentDownloadInfo(null);
         setIsDownloading(false);
+        setIsPaused(false);
         setBulkDownloadType(null);
         shouldStopDownloadRef.current = false;
+        isPausedRef.current = false;
         const { CancelAllQueuedItems: CancelQueued } = await import("../../wailsjs/go/main/App");
         await CancelQueued();
         if (settings.createM3u8File && folderName) {
@@ -1116,7 +1150,21 @@ export function useDownload(region: string) {
     const handleStopDownload = () => {
         logger.info("download stopped by user");
         shouldStopDownloadRef.current = true;
+        isPausedRef.current = false;
+        setIsPaused(false);
         toast.info("Stopping download...");
+    };
+    const handlePauseDownload = () => {
+        logger.info("download paused by user");
+        isPausedRef.current = true;
+        setIsPaused(true);
+        toast.info("Downloads paused");
+    };
+    const handleResumeDownload = () => {
+        logger.info("download resumed by user");
+        isPausedRef.current = false;
+        setIsPaused(false);
+        toast.info("Downloads resumed");
     };
     const resetDownloadedTracks = () => {
         setDownloadedTracks(new Set());
@@ -1126,6 +1174,7 @@ export function useDownload(region: string) {
     return {
         downloadProgress,
         isDownloading,
+        isPaused,
         downloadingTrack,
         bulkDownloadType,
         downloadedTracks,
@@ -1136,6 +1185,8 @@ export function useDownload(region: string) {
         handleDownloadSelected,
         handleDownloadAll,
         handleStopDownload,
+        handlePauseDownload,
+        handleResumeDownload,
         resetDownloadedTracks,
     };
 }

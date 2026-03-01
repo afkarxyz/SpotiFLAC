@@ -704,6 +704,30 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                 </Label>
               </div>
 
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="concurrent-downloads" className="text-sm font-normal">Concurrent Downloads</Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help"/>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      <p className="text-xs">Number of tracks downloaded simultaneously (1–6)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <Select value={String(tempSettings.concurrentDownloads ?? 3)} onValueChange={(value) => setTempSettings((prev) => ({ ...prev, concurrentDownloads: Number(value) }))}>
+                  <SelectTrigger id="concurrent-downloads" className="w-24">
+                    <SelectValue/>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4, 5, 6].map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
 
             </div>
 

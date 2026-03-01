@@ -33,6 +33,7 @@ export interface Settings {
     useFirstArtistOnly: boolean;
     useSingleGenre: boolean;
     embedGenre: boolean;
+    concurrentDownloads: number;
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -116,7 +117,8 @@ export const DEFAULT_SETTINGS: Settings = {
     createM3u8File: false,
     useFirstArtistOnly: false,
     useSingleGenre: false,
-    embedGenre: true
+    embedGenre: true,
+    concurrentDownloads: 3
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
@@ -223,6 +225,9 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('allowFallback' in parsed)) {
                 parsed.allowFallback = true;
             }
+            if (!('concurrentDownloads' in parsed)) {
+                parsed.concurrentDownloads = 3;
+            }
             return { ...DEFAULT_SETTINGS, ...parsed };
         }
     }
@@ -313,6 +318,9 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('embedGenre' in parsed)) {
                 parsed.embedGenre = true;
+            }
+            if (!('concurrentDownloads' in parsed)) {
+                parsed.concurrentDownloads = 3;
             }
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
             return cachedSettings!;
