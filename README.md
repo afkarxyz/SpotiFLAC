@@ -12,6 +12,12 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz, Amazon Music & Deezer — no 
 
 ### [Download](https://github.com/afkarxyz/SpotiFLAC/releases)
 
+## Build
+
+```bash
+wails build
+```
+
 ## Screenshot
 
 ![Image](https://github.com/user-attachments/assets/adbdc056-bace-44a9-8ba6-898b4526b65a)
