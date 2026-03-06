@@ -93,3 +93,21 @@ The software is provided "as is", without warranty of any kind. The author assum
 > [!TIP]
 >
 > **Star Us**, You will receive all release notifications from GitHub without any delay ~
+
+## Building
+
+### Dependencies
+
+* Go runtime and SDK
+
+* Wails
+
+### Instructions 
+
+Open your terminal and run these commands
+
+```
+git clone https://github.com/afkarxyz/SpotiFLAC
+cd SpotiFLAC
+wails build
+```
