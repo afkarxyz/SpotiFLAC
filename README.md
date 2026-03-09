@@ -34,9 +34,9 @@ Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus with High Quality.
 
 SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarzet)
 
-### [SpotiFLAC (CLI) (https://github.com/Nizarberyan/SpotiFLAC)
+### [SpotiFLAC (CLI)](https://github.com/Nizarberyan/SpotiFLAC)
 
-Spotiflac for use in a terminal witout a GUI — maintained by [@Nizarbreyan](https://github.com/Nizarberyan)
+Spotiflac for use in a terminal witout a GUI — maintained by [@Nizarberyan](https://github.com/Nizarberyan)
 
 ## FAQ
 
