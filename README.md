@@ -12,7 +12,7 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 
 ### [Download](https://github.com/afkarxyz/SpotiFLAC/releases)
 
-![Image](https://github.com/user-attachments/assets/b0b978b9-9b80-4c87-add8-276e80d7a354)
+![Image](https://github.com/user-attachments/assets/c2624ca5-8569-49f0-950e-4410b523cea1)
 
 ## Other projects
 
@@ -34,7 +34,7 @@ SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarze
 
 ### [SpotiFLAC (CLI)](https://github.com/Nizarberyan/SpotiFLAC)
 
-SpotiFLAC for use in a terminal without a GUI — maintained by [@Nizarberyan](https://github.com/Nizarberyan)
+SpotiFLAC for command-line environments — maintained by [@Nizarberyan](https://github.com/Nizarberyan)
 
 ## FAQ
 
@@ -78,7 +78,7 @@ Your support helps keep development going._
 
 This project is for **educational and private use only**. The developer does not condone or encourage copyright infringement.
 
-**SpotiFLAC** is a third-party tool and is not affiliated with, endorsed by, or connected to Spotify, Tidal, Qobuz, Amazon Music, Deezer or any other streaming service.
+**SpotiFLAC** is a third-party tool and is not affiliated with, endorsed by, or connected to Spotify, Tidal, Qobuz, Amazon Music or any other streaming service.
 
 You are solely responsible for:
 
