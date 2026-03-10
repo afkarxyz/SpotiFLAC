@@ -34,7 +34,7 @@ SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarze
 
 ### [SpotiFLAC (CLI)](https://github.com/Nizarberyan/SpotiFLAC)
 
-SpotiFLAC for use in a terminal witout a GUI — maintained by [@Nizarberyan](https://github.com/Nizarberyan)
+SpotiFLAC for use in a terminal without a GUI — maintained by [@Nizarberyan](https://github.com/Nizarberyan)
 
 ## FAQ
 
