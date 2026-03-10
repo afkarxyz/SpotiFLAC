@@ -4,7 +4,7 @@ export type FolderPreset = "none" | "artist" | "album" | "year-album" | "year-ar
 export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "artist-album-title" | "track-dash-title" | "disc-track-title" | "disc-track-title-artist" | "custom";
 export interface Settings {
     downloadPath: string;
-    downloader: "auto" | "tidal" | "qobuz" | "amazon" | "deezer";
+    downloader: "auto" | "tidal" | "qobuz" | "amazon";
     theme: string;
     themeMode: "auto" | "light" | "dark";
     fontFamily: FontFamily;
@@ -23,7 +23,7 @@ export interface Settings {
     tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
     qobuzQuality: "6" | "7" | "27";
     amazonQuality: "original";
-    autoOrder: "tidal-qobuz-amazon-deezer" | "tidal-qobuz-deezer-amazon" | "tidal-amazon-qobuz-deezer" | "tidal-amazon-deezer-qobuz" | "tidal-deezer-qobuz-amazon" | "tidal-deezer-amazon-qobuz" | "qobuz-tidal-amazon-deezer" | "qobuz-tidal-deezer-amazon" | "qobuz-amazon-tidal-deezer" | "qobuz-amazon-deezer-tidal" | "qobuz-deezer-tidal-amazon" | "qobuz-deezer-amazon-tidal" | "amazon-tidal-qobuz-deezer" | "amazon-tidal-deezer-qobuz" | "amazon-qobuz-tidal-deezer" | "amazon-qobuz-deezer-tidal" | "amazon-deezer-tidal-qobuz" | "amazon-deezer-qobuz-tidal" | "deezer-tidal-qobuz-amazon" | "deezer-tidal-amazon-qobuz" | "deezer-qobuz-tidal-amazon" | "deezer-qobuz-amazon-tidal" | "deezer-amazon-tidal-qobuz" | "deezer-amazon-qobuz-tidal" | string;
+    autoOrder: "tidal-qobuz-amazon" | "tidal-amazon-qobuz" | "qobuz-tidal-amazon" | "qobuz-amazon-tidal" | "amazon-tidal-qobuz" | "amazon-qobuz-tidal" | string;
     autoQuality: "16" | "24";
     allowFallback: boolean;
     useSpotFetchAPI: boolean;
@@ -33,6 +33,7 @@ export interface Settings {
     useFirstArtistOnly: boolean;
     useSingleGenre: boolean;
     embedGenre: boolean;
+    separator: "comma" | "semicolon";
 }
 export const FOLDER_PRESETS: Record<FolderPreset, {
     label: string;
@@ -107,7 +108,7 @@ export const DEFAULT_SETTINGS: Settings = {
     tidalQuality: "LOSSLESS",
     qobuzQuality: "6",
     amazonQuality: "original",
-    autoOrder: "tidal-qobuz-amazon-deezer",
+    autoOrder: "tidal-qobuz-amazon",
     autoQuality: "16",
     allowFallback: true,
     useSpotFetchAPI: false,
@@ -116,7 +117,8 @@ export const DEFAULT_SETTINGS: Settings = {
     createM3u8File: false,
     useFirstArtistOnly: false,
     useSingleGenre: false,
-    embedGenre: true
+    embedGenre: true,
+    separator: "semicolon"
 };
 export const FONT_OPTIONS: {
     value: FontFamily;
@@ -223,6 +225,9 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('allowFallback' in parsed)) {
                 parsed.allowFallback = true;
             }
+            if (!('separator' in parsed)) {
+                parsed.separator = "semicolon";
+            }
             return { ...DEFAULT_SETTINGS, ...parsed };
         }
     }
@@ -313,6 +318,9 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('embedGenre' in parsed)) {
                 parsed.embedGenre = true;
+            }
+            if (!('separator' in parsed)) {
+                parsed.separator = "semicolon";
             }
             cachedSettings = { ...DEFAULT_SETTINGS, ...parsed };
             return cachedSettings!;

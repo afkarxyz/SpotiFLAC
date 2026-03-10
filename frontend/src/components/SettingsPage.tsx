@@ -5,13 +5,14 @@ import { InputWithContext } from "@/components/ui/input-with-context";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/tooltip";
-import { FolderOpen, Save, RotateCcw, Info, ArrowRight, Settings, FolderCog, } from "lucide-react";
+import { FolderOpen, Save, RotateCcw, Info, ArrowRight, MonitorCog, FolderCog, Router, FolderLock } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { getSettings, getSettingsWithDefaults, saveSettings, resetToDefaultSettings, applyThemeMode, applyFont, FONT_OPTIONS, FOLDER_PRESETS, FILENAME_PRESETS, TEMPLATE_VARIABLES, type Settings as SettingsType, type FontFamily, type FolderPreset, type FilenamePreset, } from "@/lib/settings";
 import { themes, applyTheme } from "@/lib/themes";
-import { SelectFolder } from "../../wailsjs/go/main/App";
+import { SelectFolder, OpenConfigFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
+import { ApiStatusTab } from "./ApiStatusTab";
 const TidalIcon = ({ className }: {
     className?: string;
 }) => (<svg viewBox="0 0 24 24" className={`inline-block w-[1.1em] h-[1.1em] mr-2 ${className || "fill-muted-foreground"}`}>
@@ -29,11 +30,6 @@ const AmazonIcon = ({ className }: {
 }) => (<svg viewBox="0 0 24 24" className={`inline-block w-[1.1em] h-[1.1em] mr-2 ${className || "fill-muted-foreground"}`}>
     <path fillRule="evenodd" d="M15.62 11.13c-.15.1-.37.18-.64.18-.42 0-.82-.05-1.21-.18l-.22-.04c-.08 0-.1.04-.1.14v.25c0 .08.02.12.05.17.02.03.07.08.15.1.4.18.84.25 1.33.25.52 0 .91-.12 1.24-.37.32-.25.47-.57.47-.99 0-.3-.08-.52-.23-.72-.15-.17-.4-.34-.74-.47l-.7-.27c-.26-.1-.46-.2-.53-.3a.47.47 0 0 1-.15-.36c0-.38.27-.57.84-.57.32 0 .64.05.94.15l.2.04c.07 0 .12-.04.12-.14v-.25c0-.08-.03-.12-.05-.17-.03-.05-.08-.08-.15-.1-.37-.13-.74-.2-1.11-.2-.47 0-.87.12-1.16.35-.3.22-.45.54-.45.91 0 .57.32.99.97 1.24l.74.27c.24.1.4.17.5.27.09.1.12.2.12.35 0 .2-.08.37-.23.46Zm-3.88-3.55v3.28c-.42.28-.84.42-1.26.42-.27 0-.47-.07-.6-.22-.11-.15-.16-.37-.16-.7V7.59c0-.13-.05-.18-.18-.18h-.52c-.12 0-.17.05-.17.18v3.06c0 .42.1.77.32.99.22.22.55.35.97.35.56 0 1.13-.2 1.68-.6l.05.3c0 .07.02.1.07.12.02.03.07.03.15.03h.37c.12 0 .17-.05.17-.18V7.58c0-.13-.05-.18-.17-.18h-.52c-.15 0-.2.08-.2.18Zm-4.69 4.27h.52c.12 0 .17-.05.17-.17v-3.1c0-.41-.1-.73-.32-.95a1.25 1.25 0 0 0-.94-.35c-.57 0-1.16.2-1.73.62-.2-.42-.57-.62-1.11-.62-.55 0-1.1.2-1.64.57l-.04-.27c0-.08-.03-.1-.08-.13-.02-.02-.07-.02-.12-.02h-.4c-.12 0-.17.05-.17.17v4.1c0 .13.05.18.17.18h.52c.12 0 .17-.05.17-.18V8.37c.42-.25.84-.4 1.29-.4.25 0 .42.08.52.22.1.15.17.35.17.65v2.84c0 .12.05.17.17.17h.52c.13 0 .18-.05.18-.17V8.37c.44-.27.86-.4 1.28-.4.25 0 .42.08.52.22.1.15.17.35.17.65v2.84c0 .12.05.17.18.17Zm13.47 3.29a21.8 21.8 0 0 1-8.3 1.7c-3.96 0-7.8-1.08-10.88-2.89a.35.35 0 0 0-.15-.05c-.17 0-.27.2-.1.37a16.11 16.11 0 0 0 10.87 4.16c3.02 0 6.5-.94 8.9-2.72.42-.3.08-.74-.34-.57Zm-.08-6.74c.22-.26.57-.38 1.06-.38.25 0 .5.03.72.1l.15.02c.07 0 .12-.04.12-.17v-.25c0-.07-.02-.14-.05-.17a.54.54 0 0 0-.12-.1c-.32-.07-.64-.15-.94-.15-.7 0-1.21.2-1.6.62-.38.4-.57 1-.57 1.73 0 .74.17 1.31.54 1.7.37.4.89.6 1.58.6.37 0 .72-.05.99-.17.07-.03.12-.05.15-.1.02-.03.02-.1.02-.17v-.25c0-.13-.05-.17-.12-.17-.03 0-.07 0-.12.02-.28.07-.55.12-.8.12-.46 0-.81-.12-1.03-.37-.23-.24-.32-.64-.32-1.16v-.12c.02-.55.12-.94.34-1.19Z" clipRule="evenodd"></path>
     <path fillRule="evenodd" d="M21.55 17.46c1.29-1.09 1.64-3.33 1.36-3.68-.12-.15-.71-.3-1.45-.3-.8 0-1.73.18-2.45.67-.22.15-.17.35.05.32.76-.1 2.5-.3 2.82.1.3.4-.35 2.03-.65 2.74-.07.23.1.3.32.15ZM18.12 7.4h-.52c-.12 0-.17.05-.17.18v4.1c0 .12.05.17.17.17h.52c.12 0 .17-.05.17-.17v-4.1c0-.1-.05-.18-.17-.18Zm.15-1.68a.58.58 0 0 0-.42-.15c-.18 0-.3.05-.4.15a.5.5 0 0 0-.15.37c0 .15.05.3.15.37.1.1.22.15.4.15.17 0 .3-.05.4-.15a.5.5 0 0 0 .14-.37c0-.15-.02-.3-.12-.37Z" clipRule="evenodd"></path>
-  </svg>);
-const DeezerIcon = ({ className }: {
-    className?: string;
-}) => (<svg viewBox="0 0 512 512" className={`inline-block w-[1.1em] h-[1.1em] mr-2 ${className || "fill-muted-foreground"}`}>
-    <path fill="currentColor" d="M14.8 101.1C6.6 101.1 0 127.6 0 160.3s6.6 59.2 14.8 59.2s14.8-26.5 14.8-59.2s-6.6-59.2-14.8-59.2m433.9-60.2c-7.7 0-14.5 17.1-19.4 44.1c-7.7-46.7-20.2-77-34.2-77c-16.8 0-31.1 42.9-38 105.4c-6.6-45.4-16.8-74.2-28.3-74.2c-16.1 0-29.6 56.9-34.7 136.2c-9.4-40.8-23.2-66.3-38.3-66.3s-28.8 25.5-38.3 66.3c-5.1-79.3-18.6-136.2-34.7-136.2c-11.5 0-21.7 28.8-28.3 74.2C147.9 50.9 133.3 8 116.7 8c-14 0-26.5 30.4-34.2 77c-4.8-27-11.7-44.1-19.4-44.1c-14.3 0-26 59.2-26 132.1S49 305.2 63.3 305.2c5.9 0 11.5-9.9 15.8-26.8c6.9 61.7 21.2 104.1 38 104.1c13 0 24.5-25.5 32.1-65.6c5.4 76.3 18.6 130.4 34.2 130.4c9.7 0 18.6-21.4 25.3-56.4c7.9 72.2 26.3 122.7 47.7 122.7s39.5-50.5 47.7-122.7c6.6 35 15.6 56.4 25.3 56.4c15.6 0 28.8-54.1 34.2-130.4c7.7 40.1 19.4 65.6 32.1 65.6c16.6 0 30.9-42.3 38-104.1c4.3 16.8 9.7 26.8 15.8 26.8c14.3 0 26-59.2 26-132.1S463 40.9 448.7 40.9m48.5 60.2c-8.2 0-14.8 26.5-14.8 59.2s6.6 59.2 14.8 59.2S512 193 512 160.3s-6.6-59.2-14.8-59.2"/>
   </svg>);
 interface SettingsPageProps {
     onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
@@ -129,11 +125,20 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
     const handleAutoQualityChange = async (value: "16" | "24") => {
         setTempSettings((prev) => ({ ...prev, autoQuality: value }));
     };
-    const [activeTab, setActiveTab] = useState<"general" | "files">("general");
+    const [activeTab, setActiveTab] = useState<"general" | "files" | "api">("general");
     return (<div className="space-y-4 h-full flex flex-col">
       <div className="flex items-center justify-between shrink-0">
         <h1 className="text-2xl font-bold">Settings</h1>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={async () => { try {
+        await OpenConfigFolder();
+    }
+    catch (e) {
+        toast.error(`Failed to open config folder: ${e}`);
+    } }} className="gap-1.5">
+            <FolderLock className="h-4 w-4"/>
+            Open Config Folder
+          </Button>
           <Button variant="outline" onClick={() => setShowResetConfirm(true)} className="gap-1.5">
             <RotateCcw className="h-4 w-4"/>
             Reset to Default
@@ -147,12 +152,16 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
 
       <div className="flex gap-2 border-b shrink-0">
         <Button variant={activeTab === "general" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("general")} className="rounded-b-none gap-2">
-          <Settings className="h-4 w-4"/>
+          <MonitorCog className="h-4 w-4"/>
           General
         </Button>
         <Button variant={activeTab === "files" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("files")} className="rounded-b-none gap-2">
           <FolderCog className="h-4 w-4"/>
           File Management
+        </Button>
+        <Button variant={activeTab === "api" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("api")} className="rounded-b-none gap-2">
+          <Router className="h-4 w-4"/>
+          API Status
         </Button>
       </div>
 
@@ -266,12 +275,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                           Amazon Music
                         </span>
                       </SelectItem>
-                      <SelectItem value="deezer">
-                        <span className="flex items-center">
-                          <DeezerIcon />
-                          Deezer
-                        </span>
-                      </SelectItem>
+
                     </SelectContent>
                   </Select>
 
@@ -285,139 +289,6 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                         </SelectTrigger>
                         <SelectContent>
                           
-                          <SelectItem value="tidal-qobuz-amazon-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="tidal-qobuz-deezer-amazon">
-                            <span className="flex items-center gap-1.5">
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="qobuz-tidal-amazon-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="amazon-tidal-qobuz-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="deezer-tidal-qobuz-amazon">
-                            <span className="flex items-center gap-1.5">
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="deezer-qobuz-amazon-tidal">
-                            <span className="flex items-center gap-1.5">
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <TidalIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="deezer-amazon-tidal-qobuz">
-                            <span className="flex items-center gap-1.5">
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-
-                          
-                          <SelectItem value="tidal-qobuz-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="tidal-amazon-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="qobuz-amazon-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="amazon-qobuz-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="amazon-tidal-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="deezer-qobuz-amazon">
-                            <span className="flex items-center gap-1.5">
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
                           <SelectItem value="tidal-qobuz-amazon">
                             <span className="flex items-center gap-1.5">
                               <TidalIcon className="fill-current"/>
@@ -427,50 +298,53 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                               <AmazonIcon className="fill-current"/>
                             </span>
                           </SelectItem>
+                          <SelectItem value="tidal-amazon-qobuz">
+                            <span className="flex items-center gap-1.5">
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <QobuzIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="qobuz-tidal-amazon">
+                            <span className="flex items-center gap-1.5">
+                              <QobuzIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="qobuz-amazon-tidal">
+                            <span className="flex items-center gap-1.5">
+                              <QobuzIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <TidalIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="amazon-tidal-qobuz">
+                            <span className="flex items-center gap-1.5">
+                              <AmazonIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <QobuzIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="amazon-qobuz-tidal">
+                            <span className="flex items-center gap-1.5">
+                              <AmazonIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <QobuzIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <TidalIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
 
                           
-                          <SelectItem value="tidal-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <TidalIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="qobuz-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <QobuzIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="amazon-deezer">
-                            <span className="flex items-center gap-1.5">
-                              <AmazonIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <DeezerIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="deezer-tidal">
-                            <span className="flex items-center gap-1.5">
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <TidalIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="deezer-qobuz">
-                            <span className="flex items-center gap-1.5">
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <QobuzIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
-                          <SelectItem value="deezer-amazon">
-                            <span className="flex items-center gap-1.5">
-                              <DeezerIcon className="fill-current"/>
-                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
-                              <AmazonIcon className="fill-current"/>
-                            </span>
-                          </SelectItem>
                           <SelectItem value="tidal-qobuz">
                             <span className="flex items-center gap-1.5">
                               <TidalIcon className="fill-current"/>
@@ -552,9 +426,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                   {tempSettings.downloader === "amazon" && (<div className="h-9 px-3 flex items-center text-sm font-medium border border-input rounded-md bg-muted/30 text-muted-foreground whitespace-nowrap cursor-default">
                       16-bit - 24-bit/44.1kHz - 192kHz
                     </div>)}
-                  {tempSettings.downloader === "deezer" && (<div className="h-9 px-3 flex items-center text-sm font-medium border border-input rounded-md bg-muted/30 text-muted-foreground whitespace-nowrap cursor-default">
-                      16-bit/44.1kHz
-                    </div>)}
+
                 </div>
 
                 {((tempSettings.downloader === "tidal" &&
@@ -664,9 +536,12 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     Preview:{" "}
                     <span className="font-mono">
                       {tempSettings.folderTemplate
-                    .replace(/\{artist\}/g, "Kendrick Lamar, SZA")
+                    .replace(/\{artist\}/g, tempSettings.separator === "comma" ? "Kendrick Lamar, SZA" : "Kendrick Lamar; SZA")
                     .replace(/\{album\}/g, "Black Panther")
                     .replace(/\{album_artist\}/g, "Kendrick Lamar")
+                    .replace(/\{title\}/g, "All The Stars")
+                    .replace(/\{track\}/g, "01")
+                    .replace(/\{disc\}/g, "1")
                     .replace(/\{year\}/g, "2018")
                     .replace(/\{date\}/g, "2018-02-09")}
                       /
@@ -747,12 +622,31 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     filenameTemplate: e.target.value,
                 }))} placeholder="{track}. {title}" className="h-9 text-sm flex-1"/>)}
               </div>
+              <div className="space-y-2 pt-2">
+                <Label className="text-sm">Separator</Label>
+                <div className="flex gap-2">
+                  <Select value={tempSettings.separator} onValueChange={(value: "comma" | "semicolon") => setTempSettings((prev) => ({
+                ...prev,
+                separator: value,
+            }))}>
+                    <SelectTrigger className="h-9 w-fit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="comma">Comma (,)</SelectItem>
+                      <SelectItem value="semicolon">Semicolon (;)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               {tempSettings.filenameTemplate && (<p className="text-xs text-muted-foreground">
                   Preview:{" "}
                   <span className="font-mono">
                     {tempSettings.filenameTemplate
-                    .replace(/\{artist\}/g, "Kendrick Lamar, SZA")
+                    .replace(/\{artist\}/g, tempSettings.separator === "comma" ? "Kendrick Lamar, SZA" : "Kendrick Lamar; SZA")
                     .replace(/\{album_artist\}/g, "Kendrick Lamar")
+                    .replace(/\{album\}/g, "Black Panther")
                     .replace(/\{title\}/g, "All The Stars")
                     .replace(/\{track\}/g, "01")
                     .replace(/\{disc\}/g, "1")
@@ -761,8 +655,11 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     .flac
                   </span>
                 </p>)}
+                
             </div>
           </div>)}
+        
+        {activeTab === "api" && (<ApiStatusTab />)}
       </div>
 
       <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>

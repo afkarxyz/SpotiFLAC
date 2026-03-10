@@ -6,6 +6,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { SearchAndSort } from "./SearchAndSort";
 import { TrackList } from "./TrackList";
 import { DownloadProgress } from "./DownloadProgress";
+import { getSettings } from "@/lib/settings";
+import { downloadCover } from "@/lib/api";
+import { useState } from "react";
+import { toastWithSound as toast } from "@/lib/toast-with-sound";
+import { joinPath, sanitizePath } from "@/lib/utils";
+import { parseTemplate, type TemplateData } from "@/lib/settings";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
 interface AlbumInfoProps {
     albumInfo: {
@@ -70,6 +76,65 @@ interface AlbumInfoProps {
     onBack?: () => void;
 }
 export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onArtistClick, onTrackClick, onBack, }: AlbumInfoProps) {
+    const settings = getSettings();
+    const [downloadingAlbumCover, setDownloadingAlbumCover] = useState(false);
+    const handleDownloadAlbumCover = async () => {
+        if (!albumInfo.images)
+            return;
+        setDownloadingAlbumCover(true);
+        try {
+            const os = settings.operatingSystem;
+            let outputDir = settings.downloadPath;
+            const albumName = albumInfo.name;
+            const artistName = albumInfo.artists;
+            const placeholder = "__SLASH_PLACEHOLDER__";
+            const templateData: TemplateData = {
+                artist: artistName?.replace(/\//g, placeholder),
+                album: albumName?.replace(/\//g, placeholder),
+                album_artist: artistName?.replace(/\//g, placeholder),
+                title: albumName?.replace(/\//g, placeholder),
+                year: albumInfo.release_date?.substring(0, 4),
+                date: albumInfo.release_date,
+            };
+            if (settings.folderTemplate) {
+                const folderPath = parseTemplate(settings.folderTemplate, templateData);
+                if (folderPath) {
+                    const parts = folderPath.split("/").filter((p: string) => p.trim());
+                    for (const part of parts) {
+                        outputDir = joinPath(os, outputDir, sanitizePath(part.replace(new RegExp(placeholder, "g"), " "), os));
+                    }
+                }
+            }
+            const response = await downloadCover({
+                cover_url: albumInfo.images,
+                track_name: albumName,
+                artist_name: "",
+                album_name: "",
+                album_artist: "",
+                release_date: "",
+                output_dir: outputDir,
+                filename_format: "title",
+                track_number: false,
+                position: 0,
+                disc_number: 0,
+            });
+            if (response.success) {
+                if (response.already_exists)
+                    toast.info("Cover already exists");
+                else
+                    toast.success("Album cover downloaded");
+            }
+            else {
+                toast.error(response.error || "Failed to download cover");
+            }
+        }
+        catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to download cover");
+        }
+        finally {
+            setDownloadingAlbumCover(false);
+        }
+    };
     return (<div className="space-y-6">
       <Card className="relative">
       {onBack && (<div className="absolute top-4 right-4 z-10">
@@ -79,7 +144,19 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
       </div>)}
         <CardContent className="px-6">
           <div className="flex gap-6 items-start">
-            {albumInfo.images && (<img src={albumInfo.images} alt={albumInfo.name} className="w-48 h-48 rounded-md shadow-lg object-cover"/>)}
+            {albumInfo.images && (<div className="relative group shrink-0 w-48 h-48">
+                <img src={albumInfo.images} alt={albumInfo.name} className="w-48 h-48 rounded-md shadow-lg object-cover"/>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="secondary" size="icon" className="h-9 w-9 shadow-lg" onClick={handleDownloadAlbumCover} disabled={downloadingAlbumCover}>
+                        {downloadingAlbumCover ? <Spinner /> : <ImageDown className="h-4 w-4"/>}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Download Album Cover</p></TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>)}
             <div className="flex-1 space-y-4">
               <div className="space-y-2">
                 <p className="text-sm font-medium">Album</p>

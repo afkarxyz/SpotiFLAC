@@ -146,7 +146,7 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 			if len(genres) > 5 {
 				genres = genres[:5]
 			}
-			meta.Genre = strings.Join(genres, "; ")
+			meta.Genre = strings.Join(genres, GetSeparator())
 		}
 	}
 

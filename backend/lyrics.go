@@ -37,17 +37,6 @@ type LyricsResponse struct {
 	Lines    []LyricsLine `json:"lines"`
 }
 
-type SpotifyLyricsLine struct {
-	TimeTag string `json:"timeTag"`
-	Words   string `json:"words"`
-}
-
-type SpotifyLyricsAPIResponse struct {
-	Error    bool                `json:"error"`
-	SyncType string              `json:"syncType"`
-	Lines    []SpotifyLyricsLine `json:"lines"`
-}
-
 type LyricsDownloadRequest struct {
 	SpotifyID           string `json:"spotify_id"`
 	TrackName           string `json:"track_name"`
@@ -81,11 +70,15 @@ func NewLyricsClient() *LyricsClient {
 	}
 }
 
-func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName string, duration int) (*LyricsResponse, error) {
+func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName, albumName string, duration int) (*LyricsResponse, error) {
 
 	apiURL := fmt.Sprintf("https://lrclib.net/api/get?artist_name=%s&track_name=%s",
 		url.QueryEscape(artistName),
 		url.QueryEscape(trackName))
+
+	if albumName != "" {
+		apiURL = fmt.Sprintf("%s&album_name=%s", apiURL, url.QueryEscape(albumName))
+	}
 
 	if duration > 0 {
 		apiURL = fmt.Sprintf("%s&duration=%d", apiURL, duration)
@@ -109,6 +102,10 @@ func (c *LyricsClient) FetchLyricsWithMetadata(trackName, artistName string, dur
 	var lrcLibResp LRCLibResponse
 	if err := json.Unmarshal(body, &lrcLibResp); err != nil {
 		return nil, fmt.Errorf("failed to parse LRCLIB response: %v", err)
+	}
+
+	if lrcLibResp.SyncedLyrics == "" && lrcLibResp.PlainLyrics == "" {
+		return nil, fmt.Errorf("LRCLIB returned empty lyrics")
 	}
 
 	return c.convertLRCLibToLyricsResponse(&lrcLibResp), nil
@@ -174,8 +171,10 @@ func lrcTimestampToMs(timestamp string) int64 {
 }
 
 func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string) (*LyricsResponse, error) {
-	query := fmt.Sprintf("%s %s", artistName, trackName)
-	apiURL := fmt.Sprintf("https://lrclib.net/api/search?q=%s", url.QueryEscape(query))
+
+	apiURL := fmt.Sprintf("https://lrclib.net/api/search?artist_name=%s&track_name=%s",
+		url.QueryEscape(artistName),
+		url.QueryEscape(trackName))
 
 	resp, err := c.httpClient.Get(apiURL)
 	if err != nil {
@@ -201,77 +200,33 @@ func (c *LyricsClient) FetchLyricsFromLRCLibSearch(trackName, artistName string)
 		return nil, fmt.Errorf("no results found")
 	}
 
-	var best *LRCLibResponse
+	var bestSynced *LRCLibResponse
+	var bestPlain *LRCLibResponse
 	for i := range results {
-		if results[i].SyncedLyrics != "" {
-			best = &results[i]
-			break
+		if results[i].SyncedLyrics != "" && bestSynced == nil {
+			bestSynced = &results[i]
 		}
-		if best == nil && results[i].PlainLyrics != "" {
-			best = &results[i]
+		if results[i].PlainLyrics != "" && bestPlain == nil {
+			bestPlain = &results[i]
+		}
+		if bestSynced != nil {
+			break
 		}
 	}
 
+	best := bestSynced
+	if best == nil {
+		best = bestPlain
+	}
 	if best == nil {
 		best = &results[0]
 	}
 
+	if best.SyncedLyrics == "" && best.PlainLyrics == "" {
+		return nil, fmt.Errorf("no lyrics found in search results")
+	}
+
 	return c.convertLRCLibToLyricsResponse(best), nil
-}
-
-func (c *LyricsClient) FetchLyricsFromSpotifyAPI(spotifyID string) (*LyricsResponse, error) {
-	if spotifyID == "" {
-		return nil, fmt.Errorf("spotify ID is empty")
-	}
-
-	apiURL := fmt.Sprintf("https://spotify-lyrics-api-pi.vercel.app/?trackid=%s&format=lrc", spotifyID)
-
-	resp, err := c.httpClient.Get(apiURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch from Spotify Lyrics API: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Spotify Lyrics API returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read Spotify Lyrics API response: %v", err)
-	}
-
-	var apiResp SpotifyLyricsAPIResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse Spotify Lyrics API response: %v", err)
-	}
-
-	if apiResp.Error {
-		return nil, fmt.Errorf("Spotify Lyrics API returned error")
-	}
-
-	result := &LyricsResponse{
-		Error:    false,
-		SyncType: apiResp.SyncType,
-		Lines:    []LyricsLine{},
-	}
-
-	for _, line := range apiResp.Lines {
-		if line.TimeTag == "" && line.Words == "" {
-			continue
-		}
-		ms := lrcTimestampToMs(line.TimeTag)
-		result.Lines = append(result.Lines, LyricsLine{
-			StartTimeMs: fmt.Sprintf("%d", ms),
-			Words:       line.Words,
-		})
-	}
-
-	if len(result.Lines) == 0 {
-		return nil, fmt.Errorf("Spotify Lyrics API returned empty lines")
-	}
-
-	return result, nil
 }
 
 func simplifyTrackName(name string) string {
@@ -286,39 +241,86 @@ func simplifyTrackName(name string) string {
 	return name
 }
 
-func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName string, duration int) (*LyricsResponse, string, error) {
+func isSynced(resp *LyricsResponse) bool {
+	return resp != nil && !resp.Error && resp.SyncType == "LINE_SYNCED" && len(resp.Lines) > 0
+}
 
-	resp, err := c.FetchLyricsFromSpotifyAPI(spotifyID)
-	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
-		return resp, "Spotify", nil
-	}
-	fmt.Printf("   Spotify Lyrics API: %v\n", err)
+func hasLyrics(resp *LyricsResponse) bool {
+	return resp != nil && !resp.Error && len(resp.Lines) > 0
+}
 
-	resp, err = c.FetchLyricsWithMetadata(trackName, artistName, duration)
-	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
-		return resp, "LRCLIB", nil
-	}
-	fmt.Printf("   LRCLIB exact: %v\n", err)
+func (c *LyricsClient) FetchLyricsAllSources(spotifyID, trackName, artistName, albumName string, duration int) (*LyricsResponse, string, error) {
 
-	resp, err = c.FetchLyricsFromLRCLibSearch(trackName, artistName)
-	if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
-		return resp, "LRCLIB Search", nil
+	var unsyncedFallback *LyricsResponse
+	var unsyncedSource string
+
+	check := func(resp *LyricsResponse, err error, source string) (*LyricsResponse, string, bool) {
+		if err != nil || resp == nil || resp.Error || len(resp.Lines) == 0 {
+			return nil, "", false
+		}
+		if isSynced(resp) {
+			return resp, source, true
+		}
+
+		if unsyncedFallback == nil {
+			unsyncedFallback = resp
+			unsyncedSource = source
+		}
+		return nil, "", false
 	}
-	fmt.Printf("   LRCLIB search: %v\n", err)
+
+	var resp *LyricsResponse
+	var src string
+	var found bool
+
+	resp, _ = c.FetchLyricsWithMetadata(trackName, artistName, albumName, duration)
+	resp, src, found = check(resp, nil, "LRCLIB")
+	if found {
+		fmt.Printf("   [LRCLIB] Synced found via exact match (with album)\n")
+		return resp, src, nil
+	}
+	fmt.Printf("   LRCLIB exact (with album): no synced\n")
+
+	if albumName != "" {
+		resp, _ = c.FetchLyricsWithMetadata(trackName, artistName, "", duration)
+		resp, src, found = check(resp, nil, "LRCLIB (no album)")
+		if found {
+			fmt.Printf("   [LRCLIB] Synced found via exact match (no album)\n")
+			return resp, src, nil
+		}
+		fmt.Printf("   LRCLIB exact (no album): no synced\n")
+	}
+
+	resp, _ = c.FetchLyricsFromLRCLibSearch(trackName, artistName)
+	resp, src, found = check(resp, nil, "LRCLIB Search")
+	if found {
+		fmt.Printf("   [LRCLIB] Synced found via search\n")
+		return resp, src, nil
+	}
+	fmt.Printf("   LRCLIB search: no synced\n")
 
 	simplifiedTrack := simplifyTrackName(trackName)
 	if simplifiedTrack != trackName {
 		fmt.Printf("   Trying simplified name: %s\n", simplifiedTrack)
 
-		resp, err = c.FetchLyricsWithMetadata(simplifiedTrack, artistName, duration)
-		if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
-			return resp, "LRCLIB (simplified)", nil
+		resp, _ = c.FetchLyricsWithMetadata(simplifiedTrack, artistName, albumName, duration)
+		resp, src, found = check(resp, nil, "LRCLIB (simplified)")
+		if found {
+			fmt.Printf("   [LRCLIB] Synced found via simplified exact\n")
+			return resp, src, nil
 		}
 
-		resp, err = c.FetchLyricsFromLRCLibSearch(simplifiedTrack, artistName)
-		if err == nil && resp != nil && !resp.Error && len(resp.Lines) > 0 {
-			return resp, "LRCLIB Search (simplified)", nil
+		resp, _ = c.FetchLyricsFromLRCLibSearch(simplifiedTrack, artistName)
+		resp, src, found = check(resp, nil, "LRCLIB Search (simplified)")
+		if found {
+			fmt.Printf("   [LRCLIB] Synced found via simplified search\n")
+			return resp, src, nil
 		}
+	}
+
+	if unsyncedFallback != nil {
+		fmt.Printf("   [LRCLIB] No synced found, using unsynced from: %s\n", unsyncedSource)
+		return unsyncedFallback, unsyncedSource + " (unsynced)", nil
 	}
 
 	return nil, "", fmt.Errorf("lyrics not found in any source")
@@ -472,25 +474,6 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		outputDir = NormalizePath(outputDir)
 	}
 
-	safeArtist := sanitizeFilename(req.AlbumArtist)
-	if safeArtist == "" {
-		safeArtist = sanitizeFilename(req.ArtistName)
-	}
-	safeAlbum := sanitizeFilename(req.AlbumName)
-
-	if safeArtist != "" && safeAlbum != "" {
-		artistAlbumPath := filepath.Join(outputDir, safeArtist, safeAlbum)
-		if info, err := os.Stat(artistAlbumPath); err == nil && info.IsDir() {
-			outputDir = artistAlbumPath
-		} else {
-
-			artistPath := filepath.Join(outputDir, safeArtist)
-			if info, err := os.Stat(artistPath); err == nil && info.IsDir() {
-				outputDir = artistPath
-			}
-		}
-	}
-
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return &LyricsDownloadResponse{
 			Success: false,
@@ -524,7 +507,7 @@ func (c *LyricsClient) DownloadLyrics(req LyricsDownloadRequest) (*LyricsDownloa
 		}
 	}
 
-	lyrics, _, err := c.FetchLyricsAllSources(req.SpotifyID, req.TrackName, req.ArtistName, audioDuration)
+	lyrics, _, err := c.FetchLyricsAllSources(req.SpotifyID, req.TrackName, req.ArtistName, req.AlbumName, audioDuration)
 	if err != nil {
 		return &LyricsDownloadResponse{
 			Success: false,

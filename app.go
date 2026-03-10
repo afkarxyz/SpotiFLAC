@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"path/filepath"
 
+	"net/http"
 	"strings"
 	"time"
 
@@ -51,10 +53,11 @@ func (a *App) shutdown(ctx context.Context) {
 }
 
 type SpotifyMetadataRequest struct {
-	URL     string  `json:"url"`
-	Batch   bool    `json:"batch"`
-	Delay   float64 `json:"delay"`
-	Timeout float64 `json:"timeout"`
+	URL       string  `json:"url"`
+	Batch     bool    `json:"batch"`
+	Delay     float64 `json:"delay"`
+	Timeout   float64 `json:"timeout"`
+	Separator string  `json:"separator,omitempty"`
 }
 
 type DownloadRequest struct {
@@ -91,6 +94,7 @@ type DownloadRequest struct {
 	UseFirstArtistOnly   bool   `json:"use_first_artist_only,omitempty"`
 	UseSingleGenre       bool   `json:"use_single_genre,omitempty"`
 	EmbedGenre           bool   `json:"embed_genre,omitempty"`
+	Separator            string `json:"separator,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -342,7 +346,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if req.EmbedLyrics {
 			go func() {
 				client := backend.NewLyricsClient()
-				resp, _, err := client.FetchLyricsAllSources(req.SpotifyID, req.TrackName, req.ArtistName, req.Duration)
+				resp, _, err := client.FetchLyricsAllSources(req.SpotifyID, req.TrackName, req.ArtistName, req.AlbumName, req.Duration)
 				if err == nil && resp != nil && len(resp.Lines) > 0 {
 					lrc := client.ConvertToLRC(resp, req.TrackName, req.ArtistName)
 					lyricsChan <- lrc
@@ -401,10 +405,6 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			quality = "6"
 		}
 		filename, err = downloader.DownloadTrackWithISRC(isrc, req.SpotifyID, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
-
-	case "deezer":
-		downloader := backend.NewDeezerDownloader()
-		filename, err = downloader.Download(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.PlaylistName, req.PlaylistOwner, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
 
 	default:
 		return DownloadResponse{
@@ -548,6 +548,18 @@ func (a *App) OpenFolder(path string) error {
 	return nil
 }
 
+func (a *App) OpenConfigFolder() error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %v", err)
+	}
+	configDir := filepath.Join(homeDir, ".spotiflac")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %v", err)
+	}
+	return backend.OpenFolderInExplorer(configDir)
+}
+
 func (a *App) SelectFolder(defaultPath string) (string, error) {
 	return backend.SelectFolderDialog(a.ctx, defaultPath)
 }
@@ -658,6 +670,52 @@ func (a *App) ExportFailedDownloads() (string, error) {
 	}
 
 	return fmt.Sprintf("Successfully exported %d failed downloads to %s", count, path), nil
+}
+
+func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
+	var checkURL string
+	if apiType == "tidal" {
+		checkURL = fmt.Sprintf("%s/track/?id=441821360&quality=HI_RES_LOSSLESS", apiURL)
+	} else if apiType == "qobuz" {
+		checkURL = fmt.Sprintf("%s/api/stream?trackId=360735657&format_id=27", apiURL)
+	} else if apiType == "qbz" {
+		checkURL = fmt.Sprintf("%s/api/track/360735657?quality=27", apiURL)
+	} else if apiType == "amazon" {
+		checkURL = fmt.Sprintf("%s/status", apiURL)
+	} else {
+		checkURL = apiURL
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequest("GET", checkURL, nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		resp, err := client.Do(req)
+		if err == nil {
+			statusCode := resp.StatusCode
+			if apiType == "amazon" && statusCode == 200 {
+				body, readErr := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				if readErr == nil && strings.Contains(string(body), `"amazonMusic":"up"`) {
+					return true
+				}
+			} else {
+				resp.Body.Close()
+				if statusCode == 200 {
+					return true
+				}
+			}
+		}
+		if i < maxRetries-1 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+	return false
 }
 
 func (a *App) Quit() {
@@ -1088,23 +1146,6 @@ func (a *App) RenameFileTo(oldPath, newName string) error {
 	return os.Rename(oldPath, newPath)
 }
 
-func (a *App) UploadImage(filePath string) (string, error) {
-	return backend.UploadToSendNow(filePath)
-}
-
-func (a *App) UploadImageBytes(filename string, base64Data string) (string, error) {
-
-	if idx := strings.Index(base64Data, ","); idx != -1 {
-		base64Data = base64Data[idx+1:]
-	}
-
-	data, err := base64.StdEncoding.DecodeString(base64Data)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode base64: %v", err)
-	}
-	return backend.UploadBytesToSendNow(filename, data)
-}
-
 func (a *App) SelectImageVideo() ([]string, error) {
 	return backend.SelectImageVideoDialog(a.ctx)
 }
@@ -1368,10 +1409,6 @@ func (a *App) LoadSettings() (map[string]interface{}, error) {
 
 func (a *App) CheckFFmpegInstalled() (bool, error) {
 	return backend.IsFFmpegInstalled()
-}
-
-func (a *App) GetOSInfo() (string, error) {
-	return backend.GetOSInfo()
 }
 
 func (a *App) CreateM3U8File(m3u8Name string, outputDir string, filePaths []string) error {
