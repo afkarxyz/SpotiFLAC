@@ -81,6 +81,28 @@ func GetFFmpegPath() (string, error) {
 		return localPath, nil
 	}
 
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		homebrewPath := "/opt/homebrew/bin/" + ffmpegName
+		if _, err := os.Stat(homebrewPath); err == nil {
+			return homebrewPath, nil
+		}
+	} else if runtime.GOOS == "darwin" && runtime.GOARCH == "amd64" {
+		homebrewPath := "/usr/local/bin/" + ffmpegName
+		if _, err := os.Stat(homebrewPath); err == nil {
+			return homebrewPath, nil
+		}
+	}
+
+	if runtime.GOOS != "windows" {
+		path, err := exec.Command("which", ffmpegName).Output()
+		if err == nil {
+			trimmed := strings.TrimSpace(string(path))
+			if trimmed != "" {
+				return trimmed, nil
+			}
+		}
+	}
+
 	path, err := exec.LookPath(ffmpegName)
 	if err == nil {
 		return path, nil
@@ -103,6 +125,28 @@ func GetFFprobePath() (string, error) {
 	localPath := filepath.Join(ffmpegDir, ffprobeName)
 	if _, err := os.Stat(localPath); err == nil {
 		return localPath, nil
+	}
+
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		homebrewPath := "/opt/homebrew/bin/" + ffprobeName
+		if _, err := os.Stat(homebrewPath); err == nil {
+			return homebrewPath, nil
+		}
+	} else if runtime.GOOS == "darwin" && runtime.GOARCH == "amd64" {
+		homebrewPath := "/usr/local/bin/" + ffprobeName
+		if _, err := os.Stat(homebrewPath); err == nil {
+			return homebrewPath, nil
+		}
+	}
+
+	if runtime.GOOS != "windows" {
+		path, err := exec.Command("which", ffprobeName).Output()
+		if err == nil {
+			trimmed := strings.TrimSpace(string(path))
+			if trimmed != "" {
+				return trimmed, nil
+			}
+		}
 	}
 
 	path, err := exec.LookPath(ffprobeName)
@@ -144,6 +188,53 @@ func IsFFmpegInstalled() (bool, error) {
 	setHideWindow(cmd)
 	err = cmd.Run()
 	return err == nil, nil
+}
+
+func GetBrewPath() string {
+	brewPaths := []string{
+		"/opt/homebrew/bin/brew",
+		"/usr/local/bin/brew",
+	}
+
+	for _, path := range brewPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	return ""
+}
+
+func IsBrewFFmpegInstalled() (bool, error) {
+	brewPath := GetBrewPath()
+	if brewPath == "" {
+		return false, nil
+	}
+
+	cmd := exec.Command(brewPath, "list", "ffmpeg")
+	setHideWindow(cmd)
+	err := cmd.Run()
+	return err == nil, nil
+}
+
+func InstallFFmpegWithBrew(progressCallback func(int, string)) error {
+	brewPath := GetBrewPath()
+	if brewPath == "" {
+		return fmt.Errorf("brew not found")
+	}
+
+	progressCallback(10, "Installing FFmpeg via Homebrew...")
+
+	cmd := exec.Command(brewPath, "install", "ffmpeg")
+	setHideWindow(cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to install ffmpeg: %w - %s", err, string(output))
+	}
+
+	progressCallback(100, "done")
+
+	return nil
 }
 
 const (
