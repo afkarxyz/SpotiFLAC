@@ -549,7 +549,7 @@ export function FileManagerPage() {
             <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help"/>
           </TooltipTrigger>
           <TooltipContent side="right">
-            <p className="text-xs whitespace-nowrap">Variables: {"{title}"}, {"{artist}"}, {"{album}"}, {"{album_artist}"}, {"{track}"}, {"{disc}"}, {"{year}"}</p>
+            <p className="text-xs whitespace-nowrap">Variables: {"{title}"}, {"{artist}"}, {"{album}"}, {"{album_artist}"}, {"{track}"}, {"{disc}"}, {"{year}"}, {"{date}"}</p>
           </TooltipContent>
         </Tooltip>
       </div>
@@ -571,7 +571,7 @@ export function FileManagerPage() {
         </Tooltip>
       </div>
       <p className="text-xs text-muted-foreground">
-        Preview: <span className="font-mono">{renameFormat.replace(/\{title\}/g, "All The Stars").replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018")}.flac</span>
+        Preview: <span className="font-mono">{renameFormat.replace(/\{title\}/g, "All The Stars").replace(/\{artist\}/g, "Kendrick Lamar, SZA").replace(/\{album\}/g, "Black Panther").replace(/\{album_artist\}/g, "Kendrick Lamar").replace(/\{track\}/g, "01").replace(/\{disc\}/g, "1").replace(/\{year\}/g, "2018").replace(/\{date\}/g, "2018-02-09")}.flac</span>
       </p>
     </div>)}
 

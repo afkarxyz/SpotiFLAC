@@ -1,4 +1,4 @@
-import { X, Minus, Maximize, Settings, Info } from "lucide-react";
+import { X, Minus, Maximize, SlidersHorizontal, Info } from "lucide-react";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
 import { Menubar, MenubarContent, MenubarMenu, MenubarItem, MenubarTrigger, MenubarLabel, MenubarSeparator } from "@/components/ui/menubar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -43,7 +43,7 @@ export function TitleBar() {
         <Menubar className="border-none bg-transparent shadow-none px-0 mr-1" style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}>
             <MenubarMenu>
                 <MenubarTrigger className="cursor-pointer w-8 h-7 p-0 flex items-center justify-center hover:bg-muted transition-colors rounded data-[state=open]:bg-muted">
-                    <Settings className="w-3.5 h-3.5"/>
+                    <SlidersHorizontal className="w-3.5 h-3.5"/>
                 </MenubarTrigger>
                 <MenubarContent align="end" className="min-w-[200px]">
                     <div className="flex items-center gap-1.5 px-2 py-1.5">

@@ -117,7 +117,7 @@ func buildCoverFilename(trackName, artistName, albumName, albumArtist, releaseDa
 		}
 	}
 
-	return filename + ".cover.jpg"
+	return filename + ".jpg"
 }
 
 func convertSmallToMedium(imageURL string) string {

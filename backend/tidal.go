@@ -79,9 +79,13 @@ func NewTidalDownloader(apiURL string) *TidalDownloader {
 
 func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
 	apis := []string{
-		"https://triton.squid.wtf",
 		"https://hifi-one.spotisaver.net",
 		"https://hifi-two.spotisaver.net",
+		"https://eu-central.monochrome.tf",
+		"https://us-west.monochrome.tf",
+		"https://api.monochrome.tf",
+		"https://monochrome-api.samidy.com",
+		"https://tidal.kinoplus.online",
 	}
 	return apis, nil
 }

@@ -1,7 +1,9 @@
 package backend
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -133,8 +135,32 @@ func GetFirstArtist(artistString string) string {
 }
 
 func NormalizePath(folderPath string) string {
-
 	return strings.ReplaceAll(folderPath, "/", string(filepath.Separator))
+}
+
+func GetSeparator() string {
+	dir, err := GetFFmpegDir()
+	if err != nil {
+		return "; "
+	}
+	configPath := filepath.Join(dir, "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return "; "
+	}
+
+	var settings map[string]interface{}
+	if err := json.Unmarshal(data, &settings); err == nil {
+		if sep, ok := settings["separator"].(string); ok {
+			if sep == "comma" {
+				return ", "
+			}
+			if sep == "semicolon" {
+				return "; "
+			}
+		}
+	}
+	return "; "
 }
 
 func SanitizeFolderPath(folderPath string) string {
