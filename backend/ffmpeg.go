@@ -190,6 +190,53 @@ func IsFFmpegInstalled() (bool, error) {
 	return err == nil, nil
 }
 
+func GetBrewPath() string {
+	brewPaths := []string{
+		"/opt/homebrew/bin/brew",
+		"/usr/local/bin/brew",
+	}
+
+	for _, path := range brewPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+
+	return ""
+}
+
+func IsBrewFFmpegInstalled() (bool, error) {
+	brewPath := GetBrewPath()
+	if brewPath == "" {
+		return false, nil
+	}
+
+	cmd := exec.Command(brewPath, "list", "ffmpeg")
+	setHideWindow(cmd)
+	err := cmd.Run()
+	return err == nil, nil
+}
+
+func InstallFFmpegWithBrew(progressCallback func(int, string)) error {
+	brewPath := GetBrewPath()
+	if brewPath == "" {
+		return fmt.Errorf("brew not found")
+	}
+
+	progressCallback(10, "Installing FFmpeg via Homebrew...")
+
+	cmd := exec.Command(brewPath, "install", "ffmpeg")
+	setHideWindow(cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to install ffmpeg: %w - %s", err, string(output))
+	}
+
+	progressCallback(100, "done")
+
+	return nil
+}
+
 const (
 	ffmpegWindowsURL = "https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffmpeg-windows-amd64.zip"
 	ffmpegLinuxURL   = "https://github.com/afkarxyz/ffmpeg-binaries/releases/download/v8.0/ffmpeg-linux-amd64.tar.xz"

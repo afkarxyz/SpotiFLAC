@@ -1041,10 +1041,6 @@ func (a *App) IsFFprobeInstalled() (bool, error) {
 	return backend.IsFFprobeInstalled()
 }
 
-func (a *App) GetFFmpegPath() (string, error) {
-	return backend.GetFFmpegPath()
-}
-
 type DownloadFFmpegRequest struct{}
 
 type DownloadFFmpegResponse struct {
@@ -1070,6 +1066,41 @@ func (a *App) DownloadFFmpeg() DownloadFFmpegResponse {
 	return DownloadFFmpegResponse{
 		Success: true,
 		Message: "FFmpeg installed successfully",
+	}
+}
+
+func (a *App) GetBrewPath() string {
+	return backend.GetBrewPath()
+}
+
+func (a *App) IsBrewFFmpegInstalled() (bool, error) {
+	return backend.IsBrewFFmpegInstalled()
+}
+
+type InstallFFmpegWithBrewResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Error   string `json:"error,omitempty"`
+}
+
+func (a *App) InstallFFmpegWithBrew() InstallFFmpegWithBrewResponse {
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "Installing FFmpeg via Homebrew...")
+	err := backend.InstallFFmpegWithBrew(func(progress int, status string) {
+		runtime.EventsEmit(a.ctx, "ffmpeg:progress", progress)
+		runtime.EventsEmit(a.ctx, "ffmpeg:status", status)
+	})
+	if err != nil {
+		runtime.EventsEmit(a.ctx, "ffmpeg:status", "failed")
+		return InstallFFmpegWithBrewResponse{
+			Success: false,
+			Error:   err.Error(),
+		}
+	}
+
+	runtime.EventsEmit(a.ctx, "ffmpeg:status", "completed")
+	return InstallFFmpegWithBrewResponse{
+		Success: true,
+		Message: "FFmpeg installed successfully via Homebrew",
 	}
 }
 

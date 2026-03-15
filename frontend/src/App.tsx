@@ -5,7 +5,7 @@ import { Search, X, ArrowUp } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont, updateSettings } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
-import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg } from "../wailsjs/go/main/App";
+import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg, GetBrewPath, InstallFFmpegWithBrew } from "../wailsjs/go/main/App";
 import { EventsOn, EventsOff, Quit } from "../wailsjs/runtime/runtime";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { TitleBar } from "@/components/TitleBar";
@@ -65,6 +65,7 @@ function App() {
     const downloadQueue = useDownloadQueueDialog();
     const downloadProgress = useDownloadProgress();
     const [isFFmpegInstalled, setIsFFmpegInstalled] = useState<boolean | null>(null);
+    const [brewPath, setBrewPath] = useState<string>("");
     const [isInstallingFFmpeg, setIsInstallingFFmpeg] = useState(false);
     const [ffmpegInstallProgress, setFfmpegInstallProgress] = useState(0);
     const [ffmpegInstallStatus, setFfmpegInstallStatus] = useState("");
@@ -92,6 +93,8 @@ function App() {
             try {
                 const installed = await CheckFFmpegInstalled();
                 setIsFFmpegInstalled(installed);
+                const brew = await GetBrewPath();
+                setBrewPath(brew);
             }
             catch (err) {
                 console.error("Failed to check FFmpeg:", err);
@@ -170,7 +173,7 @@ function App() {
             console.error("Failed to load history:", err);
         }
     };
-    const handleInstallFFmpeg = async () => {
+    const handleInstallFFmpeg = async (useBrew: boolean = false) => {
         setIsInstallingFFmpeg(true);
         setFfmpegInstallProgress(0);
         setFfmpegInstallStatus("starting");
@@ -187,11 +190,11 @@ function App() {
             EventsOn("ffmpeg:status", (status: string) => {
                 setFfmpegInstallStatus(status);
             });
-            const response = await DownloadFFmpeg();
+            const response = useBrew ? await InstallFFmpegWithBrew() : await DownloadFFmpeg();
             EventsOff("ffmpeg:progress");
             EventsOff("ffmpeg:status");
             if (response.success) {
-                toast.success("FFmpeg installed successfully!");
+                toast.success(useBrew ? "FFmpeg installed successfully via Homebrew!" : "FFmpeg installed successfully!");
                 setIsFFmpegInstalled(true);
             }
             else {
@@ -522,14 +525,23 @@ function App() {
 
             
             <Dialog open={isFFmpegInstalled === false} onOpenChange={() => { }}>
-                <DialogContent className="max-w-[360px] [&>button]:hidden p-6 gap-5">
+                <DialogContent className="max-w-[450px] [&>button]:hidden p-6 gap-5">
                     <DialogHeader className="space-y-2">
                         <DialogTitle className="text-lg font-bold tracking-tight">
                             FFmpeg Required
                         </DialogTitle>
                         <DialogDescription className="text-sm text-foreground/70 leading-relaxed font-normal">
-                            FFmpeg is essential for SpotiFLAC to function properly.
-                            This setup will download about <span className="text-foreground font-semibold">100-200MB</span> of data.
+                            {brewPath ? (
+                                <>
+                                    FFmpeg is essential for SpotiFLAC to function properly.
+                                    Homebrew detected. Recommended: <span className="text-foreground font-semibold">brew install ffmpeg</span>
+                                </>
+                            ) : (
+                                <>
+                                    FFmpeg is essential for SpotiFLAC to function properly.
+                                    This setup will download about <span className="text-foreground font-semibold">100-200MB</span> of data.
+                                </>
+                            )}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -557,13 +569,20 @@ function App() {
                                 </div>)}
                         </div>)}
 
-                    <DialogFooter className="flex-row gap-3 pt-2">
+                    <DialogFooter className={`flex-row gap-3 pt-2 ${brewPath ? 'flex-col' : ''}`}>
                         {!isInstallingFFmpeg && (<Button variant="outline" className="flex-1 h-11 text-sm font-bold transition-colors" onClick={() => Quit()}>
                                 Exit
                             </Button>)}
-                        <Button className={`${isInstallingFFmpeg ? 'w-full' : 'flex-1'} h-11 text-sm font-bold shadow-lg shadow-primary/10`} onClick={handleInstallFFmpeg} disabled={isInstallingFFmpeg}>
-                            {isInstallingFFmpeg ? "Installing..." : "Install now"}
-                        </Button>
+                        {brewPath ? (
+                                <Button className="flex-1 h-11 text-sm font-bold shadow-lg shadow-primary/10" onClick={() => handleInstallFFmpeg(true)} disabled={isInstallingFFmpeg}>
+                                    {isInstallingFFmpeg ? "Installing..." : "Install via Homebrew"}
+                                </Button>
+                            
+                        ) : (
+                            <Button className={`${isInstallingFFmpeg ? 'w-full' : 'flex-1'} h-11 text-sm font-bold shadow-lg shadow-primary/10`} onClick={() => handleInstallFFmpeg(false)} disabled={isInstallingFFmpeg}>
+                                {isInstallingFFmpeg ? "Installing..." : "Install now"}
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
