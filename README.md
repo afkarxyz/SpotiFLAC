@@ -95,3 +95,5 @@ The software is provided "as is", without warranty of any kind. The author assum
 > [!TIP]
 >
 > **Star Us**, You will receive all release notifications from GitHub without any delay ~
+
+[![RepoStars](https://repostars.dev/api/embed?repo=afkarxyz%2FSpotiFLAC&theme=forest)](https://repostars.dev/?repos=afkarxyz%2FSpotiFLAC&theme=forest)
