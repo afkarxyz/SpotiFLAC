@@ -102,6 +102,10 @@ func (s *SongLinkClient) setCached(spotifyTrackID string, data *songLinkPlatform
 // fetchSongLinkData is the shared internal method for all Songlink API calls.
 // It handles rate limiting, retries (including for HTTP 400/5xx), caching,
 // and falls back to HTML scraping if the API is completely unavailable.
+//
+// The mutex is only held briefly for state reads/updates, never during
+// network I/O or sleeps, so concurrent callers (e.g. ISRC goroutines)
+// are not blocked for extended periods.
 func (s *SongLinkClient) fetchSongLinkData(spotifyTrackID string, region string) (*songLinkPlatformData, error) {
 	// Check cache first
 	if cached := s.getCached(spotifyTrackID); cached != nil {
@@ -110,14 +114,17 @@ func (s *SongLinkClient) fetchSongLinkData(spotifyTrackID string, region string)
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	// Double-check cache after acquiring lock
 	if cached := s.getCached(spotifyTrackID); cached != nil {
+		s.mu.Unlock()
 		return cached, nil
 	}
 
-	// Rate limiting
+	// Rate limiting — calculate delays while holding lock, then release before sleeping
+	var rateLimitWait time.Duration
+	var minDelayWait time.Duration
+
 	now := time.Now()
 	if now.Sub(s.apiCallResetTime) >= time.Minute {
 		s.apiCallCount = 0
@@ -125,12 +132,9 @@ func (s *SongLinkClient) fetchSongLinkData(spotifyTrackID string, region string)
 	}
 
 	if s.apiCallCount >= 9 {
-		waitTime := time.Minute - now.Sub(s.apiCallResetTime)
-		if waitTime > 0 {
-			fmt.Printf("Rate limit reached, waiting %v...\n", waitTime.Round(time.Second))
-			time.Sleep(waitTime)
-			s.apiCallCount = 0
-			s.apiCallResetTime = time.Now()
+		rateLimitWait = time.Minute - now.Sub(s.apiCallResetTime)
+		if rateLimitWait < 0 {
+			rateLimitWait = 0
 		}
 	}
 
@@ -138,10 +142,25 @@ func (s *SongLinkClient) fetchSongLinkData(spotifyTrackID string, region string)
 		timeSinceLastCall := time.Since(s.lastAPICallTime)
 		minDelay := 7 * time.Second
 		if timeSinceLastCall < minDelay {
-			waitTime := minDelay - timeSinceLastCall
-			fmt.Printf("Rate limiting: waiting %v...\n", waitTime.Round(time.Second))
-			time.Sleep(waitTime)
+			minDelayWait = minDelay - timeSinceLastCall
 		}
+	}
+
+	s.mu.Unlock()
+
+	// Sleep outside the lock so other callers (e.g. cache hits) are not blocked
+	if rateLimitWait > 0 {
+		fmt.Printf("Rate limit reached, waiting %v...\n", rateLimitWait.Round(time.Second))
+		time.Sleep(rateLimitWait)
+		s.mu.Lock()
+		s.apiCallCount = 0
+		s.apiCallResetTime = time.Now()
+		s.mu.Unlock()
+	}
+
+	if minDelayWait > 0 {
+		fmt.Printf("Rate limiting: waiting %v...\n", minDelayWait.Round(time.Second))
+		time.Sleep(minDelayWait)
 	}
 
 	spotifyURL := fmt.Sprintf("https://open.spotify.com/track/%s", spotifyTrackID)
@@ -163,6 +182,7 @@ func (s *SongLinkClient) fetchSongLinkData(spotifyTrackID string, region string)
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
 
+		// HTTP call without holding the lock
 		resp, err := s.client.Do(req)
 		if err != nil {
 			lastErr = err
@@ -175,8 +195,12 @@ func (s *SongLinkClient) fetchSongLinkData(spotifyTrackID string, region string)
 			break
 		}
 
+		// Brief lock to update API call tracking
+		s.mu.Lock()
 		s.lastAPICallTime = time.Now()
 		s.apiCallCount++
+		s.mu.Unlock()
+
 		lastStatus = resp.StatusCode
 
 		if resp.StatusCode == 429 {

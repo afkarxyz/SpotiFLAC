@@ -8,6 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,6 +88,51 @@ func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
 		"https://tidal.kinoplus.online",
 	}
 	return apis, nil
+}
+
+func (t *TidalDownloader) SearchTidalByName(trackName, artistName string) (string, error) {
+	query := trackName + " " + artistName
+	apiURL := fmt.Sprintf("https://api.tidal.com/v1/search/tracks?query=%s&limit=1&countryCode=US", url.QueryEscape(query))
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create search request: %w", err)
+	}
+	req.Header.Set("x-tidal-token", "CzET4vdadNUFQ5JU")
+
+	searchClient := &http.Client{Timeout: 10 * time.Second}
+	resp, err := searchClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("tidal search request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("tidal search returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read search response: %w", err)
+	}
+
+	var result struct {
+		Items []struct {
+			ID  int64  `json:"id"`
+			URL string `json:"url"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", fmt.Errorf("failed to decode search response: %w", err)
+	}
+
+	if len(result.Items) == 0 {
+		return "", fmt.Errorf("track not found on Tidal: %s - %s", trackName, artistName)
+	}
+
+	tidalURL := result.Items[0].URL
+	fmt.Printf("Found Tidal track via direct search: %s (ID: %d)\n", tidalURL, result.Items[0].ID)
+	return tidalURL, nil
 }
 
 func (t *TidalDownloader) GetTidalURLFromSpotify(spotifyTrackID string) (string, error) {
@@ -728,9 +774,21 @@ func (t *TidalDownloader) DownloadByURLWithFallback(tidalURL, outputDir, quality
 
 func (t *TidalDownloader) Download(spotifyTrackID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
 
-	tidalURL, err := t.GetTidalURLFromSpotify(spotifyTrackID)
-	if err != nil {
-		return "", fmt.Errorf("songlink couldn't find Tidal URL: %w", err)
+	var tidalURL string
+	var err error
+
+	// Try direct Tidal search first (no rate limit, ~200ms)
+	if spotifyTrackName != "" && spotifyArtistName != "" {
+		tidalURL, err = t.SearchTidalByName(spotifyTrackName, spotifyArtistName)
+	}
+
+	// Fall back to song.link if direct search failed
+	if tidalURL == "" {
+		fmt.Println("Direct Tidal search failed, falling back to song.link...")
+		tidalURL, err = t.GetTidalURLFromSpotify(spotifyTrackID)
+		if err != nil {
+			return "", fmt.Errorf("could not find track on Tidal: %w", err)
+		}
 	}
 
 	return t.DownloadByURLWithFallback(tidalURL, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyURL, allowFallback, useFirstArtistOnly, useSingleGenre, embedGenre)

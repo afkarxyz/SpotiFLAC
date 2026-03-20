@@ -784,6 +784,19 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 	contentRating := getMap(trackData, "contentRating")
 	isExplicit := getString(contentRating, "label") == "EXPLICIT"
 
+	// Extract ISRC from externalIds array
+	isrc := ""
+	if externalIds, ok := trackData["externalIds"].([]interface{}); ok {
+		for _, item := range externalIds {
+			if idMap, ok := item.(map[string]interface{}); ok {
+				if getString(idMap, "type") == "isrc" {
+					isrc = getString(idMap, "id")
+					break
+				}
+			}
+		}
+	}
+
 	filtered := map[string]interface{}{
 		"id":          getString(trackData, "id"),
 		"name":        getString(trackData, "name"),
@@ -797,6 +810,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 		"plays":       getString(trackData, "playcount"),
 		"cover":       cover,
 		"is_explicit": isExplicit,
+		"isrc":        isrc,
 	}
 
 	return filtered

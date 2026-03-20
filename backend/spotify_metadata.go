@@ -47,6 +47,7 @@ type TrackMetadata struct {
 	Plays       string `json:"plays,omitempty"`
 	PreviewURL  string `json:"preview_url,omitempty"`
 	IsExplicit  bool   `json:"is_explicit,omitempty"`
+	ISRC        string `json:"isrc,omitempty"`
 }
 
 type ArtistSimple struct {
@@ -79,6 +80,7 @@ type AlbumTrackMetadata struct {
 	Status      string         `json:"status,omitempty"`
 	PreviewURL  string         `json:"preview_url,omitempty"`
 	IsExplicit  bool           `json:"is_explicit,omitempty"`
+	ISRC        string         `json:"isrc,omitempty"`
 }
 
 type TrackResponse struct {
@@ -184,6 +186,7 @@ type apiTrackResponse struct {
 	Discs     int    `json:"discs"`
 	Copyright string `json:"copyright"`
 	Plays     string `json:"plays"`
+	ISRC      string `json:"isrc"`
 	Album     struct {
 		ID       string `json:"id"`
 		Name     string `json:"name"`
@@ -891,6 +894,7 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 		Publisher:   raw.Album.Label,
 		Plays:       raw.Plays,
 		IsExplicit:  raw.IsExplicit,
+		ISRC:        raw.ISRC,
 	}
 
 	return TrackResponse{

@@ -44,7 +44,7 @@ export function useDownload(region: string) {
         artists: string;
     } | null>(null);
     const shouldStopDownloadRef = useRef(false);
-    const downloadWithAutoFallback = async (id: string, settings: any, trackName?: string, artistName?: string, albumName?: string, playlistName?: string, position?: number, spotifyId?: string, durationMs?: number, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
+    const downloadWithAutoFallback = async (id: string, settings: any, trackName?: string, artistName?: string, albumName?: string, playlistName?: string, position?: number, spotifyId?: string, durationMs?: number, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string, isrc?: string) => {
         const service = settings.downloader;
         const query = trackName && artistName ? `${trackName} ${artistName} ` : undefined;
         const os = settings.operatingSystem;
@@ -165,7 +165,7 @@ export function useDownload(region: string) {
             const tidalQuality = is24Bit ? "HI_RES_LOSSLESS" : "LOSSLESS";
             const qobuzQuality = is24Bit ? "27" : "6";
             for (const s of order) {
-                if (s === "tidal" && streamingURLs?.tidal_url) {
+                if (s === "tidal") {
                     try {
                         logger.debug(`trying tidal for: ${trackName} - ${artistName}`);
                         const response = await downloadTrack({
@@ -185,7 +185,7 @@ export function useDownload(region: string) {
                             spotify_id: spotifyId,
                             embed_lyrics: settings.embedLyrics,
                             embed_max_quality_cover: settings.embedMaxQualityCover,
-                            service_url: streamingURLs.tidal_url,
+                            service_url: streamingURLs?.tidal_url,
                             duration: durationSeconds,
                             item_id: itemID,
                             audio_format: tidalQuality,
@@ -282,7 +282,7 @@ export function useDownload(region: string) {
                             embed_max_quality_cover: settings.embedMaxQualityCover,
                             item_id: itemID,
                             audio_format: qobuzQuality,
-                            isrc: streamingURLs?.isrc,
+                            isrc: streamingURLs?.isrc || isrc,
                             spotify_track_number: spotifyTrackNumber,
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
@@ -367,7 +367,7 @@ export function useDownload(region: string) {
             item_id: itemID,
             audio_format: audioFormat,
             service_url: singleServiceUrl,
-            isrc: singleISRC,
+            isrc: singleISRC || isrc,
             spotify_track_number: spotifyTrackNumber,
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
@@ -383,7 +383,7 @@ export function useDownload(region: string) {
         }
         return singleServiceResponse;
     };
-    const downloadWithItemID = async (settings: any, itemID: string, trackName?: string, artistName?: string, albumName?: string, folderName?: string, position?: number, spotifyId?: string, durationMs?: number, isAlbum?: boolean, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
+    const downloadWithItemID = async (settings: any, itemID: string, trackName?: string, artistName?: string, albumName?: string, folderName?: string, position?: number, spotifyId?: string, durationMs?: number, isAlbum?: boolean, releaseYear?: string, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string, isrc?: string) => {
         const service = settings.downloader;
         const query = trackName && artistName ? `${trackName} ${artistName}` : undefined;
         const os = settings.operatingSystem;
@@ -462,7 +462,7 @@ export function useDownload(region: string) {
             const tidalQuality = is24Bit ? "HI_RES_LOSSLESS" : "LOSSLESS";
             const qobuzQuality = is24Bit ? "27" : "6";
             for (const s of order) {
-                if (s === "tidal" && streamingURLs?.tidal_url) {
+                if (s === "tidal") {
                     try {
                         logger.debug(`trying tidal for: ${trackName} - ${artistName}`);
                         const response = await downloadTrack({
@@ -482,7 +482,7 @@ export function useDownload(region: string) {
                             spotify_id: spotifyId,
                             embed_lyrics: settings.embedLyrics,
                             embed_max_quality_cover: settings.embedMaxQualityCover,
-                            service_url: streamingURLs.tidal_url,
+                            service_url: streamingURLs?.tidal_url,
                             duration: durationSeconds,
                             item_id: itemID,
                             audio_format: tidalQuality,
@@ -581,7 +581,7 @@ export function useDownload(region: string) {
                             duration: durationSeconds,
                             item_id: itemID,
                             audio_format: qobuzQuality,
-                            isrc: streamingURLs?.isrc,
+                            isrc: streamingURLs?.isrc || isrc,
                             spotify_track_number: spotifyTrackNumber,
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
@@ -663,7 +663,7 @@ export function useDownload(region: string) {
             item_id: itemID,
             audio_format: audioFormat,
             service_url: singleServiceUrl2,
-            isrc: singleISRC2,
+            isrc: singleISRC2 || isrc,
             spotify_track_number: spotifyTrackNumber,
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
@@ -680,7 +680,7 @@ export function useDownload(region: string) {
         }
         return singleServiceResponse;
     };
-    const handleDownloadTrack = async (id: string, trackName?: string, artistName?: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => {
+    const handleDownloadTrack = async (id: string, trackName?: string, artistName?: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string, isrc?: string) => {
         if (!id) {
             toast.error("No ID found for this track");
             return;
@@ -691,7 +691,7 @@ export function useDownload(region: string) {
         setDownloadingTrack(id);
         try {
             const releaseYear = releaseDate?.substring(0, 4);
-            const response = await downloadWithAutoFallback(id, settings, trackName, artistName, albumName, playlistName, position, spotifyId, durationMs, releaseYear, albumArtist || "", releaseDate, coverUrl, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, copyright, publisher);
+            const response = await downloadWithAutoFallback(id, settings, trackName, artistName, albumName, playlistName, position, spotifyId, durationMs, releaseYear, albumArtist || "", releaseDate, coverUrl, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, copyright, publisher, isrc);
             if (response.success) {
                 if (response.already_exists) {
                     toast.info(response.message);
@@ -813,7 +813,7 @@ export function useDownload(region: string) {
             setCurrentDownloadInfo({ name: track.name, artists: displayArtist || "" });
             try {
                 const releaseYear = track.release_date?.substring(0, 4);
-                const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
+                const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher, track.isrc);
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;
@@ -983,7 +983,7 @@ export function useDownload(region: string) {
             setCurrentDownloadInfo({ name: track.name || "", artists: displayArtist || "" });
             try {
                 const releaseYear = track.release_date?.substring(0, 4);
-                const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher);
+                const response = await downloadWithItemID(settings, itemID, track.name, track.artists, track.album_name, folderName, originalIndex + 1, track.spotify_id, track.duration_ms, isAlbum, releaseYear, track.album_artist || "", track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher, track.isrc);
                 if (response.success) {
                     if (response.already_exists) {
                         skippedCount++;

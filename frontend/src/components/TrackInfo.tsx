@@ -26,7 +26,7 @@ interface TrackInfoProps {
     downloadedCover?: boolean;
     failedCover?: boolean;
     skippedCover?: boolean;
-    onDownload: (id: string, name: string, artists: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string) => void;
+    onDownload: (id: string, name: string, artists: string, albumName?: string, spotifyId?: string, playlistName?: string, durationMs?: number, position?: number, albumArtist?: string, releaseDate?: string, coverUrl?: string, spotifyTrackNumber?: number, spotifyDiscNumber?: number, spotifyTotalTracks?: number, spotifyTotalDiscs?: number, copyright?: string, publisher?: string, isrc?: string) => void;
     onDownloadLyrics?: (spotifyId: string, name: string, artists: string, albumName?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
     onCheckAvailability?: (spotifyId: string) => void;
     onDownloadCover?: (coverUrl: string, trackName: string, artistName: string, albumName?: string, playlistName?: string, position?: number, trackId?: string, albumArtist?: string, releaseDate?: string, discNumber?: number) => void;
@@ -96,7 +96,7 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
             </div>
           </div>
           {track.spotify_id && (<div className="flex gap-2 flex-wrap">
-            <Button onClick={() => onDownload(track.spotify_id || "", track.name, track.artists, track.album_name, track.spotify_id, undefined, track.duration_ms, track.track_number, track.album_artist, track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher)} disabled={isDownloading || downloadingTrack === track.spotify_id}>
+            <Button onClick={() => onDownload(track.spotify_id || "", track.name, track.artists, track.album_name, track.spotify_id, undefined, track.duration_ms, track.track_number, track.album_artist, track.release_date, track.images, track.track_number, track.disc_number, track.total_tracks, track.total_discs, track.copyright, track.publisher, track.isrc)} disabled={isDownloading || downloadingTrack === track.spotify_id}>
               {downloadingTrack === track.spotify_id ? (<Spinner />) : (<>
                 <Download className="h-4 w-4"/>
                 Download

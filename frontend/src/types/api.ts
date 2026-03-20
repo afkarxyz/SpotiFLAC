@@ -28,6 +28,7 @@ export interface TrackMetadata {
     plays?: string;
     status?: string;
     is_explicit?: boolean;
+    isrc?: string;
 }
 export interface TrackResponse {
     track: TrackMetadata;
