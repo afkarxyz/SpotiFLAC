@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -15,11 +17,27 @@ type SongLinkClient struct {
 	lastAPICallTime  time.Time
 	apiCallCount     int
 	apiCallResetTime time.Time
+	mu               sync.Mutex
+	cache            map[string]*songLinkCacheEntry
+	cacheMu          sync.RWMutex
+}
+
+type songLinkCacheEntry struct {
+	data      *songLinkPlatformData
+	fetchedAt time.Time
+}
+
+type songLinkPlatformData struct {
+	TidalURL  string
+	AmazonURL string
+	DeezerURL string
+	ISRC      string
 }
 
 type SongLinkURLs struct {
 	TidalURL  string `json:"tidal_url"`
 	AmazonURL string `json:"amazon_url"`
+	DeezerURL string `json:"deezer_url,omitempty"`
 	ISRC      string `json:"isrc"`
 }
 
@@ -35,17 +53,71 @@ type TrackAvailability struct {
 	DeezerURL string `json:"deezer_url,omitempty"`
 }
 
+var (
+	defaultSongLinkClient     *SongLinkClient
+	defaultSongLinkClientOnce sync.Once
+)
+
+func GetSongLinkClient() *SongLinkClient {
+	defaultSongLinkClientOnce.Do(func() {
+		defaultSongLinkClient = NewSongLinkClient()
+	})
+	return defaultSongLinkClient
+}
+
 func NewSongLinkClient() *SongLinkClient {
 	return &SongLinkClient{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		apiCallResetTime: time.Now(),
+		cache:            make(map[string]*songLinkCacheEntry),
 	}
 }
 
-func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region string) (*SongLinkURLs, error) {
+const songLinkCacheTTL = 30 * time.Minute
 
+func (s *SongLinkClient) getCached(spotifyTrackID string) *songLinkPlatformData {
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+	entry, ok := s.cache[spotifyTrackID]
+	if !ok {
+		return nil
+	}
+	if time.Since(entry.fetchedAt) > songLinkCacheTTL {
+		return nil
+	}
+	return entry.data
+}
+
+func (s *SongLinkClient) setCached(spotifyTrackID string, data *songLinkPlatformData) {
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+	s.cache[spotifyTrackID] = &songLinkCacheEntry{
+		data:      data,
+		fetchedAt: time.Now(),
+	}
+}
+
+// fetchSongLinkData is the shared internal method for all Songlink API calls.
+// It handles rate limiting, retries (including for HTTP 400/5xx), caching,
+// and falls back to HTML scraping if the API is completely unavailable.
+func (s *SongLinkClient) fetchSongLinkData(spotifyTrackID string, region string) (*songLinkPlatformData, error) {
+	// Check cache first
+	if cached := s.getCached(spotifyTrackID); cached != nil {
+		fmt.Printf("Using cached song.link data for %s\n", spotifyTrackID)
+		return cached, nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Double-check cache after acquiring lock
+	if cached := s.getCached(spotifyTrackID); cached != nil {
+		return cached, nil
+	}
+
+	// Rate limiting
 	now := time.Now()
 	if now.Sub(s.apiCallResetTime) >= time.Minute {
 		s.apiCallCount = 0
@@ -63,7 +135,7 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region str
 	}
 
 	if !s.lastAPICallTime.IsZero() {
-		timeSinceLastCall := now.Sub(s.lastAPICallTime)
+		timeSinceLastCall := time.Since(s.lastAPICallTime)
 		minDelay := 7 * time.Second
 		if timeSinceLastCall < minDelay {
 			waitTime := minDelay - timeSinceLastCall
@@ -73,98 +145,204 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region str
 	}
 
 	spotifyURL := fmt.Sprintf("https://open.spotify.com/track/%s", spotifyTrackID)
-
 	apiURL := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?url=%s", url.QueryEscape(spotifyURL))
-
 	if region != "" {
 		apiURL += fmt.Sprintf("&userCountry=%s", region)
-	}
-
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	fmt.Println("Getting streaming URLs from song.link...")
 
 	maxRetries := 3
-	var resp *http.Response
+	var lastStatus int
+	var lastErr error
+
 	for i := 0; i < maxRetries; i++ {
-		resp, err = s.client.Do(req)
+		req, err := http.NewRequest("GET", apiURL, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get URLs: %w", err)
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+
+		resp, err := s.client.Do(req)
+		if err != nil {
+			lastErr = err
+			if i < maxRetries-1 {
+				waitTime := time.Duration((i+1)*5) * time.Second
+				fmt.Printf("Request failed, waiting %v before retry... (%v)\n", waitTime, err)
+				time.Sleep(waitTime)
+				continue
+			}
+			break
 		}
 
 		s.lastAPICallTime = time.Now()
 		s.apiCallCount++
+		lastStatus = resp.StatusCode
 
 		if resp.StatusCode == 429 {
 			resp.Body.Close()
 			if i < maxRetries-1 {
 				waitTime := 15 * time.Second
-				fmt.Printf("Rate limited by API, waiting %v before retry...\n", waitTime)
+				fmt.Printf("Rate limited by API (429), waiting %v before retry...\n", waitTime)
 				time.Sleep(waitTime)
 				continue
 			}
-			return nil, fmt.Errorf("API rate limit exceeded after %d retries", maxRetries)
+			lastErr = fmt.Errorf("API rate limit exceeded after %d retries", maxRetries)
+			break
+		}
+
+		if resp.StatusCode == 400 || resp.StatusCode >= 500 {
+			resp.Body.Close()
+			if i < maxRetries-1 {
+				waitTime := time.Duration((i+1)*10) * time.Second
+				fmt.Printf("API returned status %d, waiting %v before retry...\n", resp.StatusCode, waitTime)
+				time.Sleep(waitTime)
+				continue
+			}
+			lastErr = fmt.Errorf("API returned status %d after %d retries", resp.StatusCode, maxRetries)
+			break
 		}
 
 		if resp.StatusCode != 200 {
 			resp.Body.Close()
-			return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+			lastErr = fmt.Errorf("API returned status %d", resp.StatusCode)
+			break
 		}
 
-		break
+		// Success - parse response
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read response body: %w", err)
+		}
+
+		if len(body) == 0 {
+			lastErr = fmt.Errorf("API returned empty response")
+			break
+		}
+
+		var songLinkResp struct {
+			LinksByPlatform map[string]struct {
+				URL string `json:"url"`
+			} `json:"linksByPlatform"`
+		}
+
+		if err := json.Unmarshal(body, &songLinkResp); err != nil {
+			bodyStr := string(body)
+			if len(bodyStr) > 200 {
+				bodyStr = bodyStr[:200] + "..."
+			}
+			return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
+		}
+
+		data := &songLinkPlatformData{}
+
+		if tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]; ok && tidalLink.URL != "" {
+			data.TidalURL = tidalLink.URL
+			fmt.Printf("✓ Tidal URL found\n")
+		}
+
+		if amazonLink, ok := songLinkResp.LinksByPlatform["amazonMusic"]; ok && amazonLink.URL != "" {
+			data.AmazonURL = amazonLink.URL
+			fmt.Printf("✓ Amazon URL found\n")
+		}
+
+		if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
+			data.DeezerURL = deezerLink.URL
+			fmt.Printf("✓ Deezer URL found\n")
+			if isrc, err := getDeezerISRC(deezerLink.URL); err == nil && isrc != "" {
+				data.ISRC = isrc
+			}
+		}
+
+		s.setCached(spotifyTrackID, data)
+		return data, nil
+	}
+
+	// API failed after all retries - try HTML scraping fallback
+	fmt.Println("API failed, trying HTML scraping fallback...")
+	scraped, scrapeErr := s.scrapeSongLinkHTML(spotifyTrackID)
+	if scrapeErr == nil && scraped != nil {
+		s.setCached(spotifyTrackID, scraped)
+		return scraped, nil
+	}
+
+	if lastErr != nil {
+		return nil, fmt.Errorf("API failed (status %d): %v, HTML fallback also failed: %v", lastStatus, lastErr, scrapeErr)
+	}
+	return nil, fmt.Errorf("API failed (status %d), HTML fallback also failed: %v", lastStatus, scrapeErr)
+}
+
+// scrapeSongLinkHTML scrapes the song.link HTML page as a fallback when the API is down.
+func (s *SongLinkClient) scrapeSongLinkHTML(spotifyTrackID string) (*songLinkPlatformData, error) {
+	pageURL := fmt.Sprintf("https://song.link/s/%s", spotifyTrackID)
+
+	req, err := http.NewRequest("GET", pageURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create scrape request: %w", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch song.link page: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var songLinkResp struct {
-		LinksByPlatform map[string]struct {
-			URL string `json:"url"`
-		} `json:"linksByPlatform"`
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("song.link page returned status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, fmt.Errorf("failed to read song.link page: %w", err)
 	}
 
-	if len(body) == 0 {
-		return nil, fmt.Errorf("API returned empty response")
+	html := string(body)
+	result := &songLinkPlatformData{}
+
+	tidalRe := regexp.MustCompile(`href="(https?://(?:www\.)?(?:tidal\.com|listen\.tidal\.com)/[^"]+)"`)
+	amazonRe := regexp.MustCompile(`href="(https?://(?:www\.)?(?:music\.amazon\.[^"]+|amazon\.[^"/]+/music[^"]*))(?:"|\?)`)
+	deezerRe := regexp.MustCompile(`href="(https?://(?:www\.)?deezer\.com/[^"]+)"`)
+
+	if m := tidalRe.FindStringSubmatch(html); len(m) > 1 {
+		result.TidalURL = m[1]
+		fmt.Printf("✓ Tidal URL found (HTML fallback)\n")
 	}
-
-	if err := json.Unmarshal(body, &songLinkResp); err != nil {
-
-		bodyStr := string(body)
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "..."
-		}
-		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
+	if m := amazonRe.FindStringSubmatch(html); len(m) > 1 {
+		result.AmazonURL = m[1]
+		fmt.Printf("✓ Amazon URL found (HTML fallback)\n")
 	}
-
-	urls := &SongLinkURLs{}
-
-	if tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]; ok && tidalLink.URL != "" {
-		urls.TidalURL = tidalLink.URL
-		fmt.Printf("✓ Tidal URL found\n")
-	}
-
-	if amazonLink, ok := songLinkResp.LinksByPlatform["amazonMusic"]; ok && amazonLink.URL != "" {
-		amazonURL := amazonLink.URL
-
-		if len(amazonURL) > 0 {
-			urls.AmazonURL = amazonURL
-			fmt.Printf("✓ Amazon URL found\n")
+	if m := deezerRe.FindStringSubmatch(html); len(m) > 1 {
+		result.DeezerURL = m[1]
+		fmt.Printf("✓ Deezer URL found (HTML fallback)\n")
+		if isrc, err := getDeezerISRC(m[1]); err == nil && isrc != "" {
+			result.ISRC = isrc
 		}
 	}
 
-	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
-		if isrc, err := getDeezerISRC(deezerLink.URL); err == nil && isrc != "" {
-			urls.ISRC = isrc
-		}
+	if result.TidalURL == "" && result.AmazonURL == "" && result.DeezerURL == "" {
+		return nil, fmt.Errorf("no platform links found in HTML")
 	}
 
-	if urls.TidalURL == "" && urls.AmazonURL == "" {
+	fmt.Println("✓ HTML scraping fallback succeeded")
+	return result, nil
+}
+
+func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region string) (*SongLinkURLs, error) {
+	data, err := s.fetchSongLinkData(spotifyTrackID, region)
+	if err != nil {
+		return nil, err
+	}
+
+	urls := &SongLinkURLs{
+		TidalURL:  data.TidalURL,
+		AmazonURL: data.AmazonURL,
+		DeezerURL: data.DeezerURL,
+		ISRC:      data.ISRC,
+	}
+
+	if urls.TidalURL == "" && urls.AmazonURL == "" && urls.DeezerURL == "" && urls.ISRC == "" {
 		return nil, fmt.Errorf("no streaming URLs found")
 	}
 
@@ -172,122 +350,37 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region str
 }
 
 func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string) (*TrackAvailability, error) {
-
-	now := time.Now()
-	if now.Sub(s.apiCallResetTime) >= time.Minute {
-		s.apiCallCount = 0
-		s.apiCallResetTime = now
-	}
-
-	if s.apiCallCount >= 9 {
-		waitTime := time.Minute - now.Sub(s.apiCallResetTime)
-		if waitTime > 0 {
-			fmt.Printf("Rate limit reached, waiting %v...\n", waitTime.Round(time.Second))
-			time.Sleep(waitTime)
-			s.apiCallCount = 0
-			s.apiCallResetTime = time.Now()
-		}
-	}
-
-	if !s.lastAPICallTime.IsZero() {
-		timeSinceLastCall := now.Sub(s.lastAPICallTime)
-		minDelay := 7 * time.Second
-		if timeSinceLastCall < minDelay {
-			waitTime := minDelay - timeSinceLastCall
-			fmt.Printf("Rate limiting: waiting %v...\n", waitTime.Round(time.Second))
-			time.Sleep(waitTime)
-		}
-	}
-
-	spotifyURL := fmt.Sprintf("https://open.spotify.com/track/%s", spotifyTrackID)
-
-	apiURL := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?url=%s", url.QueryEscape(spotifyURL))
-
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
 	fmt.Printf("Checking availability for track: %s\n", spotifyTrackID)
 
-	maxRetries := 3
-	var resp *http.Response
-	for i := 0; i < maxRetries; i++ {
-		resp, err = s.client.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to check availability: %w", err)
-		}
-
-		s.lastAPICallTime = time.Now()
-		s.apiCallCount++
-
-		if resp.StatusCode == 429 {
-			resp.Body.Close()
-			if i < maxRetries-1 {
-				waitTime := 15 * time.Second
-				fmt.Printf("Rate limited by API, waiting %v before retry...\n", waitTime)
-				time.Sleep(waitTime)
-				continue
-			}
-			return nil, fmt.Errorf("API rate limit exceeded after %d retries", maxRetries)
-		}
-
-		if resp.StatusCode != 200 {
-			resp.Body.Close()
-			return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
-		}
-
-		break
-	}
-	defer resp.Body.Close()
-
-	var songLinkResp struct {
-		LinksByPlatform map[string]struct {
-			URL string `json:"url"`
-		} `json:"linksByPlatform"`
-	}
-
-	body, err := io.ReadAll(resp.Body)
+	data, err := s.fetchSongLinkData(spotifyTrackID, "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if len(body) == 0 {
-		return nil, fmt.Errorf("API returned empty response")
-	}
-
-	if err := json.Unmarshal(body, &songLinkResp); err != nil {
-
-		bodyStr := string(body)
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "..."
-		}
-		return nil, fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
+		return nil, err
 	}
 
 	availability := &TrackAvailability{
 		SpotifyID: spotifyTrackID,
 	}
 
-	if tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]; ok && tidalLink.URL != "" {
+	if data.TidalURL != "" {
 		availability.Tidal = true
-		availability.TidalURL = tidalLink.URL
+		availability.TidalURL = data.TidalURL
 	}
 
-	if amazonLink, ok := songLinkResp.LinksByPlatform["amazonMusic"]; ok && amazonLink.URL != "" {
+	if data.AmazonURL != "" {
 		availability.Amazon = true
-		availability.AmazonURL = amazonLink.URL
+		availability.AmazonURL = data.AmazonURL
 	}
 
-	if deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]; ok && deezerLink.URL != "" {
-		deezerURL := deezerLink.URL
+	if data.DeezerURL != "" {
 		availability.Deezer = true
-		availability.DeezerURL = deezerURL
+		availability.DeezerURL = data.DeezerURL
 
-		deezerISRC, err := getDeezerISRC(deezerURL)
-		if err == nil && deezerISRC != "" {
-			qobuzAvailable := checkQobuzAvailability(deezerISRC)
-			availability.Qobuz = qobuzAvailable
+		isrc := data.ISRC
+		if isrc == "" {
+			isrc, _ = getDeezerISRC(data.DeezerURL)
+		}
+		if isrc != "" {
+			availability.Qobuz = checkQobuzAvailability(isrc)
 		}
 	}
 
@@ -323,92 +416,17 @@ func checkQobuzAvailability(isrc string) bool {
 }
 
 func (s *SongLinkClient) GetDeezerURLFromSpotify(spotifyTrackID string) (string, error) {
-
-	now := time.Now()
-	if now.Sub(s.apiCallResetTime) >= time.Minute {
-		s.apiCallCount = 0
-		s.apiCallResetTime = now
-	}
-
-	if s.apiCallCount >= 9 {
-		waitTime := time.Minute - now.Sub(s.apiCallResetTime)
-		if waitTime > 0 {
-			fmt.Printf("Rate limit reached, waiting %v...\n", waitTime.Round(time.Second))
-			time.Sleep(waitTime)
-			s.apiCallCount = 0
-			s.apiCallResetTime = time.Now()
-		}
-	}
-
-	if !s.lastAPICallTime.IsZero() {
-		timeSinceLastCall := now.Sub(s.lastAPICallTime)
-		minDelay := 7 * time.Second
-		if timeSinceLastCall < minDelay {
-			waitTime := minDelay - timeSinceLastCall
-			fmt.Printf("Rate limiting: waiting %v...\n", waitTime.Round(time.Second))
-			time.Sleep(waitTime)
-		}
-	}
-
-	spotifyURL := fmt.Sprintf("https://open.spotify.com/track/%s", spotifyTrackID)
-
-	apiURL := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?url=%s", url.QueryEscape(spotifyURL))
-
-	req, err := http.NewRequest("GET", apiURL, nil)
+	data, err := s.fetchSongLinkData(spotifyTrackID, "")
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", err
 	}
 
-	fmt.Println("Getting Deezer URL from song.link...")
-
-	maxRetries := 3
-	var resp *http.Response
-	for i := 0; i < maxRetries; i++ {
-		resp, err = s.client.Do(req)
-		if err != nil {
-			return "", fmt.Errorf("failed to get Deezer URL: %w", err)
-		}
-
-		s.lastAPICallTime = time.Now()
-		s.apiCallCount++
-
-		if resp.StatusCode == 429 {
-			resp.Body.Close()
-			if i < maxRetries-1 {
-				waitTime := 15 * time.Second
-				fmt.Printf("Rate limited by API, waiting %v before retry...\n", waitTime)
-				time.Sleep(waitTime)
-				continue
-			}
-			return "", fmt.Errorf("API rate limit exceeded after %d retries", maxRetries)
-		}
-
-		if resp.StatusCode != 200 {
-			resp.Body.Close()
-			return "", fmt.Errorf("API returned status %d", resp.StatusCode)
-		}
-
-		break
-	}
-	defer resp.Body.Close()
-
-	var songLinkResp struct {
-		LinksByPlatform map[string]struct {
-			URL string `json:"url"`
-		} `json:"linksByPlatform"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	deezerLink, ok := songLinkResp.LinksByPlatform["deezer"]
-	if !ok || deezerLink.URL == "" {
+	if data.DeezerURL == "" {
 		return "", fmt.Errorf("deezer link not found")
 	}
 
-	deezerURL := deezerLink.URL
-	fmt.Printf("Found Deezer URL: %s\n", deezerURL)
-	return deezerURL, nil
+	fmt.Printf("Found Deezer URL: %s\n", data.DeezerURL)
+	return data.DeezerURL, nil
 }
 
 func getDeezerISRC(deezerURL string) (string, error) {
@@ -457,9 +475,18 @@ func getDeezerISRC(deezerURL string) (string, error) {
 }
 
 func (s *SongLinkClient) GetISRC(spotifyID string) (string, error) {
-	deezerURL, err := s.GetDeezerURLFromSpotify(spotifyID)
+	data, err := s.fetchSongLinkData(spotifyID, "")
 	if err != nil {
 		return "", err
 	}
-	return getDeezerISRC(deezerURL)
+
+	if data.ISRC != "" {
+		return data.ISRC, nil
+	}
+
+	if data.DeezerURL != "" {
+		return getDeezerISRC(data.DeezerURL)
+	}
+
+	return "", fmt.Errorf("could not resolve ISRC for track %s", spotifyID)
 }

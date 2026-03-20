@@ -95,6 +95,7 @@ type DownloadRequest struct {
 	UseSingleGenre       bool   `json:"use_single_genre,omitempty"`
 	EmbedGenre           bool   `json:"embed_genre,omitempty"`
 	Separator            string `json:"separator,omitempty"`
+	ISRC                 string `json:"isrc,omitempty"`
 }
 
 type DownloadResponse struct {
@@ -112,7 +113,7 @@ func (a *App) GetStreamingURLs(spotifyTrackID string, region string) (string, er
 	}
 
 	fmt.Printf("[GetStreamingURLs] Called for track ID: %s, Region: %s\n", spotifyTrackID, region)
-	client := backend.NewSongLinkClient()
+	client := backend.GetSongLinkClient()
 	urls, err := client.GetAllURLsFromSpotify(spotifyTrackID, region)
 	if err != nil {
 		return "", err
@@ -359,7 +360,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 		go func() {
-			client := backend.NewSongLinkClient()
+			client := backend.GetSongLinkClient()
 			isrc, _ := client.GetISRC(req.SpotifyID)
 			isrcChan <- isrc
 		}()
@@ -397,8 +398,14 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 
 	case "qobuz":
 
-		fmt.Println("Waiting for ISRC (Qobuz dependency)...")
-		isrc := <-isrcChan
+		var isrc string
+		if req.ISRC != "" {
+			isrc = req.ISRC
+			fmt.Printf("Using pre-resolved ISRC for Qobuz: %s\n", isrc)
+		} else {
+			fmt.Println("Waiting for ISRC (Qobuz dependency)...")
+			isrc = <-isrcChan
+		}
 		downloader := backend.NewQobuzDownloader()
 		quality := req.AudioFormat
 		if quality == "" {
@@ -1019,7 +1026,7 @@ func (a *App) CheckTrackAvailability(spotifyTrackID string) (string, error) {
 		return "", fmt.Errorf("spotify track ID is required")
 	}
 
-	client := backend.NewSongLinkClient()
+	client := backend.GetSongLinkClient()
 	availability, err := client.CheckTrackAvailability(spotifyTrackID)
 	if err != nil {
 		return "", err

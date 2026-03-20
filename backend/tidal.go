@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,49 +90,16 @@ func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
 }
 
 func (t *TidalDownloader) GetTidalURLFromSpotify(spotifyTrackID string) (string, error) {
-
-	spotifyBase := "https://open.spotify.com/track/"
-	spotifyURL := fmt.Sprintf("%s%s", spotifyBase, spotifyTrackID)
-
-	apiBase := "https://api.song.link/v1-alpha.1/links?url="
-	apiURL := fmt.Sprintf("%s%s", apiBase, url.QueryEscape(spotifyURL))
-
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-
-	fmt.Println("Getting Tidal URL...")
-
-	resp, err := t.client.Do(req)
+	client := GetSongLinkClient()
+	urls, err := client.GetAllURLsFromSpotify(spotifyTrackID, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to get Tidal URL: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	var songLinkResp struct {
-		LinksByPlatform map[string]struct {
-			URL string `json:"url"`
-		} `json:"linksByPlatform"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&songLinkResp); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	tidalLink, ok := songLinkResp.LinksByPlatform["tidal"]
-	if !ok || tidalLink.URL == "" {
+	if urls.TidalURL == "" {
 		return "", fmt.Errorf("tidal link not found")
 	}
-
-	tidalURL := tidalLink.URL
-	fmt.Printf("Found Tidal URL: %s\n", tidalURL)
-	return tidalURL, nil
+	fmt.Printf("Found Tidal URL: %s\n", urls.TidalURL)
+	return urls.TidalURL, nil
 }
 
 func (t *TidalDownloader) GetTrackIDFromURL(tidalURL string) (int64, error) {
@@ -516,7 +482,7 @@ func (t *TidalDownloader) DownloadByURL(tidalURL, outputDir, quality, filenameFo
 			if len(parts) > 0 {
 				sID := strings.Split(parts[len(parts)-1], "?")[0]
 				if sID != "" {
-					client := NewSongLinkClient()
+					client := GetSongLinkClient()
 					if val, err := client.GetISRC(sID); err == nil {
 						isrc = val
 					}
@@ -674,7 +640,7 @@ func (t *TidalDownloader) DownloadByURLWithFallback(tidalURL, outputDir, quality
 			if len(parts) > 0 {
 				sID := strings.Split(parts[len(parts)-1], "?")[0]
 				if sID != "" {
-					client := NewSongLinkClient()
+					client := GetSongLinkClient()
 					if val, err := client.GetISRC(sID); err == nil {
 						isrc = val
 					}

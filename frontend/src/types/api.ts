@@ -140,6 +140,7 @@ export interface DownloadRequest {
     use_first_artist_only?: boolean;
     use_single_genre?: boolean;
     embed_genre?: boolean;
+    isrc?: string;
 }
 export interface DownloadResponse {
     success: boolean;

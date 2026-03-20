@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,12 +16,6 @@ import (
 type AmazonDownloader struct {
 	client  *http.Client
 	regions []string
-}
-
-type SongLinkResponse struct {
-	LinksByPlatform map[string]struct {
-		URL string `json:"url"`
-	} `json:"linksByPlatform"`
 }
 
 type AmazonStreamResponse struct {
@@ -40,57 +33,16 @@ func NewAmazonDownloader() *AmazonDownloader {
 }
 
 func (a *AmazonDownloader) GetAmazonURLFromSpotify(spotifyTrackID string) (string, error) {
-
-	spotifyBase := "https://open.spotify.com/track/"
-	spotifyURL := fmt.Sprintf("%s%s", spotifyBase, spotifyTrackID)
-
-	apiBase := "https://api.song.link/v1-alpha.1/links?url="
-	apiURL := fmt.Sprintf("%s%s", apiBase, url.QueryEscape(spotifyURL))
-
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
-
-	fmt.Println("Getting Amazon URL...")
-
-	resp, err := a.client.Do(req)
+	client := GetSongLinkClient()
+	urls, err := client.GetAllURLsFromSpotify(spotifyTrackID, "")
 	if err != nil {
 		return "", fmt.Errorf("failed to get Amazon URL: %w", err)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	if len(body) == 0 {
-		return "", fmt.Errorf("API returned empty response")
-	}
-
-	var songLinkResp SongLinkResponse
-	if err := json.Unmarshal(body, &songLinkResp); err != nil {
-
-		bodyStr := string(body)
-		if len(bodyStr) > 200 {
-			bodyStr = bodyStr[:200] + "..."
-		}
-		return "", fmt.Errorf("failed to decode response: %w (response: %s)", err, bodyStr)
-	}
-
-	amazonLink, ok := songLinkResp.LinksByPlatform["amazonMusic"]
-	if !ok || amazonLink.URL == "" {
+	if urls.AmazonURL == "" {
 		return "", fmt.Errorf("amazon Music link not found")
 	}
 
-	amazonURL := amazonLink.URL
-
+	amazonURL := urls.AmazonURL
 	if strings.Contains(amazonURL, "trackAsin=") {
 		parts := strings.Split(amazonURL, "trackAsin=")
 		if len(parts) > 1 {
@@ -297,7 +249,7 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, quality, filename
 			if len(parts) > 0 {
 				sID := strings.Split(parts[len(parts)-1], "?")[0]
 				if sID != "" {
-					client := NewSongLinkClient()
+					client := GetSongLinkClient()
 					if val, err := client.GetISRC(sID); err == nil {
 						isrc = val
 					}

@@ -16,6 +16,9 @@ export async function downloadTrack(request: DownloadRequest): Promise<DownloadR
     if (request.use_single_genre !== undefined) {
         (req as any).use_single_genre = request.use_single_genre;
     }
+    if (request.isrc !== undefined) {
+        (req as any).isrc = request.isrc;
+    }
     return await DownloadTrack(req);
 }
 export async function checkHealth(): Promise<HealthResponse> {

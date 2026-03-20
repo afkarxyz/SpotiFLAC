@@ -282,6 +282,7 @@ export function useDownload(region: string) {
                             embed_max_quality_cover: settings.embedMaxQualityCover,
                             item_id: itemID,
                             audio_format: qobuzQuality,
+                            isrc: streamingURLs?.isrc,
                             spotify_track_number: spotifyTrackNumber,
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
@@ -325,6 +326,25 @@ export function useDownload(region: string) {
         else if (service === "deezer") {
             audioFormat = "flac";
         }
+        let singleServiceUrl: string | undefined;
+        let singleISRC: string | undefined;
+        if (spotifyId) {
+            try {
+                const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
+                const urlsJson = await GetStreamingURLs(spotifyId, region);
+                const singleStreamingURLs = JSON.parse(urlsJson);
+                if (service === "tidal" && singleStreamingURLs?.tidal_url) {
+                    singleServiceUrl = singleStreamingURLs.tidal_url;
+                } else if (service === "amazon" && singleStreamingURLs?.amazon_url) {
+                    singleServiceUrl = singleStreamingURLs.amazon_url;
+                }
+                if (service === "qobuz" && singleStreamingURLs?.isrc) {
+                    singleISRC = singleStreamingURLs.isrc;
+                }
+            } catch (err) {
+                console.warn("Failed to pre-fetch streaming URL, backend will fetch:", err);
+            }
+        }
         logger.debug(`trying ${service} for: ${trackName} - ${artistName}`);
         const singleServiceResponse = await downloadTrack({
             service: service as "tidal" | "qobuz" | "amazon",
@@ -346,6 +366,8 @@ export function useDownload(region: string) {
             duration: durationSecondsForFallback,
             item_id: itemID,
             audio_format: audioFormat,
+            service_url: singleServiceUrl,
+            isrc: singleISRC,
             spotify_track_number: spotifyTrackNumber,
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
@@ -559,6 +581,7 @@ export function useDownload(region: string) {
                             duration: durationSeconds,
                             item_id: itemID,
                             audio_format: qobuzQuality,
+                            isrc: streamingURLs?.isrc,
                             spotify_track_number: spotifyTrackNumber,
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
@@ -600,6 +623,25 @@ export function useDownload(region: string) {
         else if (service === "qobuz") {
             audioFormat = settings.qobuzQuality || "6";
         }
+        let singleServiceUrl2: string | undefined;
+        let singleISRC2: string | undefined;
+        if (spotifyId) {
+            try {
+                const { GetStreamingURLs } = await import("../../wailsjs/go/main/App");
+                const urlsJson = await GetStreamingURLs(spotifyId, region);
+                const singleStreamingURLs = JSON.parse(urlsJson);
+                if (service === "tidal" && singleStreamingURLs?.tidal_url) {
+                    singleServiceUrl2 = singleStreamingURLs.tidal_url;
+                } else if (service === "amazon" && singleStreamingURLs?.amazon_url) {
+                    singleServiceUrl2 = singleStreamingURLs.amazon_url;
+                }
+                if (service === "qobuz" && singleStreamingURLs?.isrc) {
+                    singleISRC2 = singleStreamingURLs.isrc;
+                }
+            } catch (err) {
+                console.warn("Failed to pre-fetch streaming URL, backend will fetch:", err);
+            }
+        }
         const singleServiceResponse = await downloadTrack({
             service: service as "tidal" | "qobuz" | "amazon",
             query,
@@ -620,6 +662,8 @@ export function useDownload(region: string) {
             duration: durationSecondsForFallback,
             item_id: itemID,
             audio_format: audioFormat,
+            service_url: singleServiceUrl2,
+            isrc: singleISRC2,
             spotify_track_number: spotifyTrackNumber,
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
