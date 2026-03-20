@@ -36,6 +36,10 @@ SpotiFLAC for Android & iOS — maintained by [@zarzet](https://github.com/zarze
 
 SpotiFLAC for command-line environments — maintained by [@Nizarberyan](https://github.com/Nizarberyan)
 
+### [SpotiFLAC (Python Module)](https://github.com/ShuShuzinhuu/SpotiFLAC-Module-Version)
+
+SpotiFLAC Python library for SpotiFLAC integration — maintained by [@ShuShuzinhuu](https://github.com/ShuShuzinhuu)
+
 ## FAQ
 
 ### Is this software free?
