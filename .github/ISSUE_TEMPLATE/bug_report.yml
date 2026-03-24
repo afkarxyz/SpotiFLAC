@@ -1,0 +1,71 @@
+name: Bug Report
+description: Bug Report
+title: "[Bug Report]: "
+labels: ["bug"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **WARNING: Issues that do not follow this template will be deleted without review.**
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      placeholder: Type here
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - Track
+        - Album
+        - Playlist
+        - Artist
+    validations:
+      required: true
+
+  - type: input
+    id: spotify-url
+    attributes:
+      label: Spotify URL
+      placeholder: Type here
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      placeholder: Type here or send screenshot/recording
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "### Environment"
+
+  - type: input
+    id: version
+    attributes:
+      label: SpotiFLAC Version
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Location
+    validations:
+      required: true

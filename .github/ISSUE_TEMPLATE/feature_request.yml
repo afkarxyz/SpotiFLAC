@@ -1,0 +1,34 @@
+name: Feature Request
+description: Feature Request
+title: "[Feature Request]: "
+labels: ["enhancement"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **WARNING: Issues that do not follow this template will be deleted without review.**
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      placeholder: Type here
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      placeholder: Type here
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      placeholder: Type here or send screenshot/recording
+    validations:
+      required: true
