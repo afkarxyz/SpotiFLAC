@@ -1,6 +1,6 @@
 name: Bug Report
 description: Bug Report
-title: "[Bug Report]: "
+title: "[Bug Report] "
 labels: ["bug"]
 
 body:
