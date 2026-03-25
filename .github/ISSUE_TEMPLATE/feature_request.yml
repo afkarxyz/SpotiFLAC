@@ -8,12 +8,14 @@ body:
     attributes:
       value: |
         > **WARNING: Issues that do not follow this template will be deleted without review.**
+        >
+        > **Please keep `[Feature Request]` in the issue title and only continue after it.**
 
   - type: textarea
     id: description
     attributes:
       label: Description
-      placeholder: Type here
+      placeholder: e.g. Add an option to choose the output naming format for downloaded tracks.
     validations:
       required: true
 
@@ -21,7 +23,7 @@ body:
     id: use-case
     attributes:
       label: Use Case
-      placeholder: Type here
+      placeholder: e.g. I want downloaded files to follow a custom format like Artist - Title for easier library management.
     validations:
       required: true
 
@@ -29,6 +31,6 @@ body:
     id: additional-context
     attributes:
       label: Additional Context
-      placeholder: Type here or send screenshot/recording
+      placeholder: e.g. Similar tools allow custom naming templates. Screenshot or mockup attached if needed.
     validations:
       required: true
