@@ -485,7 +485,7 @@ func extractDuration(ms float64) map[string]interface{} {
 	}
 }
 
-func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]interface{}) map[string]interface{} {
+func FilterTrack(data map[string]interface{}, separator string, albumFetchData ...map[string]interface{}) map[string]interface{} {
 	dataMap := getMap(data, "data")
 	trackData := getMap(dataMap, "trackUnion")
 	if len(trackData) == 0 {
@@ -555,7 +555,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 		copyrightData := getMap(albumData, "copyright")
 		if len(copyrightData) > 0 {
 			copyrightItems := getSlice(copyrightData, "items")
-			if copyrightItems != nil {
+			if len(copyrightItems) > 0 {
 				for _, item := range copyrightItems {
 					itemMap, ok := item.(map[string]interface{})
 					if !ok {
@@ -574,7 +574,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 		if len(tracksData) > 0 {
 			discNumbers := make(map[int]bool)
 			trackItems := getSlice(tracksData, "items")
-			if trackItems != nil {
+			if len(trackItems) > 0 {
 				for _, item := range trackItems {
 					itemMap, ok := item.(map[string]interface{})
 					if !ok {
@@ -656,7 +656,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 
 		albumArtistsString := ""
 		albumLabel := ""
-		if albumFetchDataMap != nil && len(albumFetchDataMap) > 0 {
+		if len(albumFetchDataMap) > 0 {
 			albumUnionData := getMap(getMap(albumFetchDataMap, "data"), "albumUnion")
 			if len(albumUnionData) > 0 {
 				albumArtists := extractArtists(getMap(albumUnionData, "artists"))
@@ -665,7 +665,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 					for _, artist := range albumArtists {
 						albumArtistNames = append(albumArtistNames, getString(artist, "name"))
 					}
-					albumArtistsString = strings.Join(albumArtistNames, GetSeparator())
+					albumArtistsString = strings.Join(albumArtistNames, separator)
 				}
 				if albumArtistsString == "" {
 					albumArtistsString = getString(albumUnionData, "artists")
@@ -681,7 +681,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 				for _, artist := range albumArtists {
 					albumArtistNames = append(albumArtistNames, getString(artist, "name"))
 				}
-				albumArtistsString = strings.Join(albumArtistNames, GetSeparator())
+				albumArtistsString = strings.Join(albumArtistNames, separator)
 			}
 		}
 
@@ -715,7 +715,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 	for _, artist := range artists {
 		artistNames = append(artistNames, getString(artist, "name"))
 	}
-	artistsString := strings.Join(artistNames, GetSeparator())
+	artistsString := strings.Join(artistNames, separator)
 
 	copyrightTexts := []string{}
 	for _, item := range copyrightInfo {
@@ -802,7 +802,7 @@ func FilterTrack(data map[string]interface{}, albumFetchData ...map[string]inter
 	return filtered
 }
 
-func FilterAlbum(data map[string]interface{}) map[string]interface{} {
+func FilterAlbum(data map[string]interface{}, separator string) map[string]interface{} {
 	dataMap := getMap(data, "data")
 	albumData := getMap(dataMap, "albumUnion")
 	if len(albumData) == 0 {
@@ -814,7 +814,7 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 	for _, artist := range artists {
 		artistNames = append(artistNames, getString(artist, "name"))
 	}
-	albumArtistsString := strings.Join(artistNames, GetSeparator())
+	albumArtistsString := strings.Join(artistNames, separator)
 
 	coverObj := extractCoverImage(getMap(albumData, "coverArt"))
 	var cover interface{}
@@ -875,7 +875,7 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 			for _, artist := range trackArtists {
 				trackArtistNames = append(trackArtistNames, getString(artist, "name"))
 			}
-			trackArtistsString := strings.Join(trackArtistNames, GetSeparator())
+			trackArtistsString := strings.Join(trackArtistNames, separator)
 
 			trackURI := getString(track, "uri")
 			trackID := ""
@@ -943,7 +943,7 @@ func FilterAlbum(data map[string]interface{}) map[string]interface{} {
 	return filtered
 }
 
-func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
+func FilterPlaylist(data map[string]interface{}, separator string) map[string]interface{} {
 	dataMap := getMap(data, "data")
 	playlistData := getMap(dataMap, "playlistV2")
 	if len(playlistData) == 0 {
@@ -957,21 +957,9 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 		avatarData := getMap(ownerData, "avatar")
 		if len(avatarData) > 0 {
 			sources := getSlice(avatarData, "sources")
-			if sources != nil {
-				for _, source := range sources {
-					sourceMap, ok := source.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					if getFloat64(sourceMap, "width") == 300 {
-						avatarURL = getString(sourceMap, "url")
-						break
-					}
-				}
-				if avatarURL == nil && len(sources) > 0 {
-					if firstSource, ok := sources[0].(map[string]interface{}); ok {
-						avatarURL = getString(firstSource, "url")
-					}
+			if len(sources) > 0 {
+				if firstSource, ok := sources[0].(map[string]interface{}); ok {
+					avatarURL = getString(firstSource, "url")
 				}
 			}
 		}
@@ -1075,7 +1063,7 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 			for _, artist := range trackArtists {
 				trackArtistNames = append(trackArtistNames, getString(artist, "name"))
 			}
-			artistsString := strings.Join(trackArtistNames, GetSeparator())
+			artistsString := strings.Join(trackArtistNames, separator)
 
 			trackDurationMs := getFloat64(getMap(trackData, "trackDuration"), "totalMilliseconds")
 			durationObj := extractDuration(trackDurationMs)
@@ -1121,7 +1109,7 @@ func FilterPlaylist(data map[string]interface{}) map[string]interface{} {
 					for _, artist := range albumArtists {
 						albumArtistNames = append(albumArtistNames, getString(artist, "name"))
 					}
-					albumArtistsString = strings.Join(albumArtistNames, GetSeparator())
+					albumArtistsString = strings.Join(albumArtistNames, separator)
 				}
 			}
 
@@ -1291,11 +1279,11 @@ func extractDiscographyItems(itemsData map[string]interface{}) []map[string]inte
 }
 
 func stripHTMLTags(s string) string {
-	re := regexp.MustCompile(`<[^>]*>`)
+	re := regexp.MustCompile(`(?s)<[^>]*>`)
 	return re.ReplaceAllString(s, "")
 }
 
-func FilterArtist(data map[string]interface{}) map[string]interface{} {
+func FilterArtist(data map[string]interface{}, separator string) map[string]interface{} {
 	dataMap := getMap(data, "data")
 	artistData := getMap(dataMap, "artistUnion")
 	if len(artistData) == 0 {
@@ -1424,7 +1412,7 @@ func FilterArtist(data map[string]interface{}) map[string]interface{} {
 	return filtered
 }
 
-func FilterSearch(data map[string]interface{}) map[string]interface{} {
+func FilterSearch(data map[string]interface{}, separator string) map[string]interface{} {
 	dataMap := getMap(data, "data")
 	searchData := getMap(dataMap, "searchV2")
 	if len(searchData) == 0 {
@@ -1514,7 +1502,7 @@ func FilterSearch(data map[string]interface{}) map[string]interface{} {
 			for _, artist := range trackArtists {
 				trackArtistNames = append(trackArtistNames, getString(artist, "name"))
 			}
-			trackArtistsString := strings.Join(trackArtistNames, GetSeparator())
+			trackArtistsString := strings.Join(trackArtistNames, separator)
 
 			durationString := getString(trackDuration, "formatted")
 
@@ -1586,7 +1574,7 @@ func FilterSearch(data map[string]interface{}) map[string]interface{} {
 			for _, artist := range albumArtists {
 				albumArtistNames = append(albumArtistNames, getString(artist, "name"))
 			}
-			albumArtistsString := strings.Join(albumArtistNames, GetSeparator())
+			albumArtistsString := strings.Join(albumArtistNames, separator)
 
 			dateInfo := getMap(album, "date")
 			var year interface{}

@@ -106,6 +106,22 @@ type DownloadResponse struct {
 	ItemID        string `json:"item_id,omitempty"`
 }
 
+func cleanupInvalidDownloadArtifacts(paths ...string) {
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		if err := os.Remove(path); err == nil {
+			fmt.Printf("Removed invalid download artifact: %s\n", path)
+		}
+	}
+}
+
 func (a *App) GetStreamingURLs(spotifyTrackID string, region string) (string, error) {
 	if spotifyTrackID == "" {
 		return "", fmt.Errorf("spotify track ID is required")
@@ -142,12 +158,27 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	defer cancel()
 
 	settings, err := a.LoadSettings()
+	separator := req.Separator
+	if separator == "" {
+		separator = ", "
+		if err == nil && settings != nil {
+			if sep, ok := settings["separator"].(string); ok {
+				if sep == "semicolon" {
+					separator = "; "
+				} else if sep == "comma" {
+					separator = ", "
+				}
+			}
+		}
+	}
 
 	if err == nil && settings != nil {
 		if useAPI, ok := settings["useSpotFetchAPI"].(bool); ok && useAPI {
 			if apiURL, ok := settings["spotFetchAPIUrl"].(string); ok && apiURL != "" {
 
-				data, err := backend.GetSpotifyDataWithAPI(ctx, req.URL, true, apiURL, req.Batch, time.Duration(req.Delay*float64(time.Second)))
+				data, err := backend.GetSpotifyDataWithAPI(ctx, req.URL, true, apiURL, req.Batch, time.Duration(req.Delay*float64(time.Second)), separator, func(tracks interface{}) {
+					runtime.EventsEmit(a.ctx, "metadata-stream", tracks)
+				})
 				if err != nil {
 					return "", fmt.Errorf("failed to fetch metadata from API: %v", err)
 				}
@@ -162,7 +193,9 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 		}
 	}
 
-	data, err := backend.GetFilteredSpotifyData(ctx, req.URL, req.Batch, time.Duration(req.Delay*float64(time.Second)))
+	data, err := backend.GetFilteredSpotifyData(ctx, req.URL, req.Batch, time.Duration(req.Delay*float64(time.Second)), separator, func(tracks interface{}) {
+		runtime.EventsEmit(a.ctx, "metadata-stream", tracks)
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch metadata: %v", err)
 	}
@@ -283,7 +316,21 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		defer cancel()
 
 		trackURL := fmt.Sprintf("https://open.spotify.com/track/%s", req.SpotifyID)
-		trackData, err := backend.GetFilteredSpotifyData(ctx, trackURL, false, 0)
+		metadataSeparator := req.Separator
+		if metadataSeparator == "" {
+			metadataSeparator = ", "
+			metadataSettings, _ := a.LoadSettings()
+			if metadataSettings != nil {
+				if sep, ok := metadataSettings["separator"].(string); ok {
+					if sep == "semicolon" {
+						metadataSeparator = "; "
+					} else if sep == "comma" {
+						metadataSeparator = ", "
+					}
+				}
+			}
+		}
+		trackData, err := backend.GetFilteredSpotifyData(ctx, trackURL, false, 0, metadataSeparator, nil)
 		if err == nil {
 
 			var trackResp struct {
@@ -358,11 +405,15 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			close(lyricsChan)
 		}
 
-		go func() {
-			client := backend.NewSongLinkClient()
-			isrc, _ := client.GetISRC(req.SpotifyID)
-			isrcChan <- isrc
-		}()
+		if req.Service == "qobuz" {
+			go func() {
+				client := backend.NewSongLinkClient()
+				isrc, _ := client.GetISRCDirect(req.SpotifyID)
+				isrcChan <- isrc
+			}()
+		} else {
+			close(isrcChan)
+		}
 	} else {
 		close(lyricsChan)
 		close(isrcChan)
@@ -439,6 +490,23 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		filename = strings.TrimPrefix(filename, "EXISTS:")
 	}
 
+	if !alreadyExists {
+		validated, validationErr := backend.ValidateDownloadedTrackDuration(filename, req.Duration)
+		if validationErr != nil {
+			cleanupInvalidDownloadArtifacts(filename)
+			errorMessage := validationErr.Error()
+			backend.FailDownloadItem(itemID, errorMessage)
+			return DownloadResponse{
+				Success: false,
+				Error:   errorMessage,
+				ItemID:  itemID,
+			}, fmt.Errorf(errorMessage)
+		}
+		if !validated {
+			fmt.Printf("[DownloadValidation] Skipped duration validation for %s (expected=%ds)\n", filename, req.Duration)
+		}
+	}
+
 	if !alreadyExists && req.SpotifyID != "" && req.EmbedLyrics && (strings.HasSuffix(filename, ".flac") || strings.HasSuffix(filename, ".mp3") || strings.HasSuffix(filename, ".m4a")) {
 		fmt.Printf("\nWaiting for lyrics fetch to complete...\n")
 		lyrics := <-lyricsChan
@@ -470,6 +538,14 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		message = "File already exists"
 		backend.SkipDownloadItem(itemID, filename)
 	} else {
+		if strings.EqualFold(filepath.Ext(filename), ".flac") && req.CoverURL != "" {
+			coverClient := backend.NewCoverClient()
+			if iconErr := coverClient.ApplyMacOSFLACFileIcon(filename, req.CoverURL, 256, req.EmbedMaxQualityCover); iconErr != nil {
+				fmt.Printf("Warning: failed to set macOS FLAC file icon: %v\n", iconErr)
+			} else {
+				fmt.Printf("macOS FLAC file icon set: %s\n", filename)
+			}
+		}
 
 		if fileInfo, statErr := os.Stat(filename); statErr == nil {
 			finalSize := float64(fileInfo.Size()) / (1024 * 1024)
@@ -479,15 +555,15 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			backend.CompleteDownloadItem(itemID, filename, 0)
 		}
 
-		go func(fPath, track, artist, album, sID, cover, format string) {
+		go func(fPath, track, artist, album, sID, cover, format, source string) {
+			time.Sleep(2 * time.Second)
+
 			quality := "Unknown"
-			durationStr := "--:--"
+			durationStr := "0:00"
 
 			meta, err := backend.GetTrackMetadata(fPath)
-			if err == nil && meta != nil {
-				if meta.BitsPerSample > 0 {
-					quality = fmt.Sprintf("%d-bit/%.1fkHz", meta.BitsPerSample, float64(meta.SampleRate)/1000.0)
-				} else if meta.Bitrate > 0 {
+			if err == nil {
+				if meta.Bitrate > 0 {
 					quality = fmt.Sprintf("%dkbps/%.1fkHz", meta.Bitrate/1000, float64(meta.SampleRate)/1000.0)
 				} else if meta.SampleRate > 0 {
 					quality = fmt.Sprintf("%.1fkHz", float64(meta.SampleRate)/1000.0)
@@ -508,6 +584,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				Quality:     quality,
 				Format:      strings.ToUpper(format),
 				Path:        fPath,
+				Source:      source,
 			}
 
 			if item.Format == "" || item.Format == "LOSSLESS" {
@@ -523,7 +600,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			}
 
 			backend.AddHistoryItem(item, "SpotiFLAC")
-		}(filename, req.TrackName, req.ArtistName, req.AlbumName, req.SpotifyID, req.CoverURL, req.AudioFormat)
+		}(filename, req.TrackName, req.ArtistName, req.AlbumName, req.SpotifyID, req.CoverURL, req.AudioFormat, req.Service)
 	}
 
 	return DownloadResponse{
@@ -755,46 +832,28 @@ func (a *App) ClearFetchHistoryByType(itemType string) error {
 	return backend.ClearFetchHistoryByType(itemType, "SpotiFLAC")
 }
 
-func (a *App) AnalyzeTrack(filePath string) (string, error) {
-	if filePath == "" {
-		return "", fmt.Errorf("file path is required")
+func (a *App) SaveSpectrumImage(audioFilePath string, base64Data string) (string, error) {
+	if audioFilePath == "" || base64Data == "" {
+		return "", fmt.Errorf("file path and image data are required")
 	}
 
-	result, err := backend.AnalyzeTrack(filePath)
+	base64Data = strings.TrimPrefix(base64Data, "data:image/png;base64,")
+
+	data, err := base64.StdEncoding.DecodeString(base64Data)
 	if err != nil {
-		return "", fmt.Errorf("failed to analyze track: %v", err)
+		return "", fmt.Errorf("failed to decode base64 image: %v", err)
 	}
 
-	jsonData, err := json.Marshal(result)
+	ext := filepath.Ext(audioFilePath)
+	baseName := strings.TrimSuffix(filepath.Base(audioFilePath), ext)
+	outPath := filepath.Join(filepath.Dir(audioFilePath), baseName+".png")
+
+	err = os.WriteFile(outPath, data, 0644)
 	if err != nil {
-		return "", fmt.Errorf("failed to encode response: %v", err)
+		return "", fmt.Errorf("failed to save image to disk: %v", err)
 	}
 
-	return string(jsonData), nil
-}
-
-func (a *App) AnalyzeMultipleTracks(filePaths []string) (string, error) {
-	if len(filePaths) == 0 {
-		return "", fmt.Errorf("at least one file path is required")
-	}
-
-	results := make([]*backend.AnalysisResult, 0, len(filePaths))
-
-	for _, filePath := range filePaths {
-		result, err := backend.AnalyzeTrack(filePath)
-		if err != nil {
-
-			continue
-		}
-		results = append(results, result)
-	}
-
-	jsonData, err := json.Marshal(results)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode response: %v", err)
-	}
-
-	return string(jsonData), nil
+	return outPath, nil
 }
 
 type LyricsDownloadRequest struct {
@@ -1121,12 +1180,31 @@ func (a *App) ConvertAudio(req ConvertAudioRequest) ([]backend.ConvertAudioResul
 	return backend.ConvertAudio(backendReq)
 }
 
+type ResampleAudioRequest struct {
+	InputFiles []string `json:"input_files"`
+	SampleRate string   `json:"sample_rate"`
+	BitDepth   string   `json:"bit_depth"`
+}
+
+func (a *App) ResampleAudio(req ResampleAudioRequest) ([]backend.ResampleResult, error) {
+	backendReq := backend.ResampleRequest{
+		InputFiles: req.InputFiles,
+		SampleRate: req.SampleRate,
+		BitDepth:   req.BitDepth,
+	}
+	return backend.ResampleAudio(backendReq)
+}
+
 func (a *App) SelectAudioFiles() ([]string, error) {
 	files, err := backend.SelectMultipleFiles(a.ctx)
 	if err != nil {
 		return nil, err
 	}
 	return files, nil
+}
+
+func (a *App) GetFlacInfoBatch(paths []string) []backend.FlacInfo {
+	return backend.GetFlacInfoBatch(paths)
 }
 
 func (a *App) GetFileSizes(files []string) map[string]int64 {
@@ -1168,6 +1246,15 @@ func (a *App) ReadTextFile(filePath string) (string, error) {
 		return "", err
 	}
 	return string(content), nil
+}
+
+func (a *App) ReadFileAsBase64(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(content), nil
 }
 
 func (a *App) RenameFileTo(oldPath, newName string) error {

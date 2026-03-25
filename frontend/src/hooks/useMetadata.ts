@@ -1,13 +1,17 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSettings } from "@/lib/settings";
 import { fetchSpotifyMetadata } from "@/lib/api";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { logger } from "@/lib/logger";
 import { AddFetchHistory } from "../../wailsjs/go/main/App";
+import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type { SpotifyMetadataResponse } from "@/types/api";
 export function useMetadata() {
     const [loading, setLoading] = useState(false);
     const [metadata, setMetadata] = useState<SpotifyMetadataResponse | null>(null);
+    const loadingToastId = useRef<string | number | null>(null);
+    const fetchedCount = useRef(0);
+    const currentName = useRef("");
     const [showApiModal, setShowApiModal] = useState(false);
     const [showAlbumDialog, setShowAlbumDialog] = useState(false);
     const [selectedAlbum, setSelectedAlbum] = useState<{
@@ -16,6 +20,73 @@ export function useMetadata() {
         external_urls: string;
     } | null>(null);
     const [pendingArtistName, setPendingArtistName] = useState<string | null>(null);
+    useEffect(() => {
+        if (loading) {
+            fetchedCount.current = 0;
+            currentName.current = "";
+            loadingToastId.current = toast.silentInfo("fetching metadata...", {
+                duration: Infinity,
+                description: "please wait while we retrieve the information"
+            });
+            return;
+        }
+        if (loadingToastId.current) {
+            toast.dismiss(loadingToastId.current);
+            loadingToastId.current = null;
+        }
+    }, [loading]);
+    useEffect(() => {
+        const handler = (data: any) => {
+            if (!data) {
+                return;
+            }
+            if (Array.isArray(data)) {
+                fetchedCount.current += data.length;
+                if (loadingToastId.current && currentName.current) {
+                    toast.silentInfo(`fetching tracks for ${currentName.current.toLowerCase()}...`, {
+                        id: loadingToastId.current,
+                        description: `${fetchedCount.current.toLocaleString()} tracks fetched`
+                    });
+                }
+            }
+            else {
+                const baseInfo = data;
+                const name = "artist_info" in baseInfo ? baseInfo.artist_info.name :
+                    "album_info" in baseInfo ? baseInfo.album_info.name :
+                        "playlist_info" in baseInfo ? (baseInfo.playlist_info.name || baseInfo.playlist_info.owner.name) : "";
+                if (name) {
+                    currentName.current = name;
+                    if (loadingToastId.current) {
+                        toast.silentInfo(`fetching tracks for ${name.toLowerCase()}...`, {
+                            id: loadingToastId.current,
+                            description: `${fetchedCount.current.toLocaleString()} tracks fetched`
+                        });
+                    }
+                }
+            }
+            setMetadata(prev => {
+                if (Array.isArray(data)) {
+                    if (!prev || !("track_list" in prev)) {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        track_list: [...prev.track_list, ...data]
+                    };
+                }
+                if (prev && "track_list" in prev && prev.track_list.length > 0) {
+                    return prev;
+                }
+                const baseInfo = data;
+                if (!("track_list" in baseInfo)) {
+                    baseInfo.track_list = [];
+                }
+                return baseInfo;
+            });
+        };
+        EventsOn("metadata-stream", handler);
+        return () => EventsOff("metadata-stream");
+    }, []);
     const getUrlType = (url: string): string => {
         if (url.includes("/track/"))
             return "track";

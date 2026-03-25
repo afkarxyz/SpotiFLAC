@@ -1,7 +1,10 @@
 package backend
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"net/http"
 	"os"
@@ -9,6 +12,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	xdraw "golang.org/x/image/draw"
+	_ "image/jpeg"
 )
 
 const (
@@ -168,6 +174,69 @@ func (c *CoverClient) DownloadCoverToPath(coverURL, outputPath string, embedMaxQ
 	}
 
 	return nil
+}
+
+func (c *CoverClient) ApplyMacOSFLACFileIcon(filePath, coverURL string, iconSize int, embedMaxQualityCover bool) error {
+	if filePath == "" {
+		return fmt.Errorf("file path is required")
+	}
+	if coverURL == "" {
+		return fmt.Errorf("cover URL is required")
+	}
+
+	tmpFile, err := os.CreateTemp("", "spotiflac-file-icon-*.jpg")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary cover file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
+
+	if err := c.DownloadCoverToPath(coverURL, tmpPath, embedMaxQualityCover); err != nil {
+		return err
+	}
+
+	return SetMacOSFileIconFromImage(filePath, tmpPath, iconSize)
+}
+
+func ResizeImageForIcon(sourcePath string, iconSize int) (string, error) {
+	if sourcePath == "" {
+		return "", fmt.Errorf("source image path is required")
+	}
+	if iconSize <= 0 {
+		iconSize = 256
+	}
+
+	in, err := os.Open(sourcePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to open source image: %w", err)
+	}
+	defer in.Close()
+
+	srcImage, _, err := image.Decode(in)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode source image: %w", err)
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, iconSize, iconSize))
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), srcImage, srcImage.Bounds(), xdraw.Over, nil)
+
+	tmpFile, err := os.CreateTemp("", "spotiflac-resized-icon-*.png")
+	if err != nil {
+		return "", fmt.Errorf("failed to create resized icon temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer tmpFile.Close()
+
+	var encoded bytes.Buffer
+	if err := png.Encode(&encoded, dst); err != nil {
+		return "", fmt.Errorf("failed to encode resized icon image: %w", err)
+	}
+	if _, err := io.Copy(tmpFile, &encoded); err != nil {
+		return "", fmt.Errorf("failed to write resized icon image: %w", err)
+	}
+
+	return tmpPath, nil
 }
 
 func (c *CoverClient) DownloadCover(req CoverDownloadRequest) (*CoverDownloadResponse, error) {

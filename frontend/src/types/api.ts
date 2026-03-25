@@ -155,7 +155,7 @@ export interface HealthResponse {
 }
 export interface TimeSlice {
     time: number;
-    magnitudes: number[];
+    magnitudes: number[] | Float32Array;
 }
 export interface SpectrumData {
     time_slices: TimeSlice[];
@@ -167,6 +167,7 @@ export interface SpectrumData {
 export interface AnalysisResult {
     file_path: string;
     file_size: number;
+    file_type?: "FLAC" | "MP3" | "M4A" | "AAC";
     sample_rate: number;
     channels: number;
     bits_per_sample: number;
@@ -176,6 +177,10 @@ export interface AnalysisResult {
     dynamic_range: number;
     peak_amplitude: number;
     rms_level: number;
+    codec_mode?: string;
+    bitrate_kbps?: number;
+    total_frames?: number;
+    codec_version?: string;
     spectrum?: SpectrumData;
 }
 export interface LyricsDownloadRequest {
