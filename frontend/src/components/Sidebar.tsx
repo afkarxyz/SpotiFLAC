@@ -1,16 +1,16 @@
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { HomeIcon } from "@/components/ui/home";
 import { HistoryIcon } from "@/components/ui/history-icon";
 import { SettingsIcon } from "@/components/ui/settings";
-import { ActivityIcon } from "@/components/ui/activity";
+import { ActivityIcon, type ActivityIconHandle } from "@/components/ui/activity";
 import { TerminalIcon } from "@/components/ui/terminal";
-import { FileMusicIcon } from "@/components/ui/file-music";
-import { FilePenIcon } from "@/components/ui/file-pen";
+import { FileMusicIcon, type FileMusicIconHandle } from "@/components/ui/file-music";
+import { FilePenIcon, type FilePenIconHandle } from "@/components/ui/file-pen";
 import { CoffeeIcon } from "@/components/ui/coffee";
 import { BadgeAlertIcon } from "@/components/ui/badge-alert";
 import { GithubIcon } from "@/components/ui/github";
 import { BlocksIcon } from "@/components/ui/blocks-icon";
-import { AudioLinesIcon } from "@/components/ui/audio-lines";
+import { AudioLinesIcon, type AudioLinesIconHandle } from "@/components/ui/audio-lines";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,9 +23,19 @@ interface SidebarProps {
     currentPage: PageType;
     onPageChange: (page: PageType) => void;
 }
+
+interface AnimatedIconHandle {
+    startAnimation: () => void;
+    stopAnimation: () => void;
+}
+
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
     const [isIssuesDialogOpen, setIsIssuesDialogOpen] = useState(false);
     const [hasIssueAgreement, setHasIssueAgreement] = useState(false);
+    const analyzerIconRef = useRef<ActivityIconHandle>(null);
+    const converterIconRef = useRef<FileMusicIconHandle>(null);
+    const resamplerIconRef = useRef<AudioLinesIconHandle>(null);
+    const fileManagerIconRef = useRef<FilePenIconHandle>(null);
     const handleIssuesDialogChange = (open: boolean) => {
         setIsIssuesDialogOpen(open);
         if (!open) {
@@ -36,6 +46,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         openExternal("https://github.com/afkarxyz/SpotiFLAC/issues");
         handleIssuesDialogChange(false);
     };
+    const getAnimatedItemHandlers = <T extends AnimatedIconHandle>(iconRef: RefObject<T | null>) => ({
+        onMouseEnter: () => iconRef.current?.startAnimation(),
+        onMouseLeave: () => iconRef.current?.stopAnimation(),
+        onFocus: () => iconRef.current?.startAnimation(),
+        onBlur: () => iconRef.current?.stopAnimation(),
+    });
     return (<div className="fixed left-0 top-0 h-full w-14 bg-card border-r border-border flex flex-col items-center py-14 z-30">
             <div className="flex flex-col gap-2 flex-1">
                 <Tooltip delayDuration={0}>
@@ -96,20 +112,20 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                         </TooltipContent>
                     </Tooltip>
                     <DropdownMenuContent side="right" sideOffset={14} className="min-w-[200px] ml-2">
-                        <DropdownMenuItem onClick={() => onPageChange("audio-analysis")} className="gap-3 cursor-pointer py-2 px-3">
-                            <ActivityIcon size={16}/>
+                        <DropdownMenuItem onClick={() => onPageChange("audio-analysis")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(analyzerIconRef)}>
+                            <ActivityIcon ref={analyzerIconRef} size={16}/>
                             <span>Audio Quality Analyzer</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onPageChange("audio-converter")} className="gap-3 cursor-pointer py-2 px-3">
-                            <FileMusicIcon size={16}/>
+                        <DropdownMenuItem onClick={() => onPageChange("audio-converter")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(converterIconRef)}>
+                            <FileMusicIcon ref={converterIconRef} size={16}/>
                             <span>Audio Converter</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onPageChange("audio-resampler")} className="gap-3 cursor-pointer py-2 px-3">
-                            <AudioLinesIcon size={16}/>
+                        <DropdownMenuItem onClick={() => onPageChange("audio-resampler")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(resamplerIconRef)}>
+                            <AudioLinesIcon ref={resamplerIconRef} size={16}/>
                             <span>Audio Resampler</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onPageChange("file-manager")} className="gap-3 cursor-pointer py-2 px-3">
-                            <FilePenIcon size={16}/>
+                        <DropdownMenuItem onClick={() => onPageChange("file-manager")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(fileManagerIconRef)}>
+                            <FilePenIcon ref={fileManagerIconRef} size={16}/>
                             <span>File Manager</span>
                         </DropdownMenuItem>
                     </DropdownMenuContent>
