@@ -161,7 +161,7 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
         </Button>
         <Button variant={activeTab === "api" ? "default" : "ghost"} size="sm" onClick={() => setActiveTab("api")} className="rounded-b-none gap-2">
           <Router className="h-4 w-4"/>
-          API Status
+          Status
         </Button>
       </div>
 

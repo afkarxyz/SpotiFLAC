@@ -365,7 +365,7 @@ func (q *QobuzDownloader) DownloadTrack(spotifyID, outputDir, quality, filenameF
 	var deezerISRC string
 	if spotifyID != "" {
 		songlinkClient := NewSongLinkClient()
-		isrc, err := songlinkClient.GetISRC(spotifyID)
+		isrc, err := songlinkClient.GetISRCDirect(spotifyID)
 		if err != nil {
 			return "", fmt.Errorf("failed to get ISRC: %v", err)
 		}

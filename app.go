@@ -389,11 +389,15 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			close(lyricsChan)
 		}
 
-		go func() {
-			client := backend.NewSongLinkClient()
-			isrc, _ := client.GetISRC(req.SpotifyID)
-			isrcChan <- isrc
-		}()
+		if req.Service == "qobuz" {
+			go func() {
+				client := backend.NewSongLinkClient()
+				isrc, _ := client.GetISRCDirect(req.SpotifyID)
+				isrcChan <- isrc
+			}()
+		} else {
+			close(isrcChan)
+		}
 	} else {
 		close(lyricsChan)
 		close(isrcChan)
