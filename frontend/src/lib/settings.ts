@@ -112,7 +112,7 @@ export const DEFAULT_SETTINGS: Settings = {
     autoQuality: "16",
     allowFallback: true,
     useSpotFetchAPI: false,
-    spotFetchAPIUrl: "https://spotify.afkarxyz.fun/api",
+    spotFetchAPIUrl: "https://sp.afkarxyz.qzz.io/api",
     createPlaylistFolder: true,
     createM3u8File: false,
     useFirstArtistOnly: false,

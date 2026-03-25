@@ -19,8 +19,8 @@ const SOURCES: ApiSource[] = [
     { id: "tidal7", type: "tidal", name: "Tidal G", url: "https://tidal.kinoplus.online" },
     { id: "qobuz1", type: "qobuz", name: "Qobuz A", url: "https://dab.yeet.su" },
     { id: "qobuz2", type: "qobuz", name: "Qobuz B", url: "https://dabmusic.xyz" },
-    { id: "qobuz3", type: "qbz", name: "Qobuz C", url: "https://qbz.afkarxyz.fun" },
-    { id: "amazon1", type: "amazon", name: "Amazon Music", url: "https://amzn.afkarxyz.fun" },
+    { id: "qobuz3", type: "qbz", name: "Qobuz C", url: "https://qbz.afkarxyz.qzz.io" },
+    { id: "amazon1", type: "amazon", name: "Amazon Music", url: "https://amzn.afkarxyz.qzz.io" },
 ];
 export function ApiStatusTab() {
     const [statuses, setStatuses] = useState<Record<string, "checking" | "online" | "offline" | "idle">>({});
