@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect, type ChangeEvent, type DragEvent, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Upload, ArrowLeft, Trash2, Download } from "lucide-react";
 import { AudioAnalysis } from "@/components/AudioAnalysis";
 import { SpectrumVisualization } from "@/components/SpectrumVisualization";
@@ -37,12 +38,14 @@ function fileNameFromPath(filePath: string): string {
 export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
     const {
         analyzing,
+        analysisProgress,
         result,
         analyzeFile,
         analyzeFilePath,
         clearResult,
         selectedFilePath,
         spectrumLoading,
+        spectrumProgress,
         reAnalyzeSpectrum,
     } = useAudioAnalysis();
 
@@ -229,9 +232,14 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
             )}
 
             {analyzing && !result && (
-                <div className="flex flex-col items-center justify-center py-16">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-                    <p className="text-sm text-muted-foreground">Analyzing audio file...</p>
+                <div className="flex h-[400px] items-center justify-center">
+                    <div className="w-full max-w-md space-y-2">
+                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+                            <span>Processing...</span>
+                            <span className="tabular-nums">{analysisProgress.percent}%</span>
+                        </div>
+                        <Progress value={analysisProgress.percent} className="h-2 w-full" />
+                    </div>
                 </div>
             )}
 
@@ -252,6 +260,7 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
                         fileName={fileName}
                         onReAnalyze={reAnalyzeSpectrum}
                         isAnalyzingSpectrum={spectrumLoading}
+                        spectrumProgress={spectrumProgress}
                     />
                 </div>
             )}

@@ -148,7 +148,7 @@ export function AudioAnalysis({ result, analyzing, onAnalyze, showAnalyzeButton 
                                 <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Spectrum Meta</p>
                                 <ul className="text-sm space-y-1">
                                     <li className="flex justify-between">
-                                        <span className="text-muted-foreground">Analysis Frames:</span>
+                                        <span className="text-muted-foreground">Display Frames:</span>
                                         <span className="font-medium font-mono">{frames.toLocaleString()}</span>
                                     </li>
                                     <li className="flex justify-between">

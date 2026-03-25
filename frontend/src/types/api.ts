@@ -155,7 +155,7 @@ export interface HealthResponse {
 }
 export interface TimeSlice {
     time: number;
-    magnitudes: number[];
+    magnitudes: number[] | Float32Array;
 }
 export interface SpectrumData {
     time_slices: TimeSlice[];

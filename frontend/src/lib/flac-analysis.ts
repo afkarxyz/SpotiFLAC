@@ -10,6 +10,9 @@ const DEFAULT_PARAMS: SpectrumParams = {
     windowFunction: "hann",
 };
 
+const MAX_SPECTRUM_FRAMES = 2200;
+const METRICS_CHUNK_SIZE = 262144;
+
 interface FlacStreamInfo {
     sampleRate: number;
     channels: number;
@@ -27,6 +30,49 @@ export interface FlacArrayBufferInput {
     fileName: string;
     fileSize: number;
     arrayBuffer: ArrayBuffer;
+}
+
+export type AnalysisPhase = "read" | "parse" | "decode" | "metrics" | "spectrum" | "finalize";
+
+export interface AnalysisProgress {
+    phase: AnalysisPhase;
+    percent: number;
+    message: string;
+}
+
+export type AnalysisProgressCallback = (progress: AnalysisProgress) => void;
+export type AnalysisCancelCheck = () => boolean;
+
+function reportProgress(
+    callback: AnalysisProgressCallback | undefined,
+    phase: AnalysisPhase,
+    percent: number,
+    message: string,
+): void {
+    if (!callback) return;
+    const clamped = Math.max(0, Math.min(100, percent));
+    callback({
+        phase,
+        percent: clamped,
+        message,
+    });
+}
+
+function throwIfCancelled(cancelCheck?: AnalysisCancelCheck): void {
+    if (cancelCheck?.()) {
+        throw new Error("Analysis cancelled");
+    }
+}
+
+function nowMs(): number {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
+}
+
+function nextTick(): Promise<void> {
+    if (typeof requestAnimationFrame === "function") {
+        return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+    }
+    return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function parseFlacStreamInfo(buffer: ArrayBuffer): FlacStreamInfo {
@@ -111,8 +157,7 @@ function buildWindowCoefficients(size: number, windowFunction: SpectrumParams["w
 
 function buildBitReversal(size: number): Uint32Array {
     let bits = 0;
-    while ((1 << bits) < size)
-        bits++;
+    while ((1 << bits) < size) bits++;
 
     const out = new Uint32Array(size);
     for (let i = 0; i < size; i++) {
@@ -172,15 +217,19 @@ function fftInPlace(real: Float32Array, imag: Float32Array, bitReversal: Uint32A
     }
 }
 
-export function analyzeSpectrumFromSamples(
+export async function analyzeSpectrumFromSamples(
     samples: Float32Array,
     sampleRate: number,
     params: SpectrumParams,
-): SpectrumData {
+    onProgress?: AnalysisProgressCallback,
+    shouldCancel?: AnalysisCancelCheck,
+): Promise<SpectrumData> {
+    throwIfCancelled(shouldCancel);
     const fftSize = params.fftSize;
     const hopSize = Math.max(1, Math.floor(fftSize / 4));
     const rawWindows = Math.floor((samples.length - fftSize) / hopSize);
     const numWindows = Math.max(1, rawWindows);
+    const frameStride = Math.max(1, Math.ceil(numWindows / MAX_SPECTRUM_FRAMES));
     const freqBins = Math.floor(fftSize / 2) + 1;
     const duration = sampleRate > 0 ? samples.length / sampleRate : 0;
     const maxFreq = sampleRate / 2;
@@ -191,9 +240,24 @@ export function analyzeSpectrumFromSamples(
     const imag = new Float32Array(fftSize);
     const invFFTSizeSquared = 1 / (fftSize * fftSize);
 
-    const timeSlices: TimeSlice[] = new Array(numWindows);
-    for (let i = 0; i < numWindows; i++) {
-        const start = i * hopSize;
+    reportProgress(onProgress, "spectrum", 0, "Preparing FFT...");
+    const windowIndices: number[] = [];
+    for (let windowIndex = 0; windowIndex < numWindows; windowIndex += frameStride) {
+        windowIndices.push(windowIndex);
+    }
+    if (windowIndices[windowIndices.length - 1] !== numWindows - 1) {
+        windowIndices.push(numWindows - 1);
+    }
+
+    const totalSlices = windowIndices.length;
+    const timeSlices: TimeSlice[] = new Array(totalSlices);
+    let lastReportedPercent = -1;
+    let lastYieldAt = nowMs();
+
+    for (let i = 0; i < totalSlices; i++) {
+        throwIfCancelled(shouldCancel);
+        const windowIndex = windowIndices[i];
+        const start = windowIndex * hopSize;
         const remaining = samples.length - start;
         const copyLen = Math.max(0, Math.min(fftSize, remaining));
 
@@ -208,7 +272,7 @@ export function analyzeSpectrumFromSamples(
 
         fftInPlace(real, imag, bitReversal);
 
-        const magnitudes = new Array<number>(freqBins);
+        const magnitudes = new Float32Array(freqBins);
         for (let j = 0; j < freqBins; j++) {
             const power = (real[j] * real[j] + imag[j] * imag[j]) * invFFTSizeSquared;
             magnitudes[j] = power > 1e-12 ? 10 * Math.log10(power) : -120;
@@ -218,8 +282,24 @@ export function analyzeSpectrumFromSamples(
             time: sampleRate > 0 ? start / sampleRate : 0,
             magnitudes,
         };
+
+        const currentPercent = Math.floor(((i + 1) / totalSlices) * 100);
+        if (currentPercent > lastReportedPercent) {
+            lastReportedPercent = currentPercent;
+            reportProgress(onProgress, "spectrum", currentPercent, "Analyzing spectrum...");
+        }
+
+        if ((i + 1) % 8 === 0) {
+            const now = nowMs();
+            if (now - lastYieldAt >= 16) {
+                await nextTick();
+                lastYieldAt = nowMs();
+                throwIfCancelled(shouldCancel);
+            }
+        }
     }
 
+    reportProgress(onProgress, "spectrum", 100, "Spectrum analysis complete");
     return {
         time_slices: timeSlices,
         sample_rate: sampleRate,
@@ -232,8 +312,14 @@ export function analyzeSpectrumFromSamples(
 export async function analyzeFlacFile(
     file: File,
     params: SpectrumParams = DEFAULT_PARAMS,
+    onProgress?: AnalysisProgressCallback,
+    shouldCancel?: AnalysisCancelCheck,
 ): Promise<FrontendAnalysisPayload> {
+    throwIfCancelled(shouldCancel);
+    reportProgress(onProgress, "read", 2, "Reading file...");
     const arrayBuffer = await file.arrayBuffer();
+    throwIfCancelled(shouldCancel);
+    reportProgress(onProgress, "read", 10, "File loaded");
     return analyzeFlacArrayBuffer(
         {
             fileName: file.name,
@@ -241,28 +327,56 @@ export async function analyzeFlacFile(
             arrayBuffer,
         },
         params,
+        (progress) => {
+            const mappedPercent = 10 + (progress.percent * 0.9);
+            reportProgress(onProgress, progress.phase, mappedPercent, progress.message);
+        },
+        shouldCancel,
     );
 }
 
 export async function analyzeFlacArrayBuffer(
     input: FlacArrayBufferInput,
     params: SpectrumParams = DEFAULT_PARAMS,
+    onProgress?: AnalysisProgressCallback,
+    shouldCancel?: AnalysisCancelCheck,
 ): Promise<FrontendAnalysisPayload> {
+    throwIfCancelled(shouldCancel);
+    reportProgress(onProgress, "parse", 5, "Parsing FLAC metadata...");
     const streamInfo = parseFlacStreamInfo(input.arrayBuffer);
+    throwIfCancelled(shouldCancel);
+    reportProgress(onProgress, "decode", 15, "Decoding audio stream...");
     const audioContext = new AudioContext({ sampleRate: streamInfo.sampleRate });
 
     try {
         const audioBuffer = await audioContext.decodeAudioData(input.arrayBuffer.slice(0));
+        throwIfCancelled(shouldCancel);
+        reportProgress(onProgress, "decode", 35, "Audio decoded");
         const samples = audioBuffer.getChannelData(0);
 
+        reportProgress(onProgress, "metrics", 40, "Calculating peak/RMS...");
         let peak = 0;
         let sumSquares = 0;
+        let lastMetricsYieldAt = nowMs();
         for (let i = 0; i < samples.length; i++) {
+            throwIfCancelled(shouldCancel);
             const sample = samples[i];
             const absSample = Math.abs(sample);
             if (absSample > peak)
                 peak = absSample;
             sumSquares += sample * sample;
+
+            if ((i + 1) % METRICS_CHUNK_SIZE === 0 || i === samples.length - 1) {
+                const metricsProgress = 40 + (((i + 1) / samples.length) * 10);
+                reportProgress(onProgress, "metrics", metricsProgress, "Calculating peak/RMS...");
+
+                const now = nowMs();
+                if (now - lastMetricsYieldAt >= 16) {
+                    await nextTick();
+                    lastMetricsYieldAt = nowMs();
+                    throwIfCancelled(shouldCancel);
+                }
+            }
         }
 
         const peakDB = peak > 0 ? 20 * Math.log10(peak) : -120;
@@ -270,12 +384,24 @@ export async function analyzeFlacArrayBuffer(
         const rmsDB = rms > 0 ? 20 * Math.log10(rms) : -120;
         const dynamicRange = peakDB - rmsDB;
 
-        const spectrum = analyzeSpectrumFromSamples(samples, streamInfo.sampleRate, params);
+        reportProgress(onProgress, "metrics", 50, "Signal metrics complete");
+        const spectrum = await analyzeSpectrumFromSamples(
+            samples,
+            streamInfo.sampleRate,
+            params,
+            (progress) => {
+                const mappedPercent = 50 + (progress.percent * 0.45);
+                reportProgress(onProgress, "spectrum", mappedPercent, progress.message);
+            },
+            shouldCancel,
+        );
         const durationFromBuffer = audioBuffer.duration;
         const duration = durationFromBuffer > 0 ? durationFromBuffer : streamInfo.duration;
         const totalSamples = streamInfo.totalSamples > 0 ? streamInfo.totalSamples : Math.floor(duration * streamInfo.sampleRate);
 
-        return {
+        reportProgress(onProgress, "finalize", 97, "Finalizing result...");
+
+        const payload: FrontendAnalysisPayload = {
             result: {
                 file_path: input.fileName,
                 file_size: input.fileSize,
@@ -292,8 +418,10 @@ export async function analyzeFlacArrayBuffer(
             },
             samples,
         };
-    }
-    finally {
+
+        reportProgress(onProgress, "finalize", 100, "Analysis complete");
+        return payload;
+    } finally {
         await audioContext.close();
     }
 }

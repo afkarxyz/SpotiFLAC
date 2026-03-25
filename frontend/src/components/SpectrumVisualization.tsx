@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import type { SpectrumData } from "@/types/api";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
     loadAudioAnalysisPreferences,
     saveAudioAnalysisPreferences,
@@ -27,6 +28,10 @@ interface SpectrumVisualizationProps {
     fileName?: string;
     onReAnalyze?: (fftSize: number, windowFunction: string) => void;
     isAnalyzingSpectrum?: boolean;
+    spectrumProgress?: {
+        percent: number;
+        message: string;
+    };
 }
 
 type ColorScheme = AnalyzerColorScheme;
@@ -489,6 +494,7 @@ export const SpectrumVisualization = forwardRef<SpectrumVisualizationHandle, Spe
     fileName,
     onReAnalyze,
     isAnalyzingSpectrum,
+    spectrumProgress,
 }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const preferencesRef = useRef(loadAudioAnalysisPreferences());
@@ -565,6 +571,8 @@ export const SpectrumVisualization = forwardRef<SpectrumVisualizationHandle, Spe
         }
     };
 
+    const spectrumPercent = Math.round(Math.max(0, Math.min(100, spectrumProgress?.percent ?? 0)));
+
     return (
         <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3 sm:gap-4 p-1">
@@ -638,9 +646,14 @@ export const SpectrumVisualization = forwardRef<SpectrumVisualizationHandle, Spe
 
             <div className="relative border border-white/10 rounded-lg overflow-hidden bg-black shadow-xl">
                 {isAnalyzingSpectrum && (
-                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-10 backdrop-blur-sm">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
-                        <p className="text-sm text-foreground">Re-analyzing spectrum...</p>
+                    <div className="absolute inset-0 z-10 grid place-items-center bg-black/60 backdrop-blur-sm">
+                        <div className="w-full max-w-xs space-y-2 px-4">
+                            <div className="flex items-center justify-between text-sm text-foreground/90">
+                                <span>Processing...</span>
+                                <span className="tabular-nums">{spectrumPercent}%</span>
+                            </div>
+                            <Progress value={spectrumPercent} className="h-2 w-full" />
+                        </div>
                     </div>
                 )}
                 <canvas
