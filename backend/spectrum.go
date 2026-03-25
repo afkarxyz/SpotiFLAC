@@ -21,8 +21,23 @@ type TimeSlice struct {
 	Magnitudes []float64 `json:"magnitudes"`
 }
 
-func AnalyzeSpectrum(filepath string) (*SpectrumData, error) {
+type SpectrumParams struct {
+	FFTSize        int    `json:"fft_size"`
+	WindowFunction string `json:"window_function"`
+}
 
+func DefaultSpectrumParams() SpectrumParams {
+	return SpectrumParams{
+		FFTSize:        4096,
+		WindowFunction: "hann",
+	}
+}
+
+func AnalyzeSpectrum(filepath string) (*SpectrumData, error) {
+	return AnalyzeSpectrumWithParams(filepath, DefaultSpectrumParams())
+}
+
+func AnalyzeSpectrumWithParams(filepath string, params SpectrumParams) (*SpectrumData, error) {
 	stream, err := flac.ParseFile(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse FLAC: %w", err)
@@ -42,7 +57,20 @@ func AnalyzeSpectrum(filepath string) (*SpectrumData, error) {
 		return nil, fmt.Errorf("no audio samples found")
 	}
 
-	return calculateSpectrum(samples, sampleRate), nil
+	fftSize := params.FFTSize
+	validSizes := []int{512, 1024, 2048, 4096, 8192}
+	valid := false
+	for _, s := range validSizes {
+		if fftSize == s {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		fftSize = 4096
+	}
+
+	return calculateSpectrumWithParams(samples, sampleRate, fftSize, params.WindowFunction), nil
 }
 
 func readSamples(stream *flac.Stream, channels int) ([]float64, error) {
@@ -75,8 +103,7 @@ func readSamples(stream *flac.Stream, channels int) ([]float64, error) {
 	return allSamples, nil
 }
 
-func calculateSpectrum(samples []float64, sampleRate int) *SpectrumData {
-	fftSize := 8192
+func calculateSpectrumWithParams(samples []float64, sampleRate, fftSize int, windowFunc string) *SpectrumData {
 	numTimeSlices := 300
 
 	duration := float64(len(samples)) / float64(sampleRate)
@@ -98,8 +125,7 @@ func calculateSpectrum(samples []float64, sampleRate int) *SpectrumData {
 		}
 
 		window := samples[startIdx : startIdx+fftSize]
-
-		windowedSamples := applyHannWindow(window)
+		windowedSamples := applyWindow(window, windowFunc)
 
 		spectrum := fft(windowedSamples)
 
@@ -129,16 +155,31 @@ func calculateSpectrum(samples []float64, sampleRate int) *SpectrumData {
 	}
 }
 
-func applyHannWindow(samples []float64) []float64 {
+func applyWindow(samples []float64, windowType string) []float64 {
 	n := len(samples)
 	windowed := make([]float64, n)
 
 	for i := 0; i < n; i++ {
-		window := 0.5 * (1.0 - math.Cos(2.0*math.Pi*float64(i)/float64(n-1)))
-		windowed[i] = samples[i] * window
+		var w float64
+		switch windowType {
+		case "hamming":
+			w = 0.54 - 0.46*math.Cos(2*math.Pi*float64(i)/float64(n-1))
+		case "blackman":
+			w = 0.42 - 0.5*math.Cos(2*math.Pi*float64(i)/float64(n-1)) +
+				0.08*math.Cos(4*math.Pi*float64(i)/float64(n-1))
+		case "rectangular":
+			w = 1.0
+		default:
+			w = 0.5 * (1.0 - math.Cos(2*math.Pi*float64(i)/float64(n-1)))
+		}
+		windowed[i] = samples[i] * w
 	}
 
 	return windowed
+}
+
+func applyHannWindow(samples []float64) []float64 {
+	return applyWindow(samples, "hann")
 }
 
 func fft(samples []float64) []complex128 {

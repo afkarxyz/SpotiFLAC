@@ -809,6 +809,53 @@ func (a *App) AnalyzeTrack(filePath string) (string, error) {
 	return string(jsonData), nil
 }
 
+func (a *App) AnalyzeSpectrumWithParams(filePath string, fftSize int, windowFunction string) (string, error) {
+	if filePath == "" {
+		return "", fmt.Errorf("file path is required")
+	}
+
+	params := backend.SpectrumParams{
+		FFTSize:        fftSize,
+		WindowFunction: windowFunction,
+	}
+
+	result, err := backend.AnalyzeSpectrumWithParams(filePath, params)
+	if err != nil {
+		return "", fmt.Errorf("failed to analyze spectrum: %v", err)
+	}
+
+	jsonData, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode response: %v", err)
+	}
+
+	return string(jsonData), nil
+}
+
+func (a *App) SaveSpectrumImage(audioFilePath string, base64Data string) (string, error) {
+	if audioFilePath == "" || base64Data == "" {
+		return "", fmt.Errorf("file path and image data are required")
+	}
+
+	base64Data = strings.TrimPrefix(base64Data, "data:image/png;base64,")
+
+	data, err := base64.StdEncoding.DecodeString(base64Data)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode base64 image: %v", err)
+	}
+
+	ext := filepath.Ext(audioFilePath)
+	baseName := strings.TrimSuffix(filepath.Base(audioFilePath), ext)
+	outPath := filepath.Join(filepath.Dir(audioFilePath), baseName+".png")
+
+	err = os.WriteFile(outPath, data, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to save image to disk: %v", err)
+	}
+
+	return outPath, nil
+}
+
 func (a *App) AnalyzeMultipleTracks(filePaths []string) (string, error) {
 	if len(filePaths) == 0 {
 		return "", fmt.Errorf("at least one file path is required")

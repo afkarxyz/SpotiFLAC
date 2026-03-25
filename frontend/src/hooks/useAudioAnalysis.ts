@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
-import { AnalyzeTrack } from "../../wailsjs/go/main/App";
+import { AnalyzeTrack, AnalyzeSpectrumWithParams } from "../../wailsjs/go/main/App";
 import type { AnalysisResult } from "@/types/api";
 import { logger } from "@/lib/logger";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
@@ -135,6 +135,29 @@ export function useAudioAnalysis() {
             }
         };
     }, [result, selectedFilePath, spectrumLoading]);
+
+    const reAnalyzeSpectrum = useCallback(async (fftSize: number, windowFunction: string) => {
+        if (!selectedFilePath || !result)
+            return;
+        setSpectrumLoading(true);
+        try {
+            const response = await AnalyzeSpectrumWithParams(selectedFilePath, fftSize, windowFunction);
+            const spectrumData = JSON.parse(response);
+            setResult(prev => prev ? { ...prev, spectrum: spectrumData } : null);
+            setSpectrumCache(selectedFilePath, spectrumData);
+        }
+        catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Failed to re-analyze spectrum";
+            logger.error(`Spectrum re-analysis error: ${errorMessage}`);
+            toast.error("Spectrum Analysis Failed", {
+                description: errorMessage,
+            });
+        }
+        finally {
+            setSpectrumLoading(false);
+        }
+    }, [selectedFilePath, result]);
+
     return {
         analyzing,
         result,
@@ -142,6 +165,7 @@ export function useAudioAnalysis() {
         selectedFilePath,
         spectrumLoading,
         analyzeFile,
+        reAnalyzeSpectrum,
         clearResult,
     };
 }
