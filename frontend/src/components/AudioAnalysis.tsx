@@ -140,7 +140,7 @@ export function AudioAnalysis({ result, analyzing, onAnalyze, showAnalyzeButton 
 
                     {result.spectrum && (() => {
                         const frames = result.spectrum.time_slices.length;
-                        const fftSize = result.spectrum.freq_bins * 2;
+                        const fftSize = (result.spectrum.freq_bins - 1) * 2;
                         const freqRes = result.sample_rate / fftSize;
 
                         return (

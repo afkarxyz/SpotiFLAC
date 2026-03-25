@@ -791,47 +791,6 @@ func (a *App) ClearFetchHistoryByType(itemType string) error {
 	return backend.ClearFetchHistoryByType(itemType, "SpotiFLAC")
 }
 
-func (a *App) AnalyzeTrack(filePath string) (string, error) {
-	if filePath == "" {
-		return "", fmt.Errorf("file path is required")
-	}
-
-	result, err := backend.AnalyzeTrack(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to analyze track: %v", err)
-	}
-
-	jsonData, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode response: %v", err)
-	}
-
-	return string(jsonData), nil
-}
-
-func (a *App) AnalyzeSpectrumWithParams(filePath string, fftSize int, windowFunction string) (string, error) {
-	if filePath == "" {
-		return "", fmt.Errorf("file path is required")
-	}
-
-	params := backend.SpectrumParams{
-		FFTSize:        fftSize,
-		WindowFunction: windowFunction,
-	}
-
-	result, err := backend.AnalyzeSpectrumWithParams(filePath, params)
-	if err != nil {
-		return "", fmt.Errorf("failed to analyze spectrum: %v", err)
-	}
-
-	jsonData, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode response: %v", err)
-	}
-
-	return string(jsonData), nil
-}
-
 func (a *App) SaveSpectrumImage(audioFilePath string, base64Data string) (string, error) {
 	if audioFilePath == "" || base64Data == "" {
 		return "", fmt.Errorf("file path and image data are required")
@@ -854,30 +813,6 @@ func (a *App) SaveSpectrumImage(audioFilePath string, base64Data string) (string
 	}
 
 	return outPath, nil
-}
-
-func (a *App) AnalyzeMultipleTracks(filePaths []string) (string, error) {
-	if len(filePaths) == 0 {
-		return "", fmt.Errorf("at least one file path is required")
-	}
-
-	results := make([]*backend.AnalysisResult, 0, len(filePaths))
-
-	for _, filePath := range filePaths {
-		result, err := backend.AnalyzeTrack(filePath)
-		if err != nil {
-
-			continue
-		}
-		results = append(results, result)
-	}
-
-	jsonData, err := json.Marshal(results)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode response: %v", err)
-	}
-
-	return string(jsonData), nil
 }
 
 type LyricsDownloadRequest struct {
@@ -1270,6 +1205,15 @@ func (a *App) ReadTextFile(filePath string) (string, error) {
 		return "", err
 	}
 	return string(content), nil
+}
+
+func (a *App) ReadFileAsBase64(filePath string) (string, error) {
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(content), nil
 }
 
 func (a *App) RenameFileTo(oldPath, newName string) error {

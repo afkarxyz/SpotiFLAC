@@ -1,27 +1,118 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef, useEffect, type ChangeEvent, type DragEvent, type CSSProperties } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, ArrowLeft, Trash2, Download } from "lucide-react";
 import { AudioAnalysis } from "@/components/AudioAnalysis";
 import { SpectrumVisualization } from "@/components/SpectrumVisualization";
 import { useAudioAnalysis } from "@/hooks/useAudioAnalysis";
-import { SelectFile, SaveSpectrumImage } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
+import { SelectFile, SaveSpectrumImage } from "../../wailsjs/go/main/App";
 import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 
 interface AudioAnalysisPageProps {
     onBack?: () => void;
 }
 
-export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
-    const { analyzing, result, analyzeFile, clearResult, selectedFilePath, spectrumLoading, reAnalyzeSpectrum } =
-        useAudioAnalysis();
-    const [isDragging, setIsDragging] = useState(false);
-    const spectrumRef = useRef<{ getCanvasDataURL: () => string | null; }>(null);
-    const [isExporting, setIsExporting] = useState(false);
+function isFlacPath(filePath: string): boolean {
+    return filePath.toLowerCase().endsWith(".flac");
+}
 
-    const handleExport = async () => {
-        if (!selectedFilePath || !spectrumRef.current)
+function isFlacFile(file: File): boolean {
+    const name = file.name.toLowerCase();
+    return (
+        name.endsWith(".flac") ||
+        file.type === "audio/flac" ||
+        file.type === "audio/x-flac"
+    );
+}
+
+function isAbsolutePath(filePath: string): boolean {
+    return /^(?:[a-zA-Z]:[\\/]|\\\\|\/)/.test(filePath);
+}
+
+function fileNameFromPath(filePath: string): string {
+    const parts = filePath.split(/[/\\]/);
+    return parts[parts.length - 1] || filePath;
+}
+
+export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
+    const {
+        analyzing,
+        result,
+        analyzeFile,
+        analyzeFilePath,
+        clearResult,
+        selectedFilePath,
+        spectrumLoading,
+        reAnalyzeSpectrum,
+    } = useAudioAnalysis();
+
+    const [isDragging, setIsDragging] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const spectrumRef = useRef<{ getCanvasDataURL: () => string | null; }>(null);
+
+    const analyzeSelectedPath = useCallback(async (filePath: string) => {
+        if (!isFlacPath(filePath)) {
+            toast.error("Invalid File Type", {
+                description: "Please select a FLAC file for analysis",
+            });
             return;
+        }
+        await analyzeFilePath(filePath);
+    }, [analyzeFilePath]);
+
+    const analyzeSelectedFile = useCallback(async (file: File) => {
+        if (!isFlacFile(file)) {
+            toast.error("Invalid File Type", {
+                description: "Please select a FLAC file for analysis",
+            });
+            return;
+        }
+        await analyzeFile(file);
+    }, [analyzeFile]);
+
+    const handleSelectFile = useCallback(async () => {
+        try {
+            const filePath = await SelectFile();
+            if (!filePath) {
+                return;
+            }
+            await analyzeSelectedPath(filePath);
+        } catch {
+            fileInputRef.current?.click();
+        }
+    }, [analyzeSelectedPath]);
+
+    const handleInputChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await analyzeSelectedFile(file);
+        e.target.value = "";
+    }, [analyzeSelectedFile]);
+
+    const handleHtmlDrop = useCallback(async (e: DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (!file) return;
+        await analyzeSelectedFile(file);
+    }, [analyzeSelectedFile]);
+
+    useEffect(() => {
+        OnFileDrop((_x, _y, paths) => {
+            setIsDragging(false);
+            const droppedPath = paths?.[0];
+            if (!droppedPath) return;
+            void analyzeSelectedPath(droppedPath);
+        }, true);
+
+        return () => {
+            OnFileDropOff();
+        };
+    }, [analyzeSelectedPath]);
+
+    const handleExport = useCallback(async () => {
+        if (!spectrumRef.current) return;
 
         const dataUrl = spectrumRef.current.getCanvasDataURL();
         if (!dataUrl) {
@@ -31,68 +122,51 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
 
         setIsExporting(true);
         try {
-            const outPath = await SaveSpectrumImage(selectedFilePath, dataUrl);
+            if (selectedFilePath && isAbsolutePath(selectedFilePath)) {
+                const outPath = await SaveSpectrumImage(selectedFilePath, dataUrl);
+                toast.success("Exported Successfully", {
+                    description: `Saved to: ${outPath}`,
+                });
+                return;
+            }
+
+            const base = selectedFilePath
+                ? fileNameFromPath(selectedFilePath).replace(/\.[^/.]+$/, "")
+                : "spectrogram";
+            const a = document.createElement("a");
+            a.href = dataUrl;
+            a.download = `${base}_spectrogram.png`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
             toast.success("Exported Successfully", {
-                description: `Saved to: ${outPath}`,
+                description: "Spectrogram image downloaded",
             });
-        }
-        catch (err) {
+        } catch (err) {
             toast.error("Export Failed", {
-                description: err instanceof Error ? err.message : "Failed to save image",
+                description: err instanceof Error ? err.message : "Failed to export image",
             });
-        }
-        finally {
+        } finally {
             setIsExporting(false);
         }
-    };
-
-    const handleSelectFile = async () => {
-        try {
-            const filePath = await SelectFile();
-            if (filePath) {
-                await analyzeFile(filePath);
-            }
-        }
-        catch (err) {
-            toast.error("File Selection Failed", {
-                description: err instanceof Error ? err.message : "Failed to select file",
-            });
-        }
-    };
-
-    const handleFileDrop = useCallback(async (_x: number, _y: number, paths: string[]) => {
-        setIsDragging(false);
-        if (paths.length === 0)
-            return;
-        const filePath = paths[0];
-        if (!filePath.toLowerCase().endsWith(".flac")) {
-            toast.error("Invalid File Type", {
-                description: "Please drop a FLAC file for analysis",
-            });
-            return;
-        }
-        await analyzeFile(filePath);
-    }, [analyzeFile]);
-
-    useEffect(() => {
-        OnFileDrop((x, y, paths) => {
-            handleFileDrop(x, y, paths);
-        }, true);
-        return () => {
-            OnFileDropOff();
-        };
-    }, [handleFileDrop]);
+    }, [selectedFilePath]);
 
     const handleAnalyzeAnother = () => {
         clearResult();
     };
 
-    const fileName = selectedFilePath
-        ? selectedFilePath.split(/[/\\]/).pop()
-        : undefined;
+    const fileName = selectedFilePath ? fileNameFromPath(selectedFilePath) : undefined;
 
     return (
         <div className="space-y-6">
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept=".flac,audio/flac,audio/x-flac"
+                className="hidden"
+                onChange={handleInputChange}
+            />
+
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                     {onBack && (
@@ -123,13 +197,21 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
 
             {!result && !analyzing && (
                 <div
-                    className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${isDragging
-                        ? "border-primary bg-primary/10"
-                        : "border-muted-foreground/30"}`}
-                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-                    onDrop={(e) => { e.preventDefault(); setIsDragging(false); }}
-                    style={{ "--wails-drop-target": "drop" } as React.CSSProperties}
+                    className={`flex flex-col items-center justify-center h-[400px] border-2 border-dashed rounded-lg transition-colors ${
+                        isDragging
+                            ? "border-primary bg-primary/10"
+                            : "border-muted-foreground/30"
+                    }`}
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDragging(true);
+                    }}
+                    onDragLeave={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                    }}
+                    onDrop={handleHtmlDrop}
+                    style={{ "--wails-drop-target": "drop" } as CSSProperties}
                 >
                     <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
                         <Upload className="h-8 w-8 text-primary" />
