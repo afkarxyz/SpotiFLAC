@@ -130,12 +130,14 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
       <div className="flex items-center justify-between shrink-0">
         <h1 className="text-2xl font-bold">Settings</h1>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={async () => { try {
-        await OpenConfigFolder();
-    }
-    catch (e) {
-        toast.error(`Failed to open config folder: ${e}`);
-    } }} className="gap-1.5">
+          <Button variant="outline" onClick={async () => {
+            try {
+                await OpenConfigFolder();
+            }
+            catch (e) {
+                toast.error(`Failed to open config folder: ${e}`);
+            }
+        }} className="gap-1.5">
             <FolderLock className="h-4 w-4"/>
             Open Config Folder
           </Button>

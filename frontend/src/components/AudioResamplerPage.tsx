@@ -8,7 +8,6 @@ import { SelectAudioFiles, SelectFolder, ListAudioFilesInDir, ResampleAudio } fr
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 import { AudioLinesIcon } from "@/components/ui/audio-lines";
-
 interface AudioFile {
     path: string;
     name: string;
@@ -20,7 +19,6 @@ interface AudioFile {
     srcSampleRate?: number;
     srcBitDepth?: number;
 }
-
 function formatFileSize(bytes: number): string {
     if (bytes === 0)
         return "0 B";
@@ -29,7 +27,6 @@ function formatFileSize(bytes: number): string {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
 }
-
 function formatSampleRate(sr: number): string {
     if (!sr)
         return "";
@@ -39,21 +36,17 @@ function formatSampleRate(sr: number): string {
         return `${sr / 1000}kHz`;
     return `${sr}Hz`;
 }
-
 const SAMPLE_RATE_OPTIONS = [
     { value: "44100", label: "44.1kHz" },
     { value: "48000", label: "48kHz" },
     { value: "96000", label: "96kHz" },
     { value: "192000", label: "192kHz" },
 ];
-
 const BIT_DEPTH_OPTIONS = [
     { value: "16", label: "16-bit" },
     { value: "24", label: "24-bit" },
 ];
-
 const STORAGE_KEY = "spotiflac_audio_resampler_state";
-
 export function AudioResamplerPage() {
     const [files, setFiles] = useState<AudioFile[]>(() => {
         try {
@@ -132,8 +125,11 @@ export function AudioResamplerPage() {
             return;
         try {
             const GetFlacInfoBatch = (window as any)["go"]["main"]["App"]["GetFlacInfoBatch"];
-            const infos: Array<{ path: string; sample_rate: number; bits_per_sample: number; }> =
-                await GetFlacInfoBatch(paths);
+            const infos: Array<{
+                path: string;
+                sample_rate: number;
+                bits_per_sample: number;
+            }> = await GetFlacInfoBatch(paths);
             setFiles((prev) => prev.map((f) => {
                 const info = infos.find((i) => i.path === f.path || i.path.toLowerCase() === f.path.toLowerCase());
                 if (info) {
@@ -389,9 +385,9 @@ export function AudioResamplerPage() {
                         <div className="flex items-center gap-2">
                             <Label className="whitespace-nowrap">Bit Depth:</Label>
                             <ToggleGroup type="single" variant="outline" value={bitDepth} onValueChange={(value) => {
-                    if (value)
-                        setBitDepth(value);
-                }}>
+                if (value)
+                    setBitDepth(value);
+            }}>
                                 {BIT_DEPTH_OPTIONS.map((option) => (<ToggleGroupItem key={option.value} value={option.value} aria-label={option.label}>
                                         {option.label}
                                     </ToggleGroupItem>))}
@@ -401,9 +397,9 @@ export function AudioResamplerPage() {
                         <div className="flex items-center gap-2">
                             <Label className="whitespace-nowrap">Sample Rate:</Label>
                             <ToggleGroup type="single" variant="outline" value={sampleRate} onValueChange={(value) => {
-                    if (value)
-                        setSampleRate(value);
-                }}>
+                if (value)
+                    setSampleRate(value);
+            }}>
                                 {SAMPLE_RATE_OPTIONS.map((option) => (<ToggleGroupItem key={option.value} value={option.value} aria-label={option.label}>
                                         {option.label}
                                     </ToggleGroupItem>))}
@@ -420,13 +416,13 @@ export function AudioResamplerPage() {
 
                 <div className="flex-1 space-y-2 overflow-y-auto min-h-0">
                     {files.map((file) => {
-            const srcParts: string[] = [];
-            if (file.srcBitDepth)
-                srcParts.push(`${file.srcBitDepth}-bit`);
-            if (file.srcSampleRate)
-                srcParts.push(formatSampleRate(file.srcSampleRate));
-            const srcSpec = srcParts.join(" / ");
-            return (<div key={file.path} className="flex items-center gap-3 rounded-lg border p-3">
+                const srcParts: string[] = [];
+                if (file.srcBitDepth)
+                    srcParts.push(`${file.srcBitDepth}-bit`);
+                if (file.srcSampleRate)
+                    srcParts.push(formatSampleRate(file.srcSampleRate));
+                const srcSpec = srcParts.join(" / ");
+                return (<div key={file.path} className="flex items-center gap-3 rounded-lg border p-3">
                                     {getStatusIcon(file.status)}
                                     <div className="flex-1 min-w-0">
                                         <p className="truncate text-sm font-medium">{file.name}</p>
@@ -451,7 +447,7 @@ export function AudioResamplerPage() {
                                             <X className="h-4 w-4"/>
                                         </Button>)}
                                 </div>);
-        })}
+            })}
                 </div>
 
                 <div className="flex justify-center pt-4 border-t shrink-0">

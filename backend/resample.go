@@ -10,14 +10,12 @@ import (
 	"sync"
 )
 
-// FlacInfo holds basic audio properties of a FLAC file.
 type FlacInfo struct {
 	Path          string `json:"path"`
-	SampleRate    uint32 `json:"sample_rate"`     // e.g. 44100
-	BitsPerSample uint8  `json:"bits_per_sample"` // e.g. 16, 24
+	SampleRate    uint32 `json:"sample_rate"`
+	BitsPerSample uint8  `json:"bits_per_sample"`
 }
 
-// GetFlacInfoBatch reads sample rate and bit depth for multiple files in parallel.
 func GetFlacInfoBatch(paths []string) []FlacInfo {
 	results := make([]FlacInfo, len(paths))
 	var wg sync.WaitGroup
@@ -170,7 +168,6 @@ func ResampleAudio(req ResampleRequest) ([]ResampleResult, error) {
 				return
 			}
 
-			// Output is always FLAC (lossless resampling).
 			outputFile := filepath.Join(outputDir, baseName+".flac")
 			result.OutputFile = outputFile
 

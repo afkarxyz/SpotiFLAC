@@ -17,18 +17,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { openExternal } from "@/lib/utils";
-
 export type PageType = "main" | "settings" | "debug" | "audio-analysis" | "audio-converter" | "audio-resampler" | "file-manager" | "about" | "history";
 interface SidebarProps {
     currentPage: PageType;
     onPageChange: (page: PageType) => void;
 }
-
 interface AnimatedIconHandle {
     startAnimation: () => void;
     stopAnimation: () => void;
 }
-
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
     const [isIssuesDialogOpen, setIsIssuesDialogOpen] = useState(false);
     const [hasIssueAgreement, setHasIssueAgreement] = useState(false);

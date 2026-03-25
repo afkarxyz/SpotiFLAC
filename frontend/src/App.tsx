@@ -36,13 +36,14 @@ import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 const HISTORY_KEY = "spotiflac_fetch_history";
 const MAX_HISTORY = 5;
-
-function extractSpotifyEntityFromURL(url: string): { type: string; id: string; } | null {
+function extractSpotifyEntityFromURL(url: string): {
+    type: string;
+    id: string;
+} | null {
     const trimmed = url.trim();
     if (!trimmed) {
         return null;
     }
-
     const spotifyUriMatch = trimmed.match(/^spotify:(track|album|playlist|artist):([A-Za-z0-9]+)$/i);
     if (spotifyUriMatch) {
         return {
@@ -50,7 +51,6 @@ function extractSpotifyEntityFromURL(url: string): { type: string; id: string; }
             id: spotifyUriMatch[2],
         };
     }
-
     try {
         const parsed = new URL(trimmed);
         const segments = parsed.pathname.split("/").filter(Boolean);
@@ -60,7 +60,6 @@ function extractSpotifyEntityFromURL(url: string): { type: string; id: string; }
             if (!supportedTypes.has(segment)) {
                 continue;
             }
-
             const id = segments[i + 1];
             if (id) {
                 return { type: segment, id };
@@ -69,15 +68,12 @@ function extractSpotifyEntityFromURL(url: string): { type: string; id: string; }
     }
     catch {
     }
-
     return null;
 }
-
 function normalizeHistoryURL(url: string): string {
     const trimmed = url.trim();
     if (!trimmed)
         return trimmed;
-
     const withoutQuery = trimmed.split("?")[0].replace(/\/+$/, "");
     const spotifyEntity = extractSpotifyEntityFromURL(withoutQuery);
     if (spotifyEntity) {
@@ -85,17 +81,14 @@ function normalizeHistoryURL(url: string): string {
     }
     return withoutQuery.replace(/(\/artist\/[A-Za-z0-9]+)\/discography\/all$/i, "$1");
 }
-
 function getHistoryIdentityKey(type: HistoryItem["type"], url: string): string {
     const normalizedUrl = normalizeHistoryURL(url);
     const spotifyEntity = extractSpotifyEntityFromURL(normalizedUrl);
     if (spotifyEntity) {
         return `${type}:${spotifyEntity.id}`;
     }
-
     return `${type}:${normalizedUrl}`;
 }
-
 function dedupeHistoryItems(items: HistoryItem[]): HistoryItem[] {
     const seen = new Set<string>();
     const deduped: HistoryItem[] = [];
@@ -109,7 +102,6 @@ function dedupeHistoryItems(items: HistoryItem[]): HistoryItem[] {
     }
     return deduped;
 }
-
 function App() {
     const [currentPage, setCurrentPage] = useState<PageType>("main");
     const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -623,17 +615,13 @@ function App() {
                             FFmpeg Required
                         </DialogTitle>
                         <DialogDescription className="text-sm text-foreground/70 leading-relaxed font-normal">
-                            {brewPath ? (
-                                <>
+                            {brewPath ? (<>
                                     FFmpeg is essential for SpotiFLAC to function properly.
                                     Homebrew detected. Recommended: <span className="text-foreground font-semibold">brew install ffmpeg</span>
-                                </>
-                            ) : (
-                                <>
+                                </>) : (<>
                                     FFmpeg is essential for SpotiFLAC to function properly.
                                     This setup will download about <span className="text-foreground font-semibold">100-200MB</span> of data.
-                                </>
-                            )}
+                                </>)}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -665,16 +653,11 @@ function App() {
                         {!isInstallingFFmpeg && (<Button variant="outline" className="flex-1 h-11 text-sm font-bold transition-colors" onClick={() => Quit()}>
                                 Exit
                             </Button>)}
-                        {brewPath ? (
-                                <Button className="flex-1 h-11 text-sm font-bold shadow-lg shadow-primary/10" onClick={() => handleInstallFFmpeg(true)} disabled={isInstallingFFmpeg}>
+                        {brewPath ? (<Button className="flex-1 h-11 text-sm font-bold shadow-lg shadow-primary/10" onClick={() => handleInstallFFmpeg(true)} disabled={isInstallingFFmpeg}>
                                     {isInstallingFFmpeg ? "Installing..." : "Install via Homebrew"}
-                                </Button>
-                            
-                        ) : (
-                            <Button className={`${isInstallingFFmpeg ? 'w-full' : 'flex-1'} h-11 text-sm font-bold shadow-lg shadow-primary/10`} onClick={() => handleInstallFFmpeg(false)} disabled={isInstallingFFmpeg}>
+                                </Button>) : (<Button className={`${isInstallingFFmpeg ? 'w-full' : 'flex-1'} h-11 text-sm font-bold shadow-lg shadow-primary/10`} onClick={() => handleInstallFFmpeg(false)} disabled={isInstallingFFmpeg}>
                                 {isInstallingFFmpeg ? "Installing..." : "Install now"}
-                            </Button>
-                        )}
+                            </Button>)}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -15,7 +15,6 @@ import KofiLogo from "@/assets/ko-fi.gif";
 import KofiSvg from "@/assets/kofi_symbol.svg";
 import UsdtBarcode from "@/assets/usdt.jpg";
 import { langColors } from "@/assets/github-lang-colors";
-
 export function AboutPage() {
     const [activeTab, setActiveTab] = useState<"projects" | "support">("projects");
     const [repoStats, setRepoStats] = useState<Record<string, any>>({});
@@ -248,9 +247,9 @@ export function AboutPage() {
                 {repoStats["SpotiFLAC-Next"] && (<CardContent className="space-y-2">
                     {repoStats["SpotiFLAC-Next"].languages?.length > 0 && (<div className="flex flex-wrap gap-2 text-xs">
                         {repoStats["SpotiFLAC-Next"].languages.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
-                        backgroundColor: getLangColor(lang) + "20",
-                        color: getLangColor(lang),
-                    }}>
+                            backgroundColor: getLangColor(lang) + "20",
+                            color: getLangColor(lang),
+                        }}>
                             {lang}
                           </span>))}
                       </div>)}
