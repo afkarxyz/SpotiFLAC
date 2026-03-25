@@ -35,7 +35,7 @@ export function AudioAnalysis({ result, analyzing, onAnalyze, showAnalyzeButton 
                         <div className="text-center space-y-2">
                             <p className="font-medium">Audio Quality Analysis</p>
                             <p className="text-sm text-muted-foreground">
-                                Verify the true lossless quality of downloaded files
+                                Inspect spectral content and effective quality of FLAC, MP3, M4A, and AAC files
                             </p>
                         </div>
                         {onAnalyze && (
@@ -73,6 +73,14 @@ export function AudioAnalysis({ result, analyzing, onAnalyze, showAnalyzeButton 
     };
 
     const nyquistFreq = result.sample_rate / 2;
+    const totalSamplesText = result.total_samples > 0 ? result.total_samples.toLocaleString() : "N/A";
+    const freqResolutionLabel = result.file_type === "MP3" ? "Freq Res.:" : "Freq Resolution:";
+    const hasCodecMeta = result.file_type === "MP3" && (
+        Boolean(result.codec_mode) ||
+        typeof result.bitrate_kbps === "number" ||
+        typeof result.total_frames === "number" ||
+        Boolean(result.codec_version)
+    );
 
     return (
         <Card className="gap-2">
@@ -83,10 +91,16 @@ export function AudioAnalysis({ result, analyzing, onAnalyze, showAnalyzeButton 
             </CardHeader>
 
             <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className={`grid grid-cols-1 gap-6 md:grid-cols-2 ${hasCodecMeta ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
                     <div className="space-y-2">
                         <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Format</p>
                         <ul className="text-sm space-y-1">
+                            {result.file_type && (
+                                <li className="flex justify-between">
+                                    <span className="text-muted-foreground">Type:</span>
+                                    <span className="font-medium font-mono">{result.file_type}</span>
+                                </li>
+                            )}
                             <li className="flex justify-between">
                                 <span className="text-muted-foreground">Sample Rate:</span>
                                 <span className="font-medium font-mono">{(result.sample_rate / 1000).toFixed(1)} kHz</span>
@@ -133,10 +147,42 @@ export function AudioAnalysis({ result, analyzing, onAnalyze, showAnalyzeButton 
                             </li>
                             <li className="flex justify-between">
                                 <span className="text-muted-foreground">Total Samples:</span>
-                                <span className="font-medium font-mono">{result.total_samples.toLocaleString()}</span>
+                                <span className="font-medium font-mono">{totalSamplesText}</span>
                             </li>
                         </ul>
                     </div>
+
+                    {hasCodecMeta && (
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">MP3 Meta</p>
+                            <ul className="text-sm space-y-1">
+                                {result.codec_mode && (
+                                    <li className="flex justify-between">
+                                        <span className="text-muted-foreground">Mode:</span>
+                                        <span className="font-medium font-mono">{result.codec_mode}</span>
+                                    </li>
+                                )}
+                                {typeof result.bitrate_kbps === "number" && (
+                                    <li className="flex justify-between">
+                                        <span className="text-muted-foreground">Bitrate:</span>
+                                        <span className="font-medium font-mono">{result.bitrate_kbps} kbps</span>
+                                    </li>
+                                )}
+                                {typeof result.total_frames === "number" && result.total_frames > 0 && (
+                                    <li className="flex justify-between">
+                                        <span className="text-muted-foreground">Frames:</span>
+                                        <span className="font-medium font-mono">{result.total_frames.toLocaleString()}</span>
+                                    </li>
+                                )}
+                                {result.codec_version && (
+                                    <li className="flex justify-between">
+                                        <span className="text-muted-foreground">Version:</span>
+                                        <span className="font-medium font-mono">{result.codec_version}</span>
+                                    </li>
+                                )}
+                            </ul>
+                        </div>
+                    )}
 
                     {result.spectrum && (() => {
                         const frames = result.spectrum.time_slices.length;
@@ -156,7 +202,7 @@ export function AudioAnalysis({ result, analyzing, onAnalyze, showAnalyzeButton 
                                         <span className="font-medium font-mono">{fftSize.toLocaleString()}</span>
                                     </li>
                                     <li className="flex justify-between">
-                                        <span className="text-muted-foreground">Freq Resolution:</span>
+                                        <span className="text-muted-foreground">{freqResolutionLabel}</span>
                                         <span className="font-medium font-mono">{freqRes.toFixed(2)} Hz/bin</span>
                                     </li>
                                 </ul>

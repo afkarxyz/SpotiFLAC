@@ -3,8 +3,8 @@ import type { AnalysisResult } from "@/types/api";
 import { logger } from "@/lib/logger";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import {
-    analyzeFlacArrayBuffer,
-    analyzeFlacFile,
+    analyzeAudioArrayBuffer,
+    analyzeAudioFile,
     analyzeSpectrumFromSamples,
     type AnalysisProgress,
 } from "@/lib/flac-analysis";
@@ -159,7 +159,7 @@ export function useAudioAnalysis() {
             logger.info(`Analyzing audio file (frontend): ${file.name}`);
             const start = Date.now();
             const prefs = loadAudioAnalysisPreferences();
-            const payload = await analyzeFlacFile(file, {
+            const payload = await analyzeAudioFile(file, {
                 fftSize: prefs.fftSize,
                 windowFunction: prefs.windowFunction,
             }, (progress) => {
@@ -248,7 +248,7 @@ export function useAudioAnalysis() {
                 message: "Preparing audio buffer...",
             });
             const fileName = fileNameFromPath(filePath);
-            const payload = await analyzeFlacArrayBuffer(
+            const payload = await analyzeAudioArrayBuffer(
                 {
                     fileName,
                     fileSize: arrayBuffer.byteLength,

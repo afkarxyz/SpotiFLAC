@@ -13,16 +13,41 @@ interface AudioAnalysisPageProps {
     onBack?: () => void;
 }
 
-function isFlacPath(filePath: string): boolean {
-    return filePath.toLowerCase().endsWith(".flac");
+const SUPPORTED_AUDIO_EXTENSIONS = [".flac", ".mp3", ".m4a", ".aac"];
+const SUPPORTED_AUDIO_ACCEPT = [
+    ".flac",
+    ".mp3",
+    ".m4a",
+    ".aac",
+    "audio/flac",
+    "audio/x-flac",
+    "audio/mpeg",
+    "audio/mp3",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/aac",
+    "audio/aacp",
+].join(",");
+const SUPPORTED_AUDIO_LABEL = "FLAC, MP3, M4A, or AAC";
+
+function isSupportedAudioPath(filePath: string): boolean {
+    const normalized = filePath.toLowerCase();
+    return SUPPORTED_AUDIO_EXTENSIONS.some((ext) => normalized.endsWith(ext));
 }
 
-function isFlacFile(file: File): boolean {
-    const name = file.name.toLowerCase();
+function isSupportedAudioFile(file: File): boolean {
+    const normalizedName = file.name.toLowerCase();
+    const normalizedType = file.type.toLowerCase();
     return (
-        name.endsWith(".flac") ||
-        file.type === "audio/flac" ||
-        file.type === "audio/x-flac"
+        SUPPORTED_AUDIO_EXTENSIONS.some((ext) => normalizedName.endsWith(ext)) ||
+        normalizedType === "audio/flac" ||
+        normalizedType === "audio/x-flac" ||
+        normalizedType === "audio/mpeg" ||
+        normalizedType === "audio/mp3" ||
+        normalizedType === "audio/mp4" ||
+        normalizedType === "audio/x-m4a" ||
+        normalizedType === "audio/aac" ||
+        normalizedType === "audio/aacp"
     );
 }
 
@@ -55,9 +80,9 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
     const spectrumRef = useRef<{ getCanvasDataURL: () => string | null; }>(null);
 
     const analyzeSelectedPath = useCallback(async (filePath: string) => {
-        if (!isFlacPath(filePath)) {
+        if (!isSupportedAudioPath(filePath)) {
             toast.error("Invalid File Type", {
-                description: "Please select a FLAC file for analysis",
+                description: `Please select a ${SUPPORTED_AUDIO_LABEL} file for analysis`,
             });
             return;
         }
@@ -65,9 +90,9 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
     }, [analyzeFilePath]);
 
     const analyzeSelectedFile = useCallback(async (file: File) => {
-        if (!isFlacFile(file)) {
+        if (!isSupportedAudioFile(file)) {
             toast.error("Invalid File Type", {
-                description: "Please select a FLAC file for analysis",
+                description: `Please select a ${SUPPORTED_AUDIO_LABEL} file for analysis`,
             });
             return;
         }
@@ -165,7 +190,7 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
             <input
                 ref={fileInputRef}
                 type="file"
-                accept=".flac,audio/flac,audio/x-flac"
+                accept={SUPPORTED_AUDIO_ACCEPT}
                 className="hidden"
                 onChange={handleInputChange}
             />
@@ -221,13 +246,16 @@ export function AudioAnalysisPage({ onBack }: AudioAnalysisPageProps) {
                     </div>
                     <p className="text-sm text-muted-foreground mb-4 text-center">
                         {isDragging
-                            ? "Drop your FLAC file here"
-                            : "Drag and drop a FLAC file here, or click the button below to select"}
+                            ? "Drop your audio file here"
+                            : "Drag and drop an audio file here, or click the button below to select"}
                     </p>
                     <Button onClick={handleSelectFile} size="lg">
                         <Upload className="h-5 w-5" />
-                        Select FLAC File
+                        Select Audio File
                     </Button>
+                    <p className="text-xs text-muted-foreground mt-4 text-center">
+                        Supported formats: FLAC, MP3, M4A, AAC
+                    </p>
                 </div>
             )}
 
