@@ -33,8 +33,8 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
     const [isIssuesDialogOpen, setIsIssuesDialogOpen] = useState(false);
     const [hasIssueAgreement, setHasIssueAgreement] = useState(false);
     const analyzerIconRef = useRef<ActivityIconHandle>(null);
-    const converterIconRef = useRef<FileMusicIconHandle>(null);
     const resamplerIconRef = useRef<AudioLinesIconHandle>(null);
+    const converterIconRef = useRef<FileMusicIconHandle>(null);
     const fileManagerIconRef = useRef<FilePenIconHandle>(null);
     const handleIssuesDialogChange = (open: boolean) => {
         setIsIssuesDialogOpen(open);
@@ -116,13 +116,13 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                             <ActivityIcon ref={analyzerIconRef} size={16}/>
                             <span>Audio Quality Analyzer</span>
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => onPageChange("audio-converter")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(converterIconRef)}>
-                            <FileMusicIcon ref={converterIconRef} size={16}/>
-                            <span>Audio Converter</span>
-                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onPageChange("audio-resampler")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(resamplerIconRef)}>
                             <AudioLinesIcon ref={resamplerIconRef} size={16}/>
                             <span>Audio Resampler</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onPageChange("audio-converter")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(converterIconRef)}>
+                            <FileMusicIcon ref={converterIconRef} size={16}/>
+                            <span>Audio Converter</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onPageChange("file-manager")} className="gap-3 cursor-pointer py-2 px-3" {...getAnimatedItemHandlers(fileManagerIconRef)}>
                             <FilePenIcon ref={fileManagerIconRef} size={16}/>

@@ -363,12 +363,12 @@ export function AudioResamplerPage() {
         }} style={{ "--wails-drop-target": "drop" } as React.CSSProperties}>
             {files.length === 0 ? (<>
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                    <AudioLinesIcon size={32} className="text-primary"/>
+                    <Upload className="h-8 w-8 text-primary"/>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4 text-center">
                     {isDragging
-                ? "Drop your FLAC files here"
-                : "Drag and drop FLAC files here, or click the button below to select"}
+                ? "Drop your audio files here"
+                : "Drag and drop audio files here, or click the button below to select"}
                 </p>
                 <div className="flex gap-3">
                     <Button onClick={handleSelectFiles} size="lg">

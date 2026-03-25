@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { GetPreviewURL } from "@/../wailsjs/go/main/App";
+import { SPOTIFY_PREVIEW_VOLUME } from "@/lib/preview";
 import { toast } from "sonner";
 export function usePreview() {
     const [loadingPreview, setLoadingPreview] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export function usePreview() {
                 return;
             }
             const audio = new Audio(previewURL);
+            audio.volume = SPOTIFY_PREVIEW_VOLUME;
             audio.addEventListener("loadeddata", () => {
                 setLoadingPreview(null);
                 setPlayingTrack(trackId);

@@ -9,6 +9,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { GetDownloadHistory, ClearDownloadHistory, GetPreviewURL, GetFetchHistory, DeleteDownloadHistoryItem, DeleteFetchHistoryItem, ClearFetchHistoryByType } from "../../wailsjs/go/main/App";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { openExternal } from "@/lib/utils";
+import { SPOTIFY_PREVIEW_VOLUME } from "@/lib/preview";
 import { TidalIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -191,7 +192,7 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
             if (url) {
                 const audio = new Audio(url);
                 audioRef.current = audio;
-                audio.volume = 0.5;
+                audio.volume = SPOTIFY_PREVIEW_VOLUME;
                 audio.onended = () => setPlayingPreviewId(null);
                 audio.play();
                 setPlayingPreviewId(id);
