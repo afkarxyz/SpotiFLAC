@@ -13,6 +13,7 @@ import (
 	"github.com/go-flac/flacpicture"
 	"github.com/go-flac/flacvorbis"
 	"github.com/go-flac/go-flac"
+	"golang.org/x/text/unicode/norm"
 )
 
 type Metadata struct {
@@ -218,16 +219,68 @@ func EmbedLyricsOnly(filepath string, lyrics string) error {
 }
 
 func ExtractCoverArt(filePath string) (string, error) {
+	filePath = norm.NFC.String(filePath)
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
+
+	var coverPath string
+	var err error
 
 	switch ext {
 	case ".mp3":
-		return extractCoverFromMp3(filePath)
+		coverPath, err = extractCoverFromMp3(filePath)
 	case ".m4a", ".flac":
-		return extractCoverFromM4AOrFlac(filePath)
+		coverPath, err = extractCoverFromM4AOrFlac(filePath)
 	default:
 		return "", fmt.Errorf("unsupported file format: %s", ext)
 	}
+
+	if err != nil || coverPath == "" {
+		fmt.Printf("[ExtractCoverArt] Library extraction failed for %s, trying FFmpeg fallback...\n", filePath)
+		ffmpegCover, ffmpegErr := extractCoverWithFFmpeg(filePath)
+		if ffmpegErr == nil {
+			return ffmpegCover, nil
+		}
+		return coverPath, err
+	}
+
+	return coverPath, nil
+}
+
+func extractCoverWithFFmpeg(filePath string) (string, error) {
+	ffmpegPath, err := GetFFmpegPath()
+	if err != nil {
+		return "", err
+	}
+
+	tmpFile, err := os.CreateTemp("", "cover-*.jpg")
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+
+	cmd := exec.Command(ffmpegPath,
+		"-i", filePath,
+		"-an",
+		"-vframes", "1",
+		"-f", "image2",
+		"-update", "1",
+		"-y",
+		tmpPath,
+	)
+
+	setHideWindow(cmd)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("ffmpeg cover extraction failed: %v, output: %s", err, string(output))
+	}
+
+	if info, err := os.Stat(tmpPath); err != nil || info.Size() == 0 {
+		os.Remove(tmpPath)
+		return "", fmt.Errorf("ffmpeg produced empty cover file")
+	}
+
+	return tmpPath, nil
 }
 
 func extractCoverFromMp3(filePath string) (string, error) {
@@ -298,19 +351,71 @@ func extractCoverFromM4AOrFlac(filePath string) (string, error) {
 }
 
 func ExtractLyrics(filePath string) (string, error) {
+	filePath = norm.NFC.String(filePath)
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
+
+	var lyrics string
+	var err error
 
 	switch ext {
 	case ".mp3":
-		return extractLyricsFromMp3(filePath)
+		lyrics, err = extractLyricsFromMp3(filePath)
 	case ".flac":
-		return extractLyricsFromFlac(filePath)
+		lyrics, err = extractLyricsFromFlac(filePath)
 	case ".m4a":
-
 		return "", nil
 	default:
 		return "", fmt.Errorf("unsupported file format: %s", ext)
 	}
+
+	if (err != nil || lyrics == "") && ext != ".m4a" {
+		fmt.Printf("[ExtractLyrics] Library extraction failed for %s, trying ffprobe fallback...\n", filePath)
+		ffprobeLyrics, ffprobeErr := extractLyricsWithFFprobe(filePath)
+		if ffprobeErr == nil && ffprobeLyrics != "" {
+			return ffprobeLyrics, nil
+		}
+	}
+
+	return lyrics, err
+}
+
+func extractLyricsWithFFprobe(filePath string) (string, error) {
+	ffprobePath, err := GetFFprobePath()
+	if err != nil {
+		return "", err
+	}
+
+	cmd := exec.Command(ffprobePath,
+		"-v", "quiet",
+		"-show_entries", "format_tags=lyrics:format_tags=unsyncedlyrics:format_tags=lyric",
+		"-of", "json",
+		filePath,
+	)
+
+	setHideWindow(cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", err
+	}
+
+	var result struct {
+		Format struct {
+			Tags map[string]string `json:"tags"`
+		} `json:"format"`
+	}
+
+	if err := json.Unmarshal(output, &result); err != nil {
+		return "", err
+	}
+
+	tags := result.Format.Tags
+	for _, key := range []string{"lyrics", "unsyncedlyrics", "lyric", "LYRICS", "UNSYNCEDLYRICS", "LYRIC"} {
+		if val, ok := tags[key]; ok && val != "" {
+			return val, nil
+		}
+	}
+
+	return "", nil
 }
 
 func extractLyricsFromMp3(filePath string) (string, error) {
@@ -688,6 +793,7 @@ func parseLRCTimestamp(timestamp string) int64 {
 }
 
 func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
+	filePath = norm.NFC.String(filePath)
 	var metadata Metadata
 
 	ffprobePath, err := GetFFprobePath()
@@ -796,6 +902,7 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 }
 
 func EmbedMetadataToConvertedFile(filePath string, metadata Metadata, coverPath string) error {
+	filePath = norm.NFC.String(filePath)
 	ext := strings.ToLower(pathfilepath.Ext(filePath))
 
 	switch ext {

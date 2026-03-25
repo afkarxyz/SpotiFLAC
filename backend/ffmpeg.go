@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ulikunitz/xz"
+	"golang.org/x/text/unicode/norm"
 )
 
 func ValidateExecutable(path string) error {
@@ -650,6 +651,7 @@ func ConvertAudio(req ConvertAudioRequest) ([]ConvertAudioResult, error) {
 
 			outputExt := "." + strings.ToLower(req.OutputFormat)
 			outputFile := filepath.Join(outputDir, baseName+outputExt)
+			outputFile = norm.NFC.String(outputFile)
 
 			if inputExt == outputExt {
 				result.Error = "Input and output formats are the same"
@@ -671,7 +673,11 @@ func ConvertAudio(req ConvertAudioRequest) ([]ConvertAudioResult, error) {
 				fmt.Printf("[FFmpeg] Warning: Failed to extract metadata from %s: %v\n", inputFile, err)
 			}
 
-			coverArtPath, _ = ExtractCoverArt(inputFile)
+			inputFile = norm.NFC.String(inputFile)
+			coverArtPath, err = ExtractCoverArt(inputFile)
+			if err != nil {
+				fmt.Printf("[FFmpeg] Warning: Failed to extract cover art from %s: %v\n", inputFile, err)
+			}
 			lyrics, err = ExtractLyrics(inputFile)
 			if err != nil {
 				fmt.Printf("[FFmpeg] Warning: Failed to extract lyrics from %s: %v\n", inputFile, err)
