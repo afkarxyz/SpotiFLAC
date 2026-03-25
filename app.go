@@ -510,15 +510,15 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			backend.CompleteDownloadItem(itemID, filename, 0)
 		}
 
-		go func(fPath, track, artist, album, sID, cover, format string) {
+		go func(fPath, track, artist, album, sID, cover, format, source string) {
+			time.Sleep(2 * time.Second)
+
 			quality := "Unknown"
-			durationStr := "--:--"
+			durationStr := "0:00"
 
 			meta, err := backend.GetTrackMetadata(fPath)
-			if err == nil && meta != nil {
-				if meta.BitsPerSample > 0 {
-					quality = fmt.Sprintf("%d-bit/%.1fkHz", meta.BitsPerSample, float64(meta.SampleRate)/1000.0)
-				} else if meta.Bitrate > 0 {
+			if err == nil {
+				if meta.Bitrate > 0 {
 					quality = fmt.Sprintf("%dkbps/%.1fkHz", meta.Bitrate/1000, float64(meta.SampleRate)/1000.0)
 				} else if meta.SampleRate > 0 {
 					quality = fmt.Sprintf("%.1fkHz", float64(meta.SampleRate)/1000.0)
@@ -539,6 +539,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				Quality:     quality,
 				Format:      strings.ToUpper(format),
 				Path:        fPath,
+				Source:      source,
 			}
 
 			if item.Format == "" || item.Format == "LOSSLESS" {
@@ -554,7 +555,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			}
 
 			backend.AddHistoryItem(item, "SpotiFLAC")
-		}(filename, req.TrackName, req.ArtistName, req.AlbumName, req.SpotifyID, req.CoverURL, req.AudioFormat)
+		}(filename, req.TrackName, req.ArtistName, req.AlbumName, req.SpotifyID, req.CoverURL, req.AudioFormat, req.Service)
 	}
 
 	return DownloadResponse{

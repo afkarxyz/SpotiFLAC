@@ -22,6 +22,7 @@ type HistoryItem struct {
 	Quality     string `json:"quality"`
 	Format      string `json:"format"`
 	Path        string `json:"path"`
+	Source      string `json:"source"`
 	Timestamp   int64  `json:"timestamp"`
 }
 

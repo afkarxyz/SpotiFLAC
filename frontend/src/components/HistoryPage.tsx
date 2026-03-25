@@ -9,6 +9,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { GetDownloadHistory, ClearDownloadHistory, GetPreviewURL, GetFetchHistory, DeleteDownloadHistoryItem, DeleteFetchHistoryItem, ClearFetchHistoryByType } from "../../wailsjs/go/main/App";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { openExternal } from "@/lib/utils";
+import { TidalIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
     const year = date.getFullYear();
@@ -30,6 +31,7 @@ interface DownloadHistoryItem {
     quality: string;
     format: string;
     path: string;
+    source: string;
     timestamp: number;
 }
 interface FetchHistoryItem {
@@ -62,10 +64,35 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
     const [fetchSearchQuery, setFetchSearchQuery] = useState("");
     const [fetchCurrentPage, setFetchCurrentPage] = useState(1);
     const ITEMS_PER_PAGE = 50;
+    const getTrackLink = (spotifyId: string) => {
+        if (spotifyId?.startsWith("tidal_"))
+            return { url: `https://listen.tidal.com/track/${spotifyId.replace("tidal_", "")}`, label: "Open in Tidal" };
+        if (spotifyId?.startsWith("qobuz_"))
+            return { url: `https://www.qobuz.com/track/${spotifyId.replace("qobuz_", "")}`, label: "Open in Qobuz" };
+        if (spotifyId?.startsWith("amazon_"))
+            return { url: `https://music.amazon.com/tracks/${spotifyId.replace("amazon_", "")}`, label: "Open in Amazon Music" };
+        if (spotifyId?.startsWith("deezer_"))
+            return { url: `https://www.deezer.com/track/${spotifyId.replace("deezer_", "")}`, label: "Open in Deezer" };
+        return { url: `https://open.spotify.com/track/${spotifyId}`, label: "Open in Spotify" };
+    };
+    const getSourceIcon = (source: string) => {
+        const s = source?.toLowerCase() || "";
+        if (s.includes("tidal"))
+            return <TidalIcon className="h-4 w-4 object-contain rounded"/>;
+        if (s.includes("qobuz"))
+            return <QobuzIcon className="h-4 w-4 object-contain"/>;
+        if (s.includes("amazon"))
+            return <AmazonIcon className="h-4 w-4 object-contain rounded"/>;
+        if (s.includes("deezer"))
+            return <Music2 className="h-4 w-4"/>;
+        if (s.includes("spotify"))
+            return <Music2 className="h-4 w-4"/>;
+        return <Music2 className="h-4 w-4 opacity-50"/>;
+    };
     const fetchDownloadHistory = async () => {
         try {
             const items = await GetDownloadHistory();
-            setDownloadHistory(items || []);
+            setDownloadHistory((items || []) as unknown as DownloadHistoryItem[]);
         }
         catch (err) {
             console.error("Failed to fetch download history:", err);
@@ -228,8 +255,8 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                              <h2 className="text-xl font-bold tracking-tight">Downloads</h2>
-                             {downloadHistory.length > 0 && (<Badge variant="secondary" className="font-mono">
-                                    {downloadHistory.length.toLocaleString('en-US')}
+                             {filteredDownloadHistory.length > 0 && (<Badge variant="secondary" className="font-mono">
+                                    {filteredDownloadHistory.length.toLocaleString('en-US')}
                                 </Badge>)}
                         </div>
                         <Button variant="outline" size="sm" onClick={() => setShowClearDownloadConfirm(true)} disabled={downloadHistory.length === 0} className="cursor-pointer gap-2">
@@ -275,11 +302,12 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
                              <thead>
                                 <tr className="border-b bg-muted/50">
                                     <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground w-12 text-xs uppercase">#</th>
-                                    <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground text-xs uppercase">Title</th>
-                                    <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell text-xs uppercase w-1/4">Album</th>
+                                    <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground text-xs uppercase w-[35%]">Title</th>
+                                    <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell text-xs uppercase w-48 lg:w-48 xl:w-56">Album</th>
                                     <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden lg:table-cell w-32 text-xs uppercase">Format</th>
                                     <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden xl:table-cell w-16 text-xs uppercase text-nowrap">Dur</th>
                                     <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground hidden md:table-cell w-36 text-xs uppercase text-nowrap">Downloaded At</th>
+                                    <th className="h-10 px-4 text-center align-middle font-medium text-muted-foreground w-16 text-xs uppercase text-nowrap">Source</th>
                                     <th className="h-10 px-4 text-center align-middle font-medium text-muted-foreground w-32 text-xs uppercase text-nowrap">Actions</th>
                                 </tr>
                             </thead>
@@ -311,36 +339,52 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
                                         <td className="p-3 align-middle text-sm text-muted-foreground text-left hidden xl:table-cell font-mono">
                                             {item.duration_str}
                                         </td>
-                                         <td className="p-3 align-middle text-xs text-muted-foreground hidden md:table-cell whitespace-nowrap">
+                                         <td className="p-3 align-middle text-xs text-muted-foreground hidden md:table-cell whitespace-nowrap text-left">
                                             <div className="flex flex-col">
                                                 <span>{formatDate(item.timestamp).split(' ')[0]}</span>
                                                 <span className="text-[10px] text-muted-foreground">{formatDate(item.timestamp).split(' ')[1]}</span>
                                             </div>
                                         </td>
                                         <td className="p-3 align-middle text-center">
-                                            <div className="flex items-center justify-center gap-1">
+                                            <div className="flex items-center justify-center">
                                                 <TooltipProvider>
                                                     <Tooltip delayDuration={0}>
                                                         <TooltipTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => handlePreview(item.id, item.spotify_id)} disabled={!item.spotify_id}>
-                                                                {playingPreviewId === item.id ? <Pause className="h-4 w-4"/> : <Play className="h-4 w-4"/>}
-                                                            </Button>
+                                                            <div className="flex items-center justify-center">
+                                                                {getSourceIcon(item.source)}
+                                                            </div>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
-                                                            <p>{playingPreviewId === item.id ? "Pause Preview" : "Play Preview"}</p>
+                                                            <p className="capitalize">{item.source || "Unknown"}</p>
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
+                                            </div>
+                                        </td>
+                                        <td className="p-3 align-middle text-center">
+                                            <div className="flex items-center justify-center gap-1">
+                                                {!(item.spotify_id?.startsWith('tidal_') || item.spotify_id?.startsWith('qobuz_') || item.spotify_id?.startsWith('amazon_') || item.spotify_id?.startsWith('deezer_')) && (<TooltipProvider>
+                                                        <Tooltip delayDuration={0}>
+                                                            <TooltipTrigger asChild>
+                                                                <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => handlePreview(item.id, item.spotify_id)} disabled={!item.spotify_id}>
+                                                                    {playingPreviewId === item.id ? <Pause className="h-4 w-4"/> : <Play className="h-4 w-4"/>}
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>
+                                                                <p>{playingPreviewId === item.id ? "Pause Preview" : "Play Preview"}</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>)}
 
                                                 <TooltipProvider>
                                                     <Tooltip delayDuration={0}>
                                                         <TooltipTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => openExternal(`https://open.spotify.com/track/${item.spotify_id}`)}>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 cursor-pointer" onClick={() => openExternal(getTrackLink(item.spotify_id).url)}>
                                                                 <ExternalLink className="h-4 w-4"/>
                                                             </Button>
                                                         </TooltipTrigger>
                                                         <TooltipContent>
-                                                            <p>Open in Spotify</p>
+                                                            <p>{getTrackLink(item.spotify_id).label}</p>
                                                         </TooltipContent>
                                                     </Tooltip>
                                                 </TooltipProvider>
