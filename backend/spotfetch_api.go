@@ -11,6 +11,34 @@ import (
 	"time"
 )
 
+func streamTrackListChunks(ctx context.Context, tracks []AlbumTrackMetadata, callback MetadataCallback) error {
+	if callback == nil || len(tracks) == 0 {
+		return nil
+	}
+
+	const chunkSize = 25
+	for start := 0; start < len(tracks); start += chunkSize {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		end := start + chunkSize
+		if end > len(tracks) {
+			end = len(tracks)
+		}
+
+		callback(tracks[start:end])
+
+		if end < len(tracks) {
+			time.Sleep(15 * time.Millisecond)
+		}
+	}
+
+	return nil
+}
+
 func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, apiBaseURL string, batch bool, delay time.Duration, separator string, callback MetadataCallback) (interface{}, error) {
 	if !useAPI || apiBaseURL == "" {
 		return GetFilteredSpotifyData(ctx, spotifyURL, batch, delay, separator, callback)
@@ -19,6 +47,10 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 	spotifyType, id := parseSpotifyURLToTypeAndID(spotifyURL)
 	if spotifyType == "" || id == "" {
 		return nil, fmt.Errorf("invalid Spotify URL: %s", spotifyURL)
+	}
+
+	if spotifyType == "artist" {
+		return GetFilteredSpotifyData(ctx, spotifyURL, batch, delay, separator, callback)
 	}
 
 	apiURL := fmt.Sprintf("%s/%s/%s", strings.TrimSuffix(apiBaseURL, "/"), spotifyType, id)
@@ -62,36 +94,52 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 			return nil, fmt.Errorf("failed to decode album response: %w", err)
 		}
 		data = &albumResp
+		if callback != nil {
+			callback(&AlbumResponsePayload{
+				AlbumInfo: albumResp.AlbumInfo,
+				TrackList: []AlbumTrackMetadata{},
+			})
+			if err := streamTrackListChunks(ctx, albumResp.TrackList, callback); err != nil {
+				return nil, err
+			}
+		}
 	case "playlist":
 		var playlistResp PlaylistResponsePayload
 		if err := json.Unmarshal(bodyBytes, &playlistResp); err != nil {
 			return nil, fmt.Errorf("failed to decode playlist response: %w", err)
 		}
 		data = playlistResp
+		if callback != nil {
+			callback(PlaylistResponsePayload{
+				PlaylistInfo: playlistResp.PlaylistInfo,
+				TrackList:    []AlbumTrackMetadata{},
+			})
+			if err := streamTrackListChunks(ctx, playlistResp.TrackList, callback); err != nil {
+				return nil, err
+			}
+		}
 	case "artist":
 		var artistResp ArtistDiscographyPayload
 		if err := json.Unmarshal(bodyBytes, &artistResp); err != nil {
 			return nil, fmt.Errorf("failed to decode artist response: %w", err)
 		}
 		data = &artistResp
+		if callback != nil {
+			callback(&ArtistDiscographyPayload{
+				ArtistInfo: artistResp.ArtistInfo,
+				AlbumList:  artistResp.AlbumList,
+				TrackList:  []AlbumTrackMetadata{},
+			})
+			if err := streamTrackListChunks(ctx, artistResp.TrackList, callback); err != nil {
+				return nil, err
+			}
+		}
 	default:
 		return nil, fmt.Errorf("unsupported Spotify type: %s", spotifyType)
 	}
 
 	if callback != nil {
 		switch payload := data.(type) {
-		case *AlbumResponsePayload:
-			if len(payload.TrackList) > 0 {
-				callback(payload.TrackList)
-			}
-		case PlaylistResponsePayload:
-			if len(payload.TrackList) > 0 {
-				callback(payload.TrackList)
-			}
-		case *ArtistDiscographyPayload:
-			if len(payload.TrackList) > 0 {
-				callback(payload.TrackList)
-			}
 		case TrackResponse:
 			t := payload.Track
 			callback([]AlbumTrackMetadata{{

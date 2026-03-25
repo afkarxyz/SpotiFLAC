@@ -11,6 +11,7 @@ require (
 	github.com/ulikunitz/xz v0.5.15
 	github.com/wailsapp/wails/v2 v2.11.0
 	go.etcd.io/bbolt v1.4.3
+	golang.org/x/image v0.12.0
 	golang.org/x/text v0.31.0
 )
 

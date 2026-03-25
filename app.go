@@ -106,6 +106,22 @@ type DownloadResponse struct {
 	ItemID        string `json:"item_id,omitempty"`
 }
 
+func cleanupInvalidDownloadArtifacts(paths ...string) {
+	seen := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		seen[path] = struct{}{}
+		if err := os.Remove(path); err == nil {
+			fmt.Printf("Removed invalid download artifact: %s\n", path)
+		}
+	}
+}
+
 func (a *App) GetStreamingURLs(spotifyTrackID string, region string) (string, error) {
 	if spotifyTrackID == "" {
 		return "", fmt.Errorf("spotify track ID is required")
@@ -474,6 +490,23 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		filename = strings.TrimPrefix(filename, "EXISTS:")
 	}
 
+	if !alreadyExists {
+		validated, validationErr := backend.ValidateDownloadedTrackDuration(filename, req.Duration)
+		if validationErr != nil {
+			cleanupInvalidDownloadArtifacts(filename)
+			errorMessage := validationErr.Error()
+			backend.FailDownloadItem(itemID, errorMessage)
+			return DownloadResponse{
+				Success: false,
+				Error:   errorMessage,
+				ItemID:  itemID,
+			}, fmt.Errorf(errorMessage)
+		}
+		if !validated {
+			fmt.Printf("[DownloadValidation] Skipped duration validation for %s (expected=%ds)\n", filename, req.Duration)
+		}
+	}
+
 	if !alreadyExists && req.SpotifyID != "" && req.EmbedLyrics && (strings.HasSuffix(filename, ".flac") || strings.HasSuffix(filename, ".mp3") || strings.HasSuffix(filename, ".m4a")) {
 		fmt.Printf("\nWaiting for lyrics fetch to complete...\n")
 		lyrics := <-lyricsChan
@@ -505,6 +538,14 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		message = "File already exists"
 		backend.SkipDownloadItem(itemID, filename)
 	} else {
+		if strings.EqualFold(filepath.Ext(filename), ".flac") && req.CoverURL != "" {
+			coverClient := backend.NewCoverClient()
+			if iconErr := coverClient.ApplyMacOSFLACFileIcon(filename, req.CoverURL, 256, req.EmbedMaxQualityCover); iconErr != nil {
+				fmt.Printf("Warning: failed to set macOS FLAC file icon: %v\n", iconErr)
+			} else {
+				fmt.Printf("macOS FLAC file icon set: %s\n", filename)
+			}
+		}
 
 		if fileInfo, statErr := os.Stat(filename); statErr == nil {
 			finalSize := float64(fileInfo.Size()) / (1024 * 1024)

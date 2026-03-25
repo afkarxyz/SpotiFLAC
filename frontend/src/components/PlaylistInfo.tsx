@@ -134,7 +134,7 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                 if (response.already_exists)
                     toast.info("Cover already exists");
                 else
-                    toast.success("Playlist cover downloaded");
+                    toast.success("Separate playlist cover downloaded");
             }
             else {
                 toast.error(response.error || "Failed to download cover");
@@ -165,7 +165,7 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                         {downloadingPlaylistCover ? <Spinner /> : <ImageDown className="h-4 w-4"/>}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent><p>Download Playlist Cover</p></TooltipContent>
+                    <TooltipContent><p>Download Separate Playlist Cover</p></TooltipContent>
                   </Tooltip>
                 </div>
               </div>)}
@@ -213,7 +213,7 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Download All Covers</p>
+                      <p>Download All Separate Covers</p>
                     </TooltipContent>
                   </Tooltip>)}
                 {downloadedTracks.size > 0 && (<Button onClick={onOpenFolder} variant="outline">
