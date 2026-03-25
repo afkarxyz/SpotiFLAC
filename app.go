@@ -142,12 +142,27 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 	defer cancel()
 
 	settings, err := a.LoadSettings()
+	separator := req.Separator
+	if separator == "" {
+		separator = ", "
+		if err == nil && settings != nil {
+			if sep, ok := settings["separator"].(string); ok {
+				if sep == "semicolon" {
+					separator = "; "
+				} else if sep == "comma" {
+					separator = ", "
+				}
+			}
+		}
+	}
 
 	if err == nil && settings != nil {
 		if useAPI, ok := settings["useSpotFetchAPI"].(bool); ok && useAPI {
 			if apiURL, ok := settings["spotFetchAPIUrl"].(string); ok && apiURL != "" {
 
-				data, err := backend.GetSpotifyDataWithAPI(ctx, req.URL, true, apiURL, req.Batch, time.Duration(req.Delay*float64(time.Second)))
+				data, err := backend.GetSpotifyDataWithAPI(ctx, req.URL, true, apiURL, req.Batch, time.Duration(req.Delay*float64(time.Second)), separator, func(tracks interface{}) {
+					runtime.EventsEmit(a.ctx, "metadata-stream", tracks)
+				})
 				if err != nil {
 					return "", fmt.Errorf("failed to fetch metadata from API: %v", err)
 				}
@@ -162,7 +177,9 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 		}
 	}
 
-	data, err := backend.GetFilteredSpotifyData(ctx, req.URL, req.Batch, time.Duration(req.Delay*float64(time.Second)))
+	data, err := backend.GetFilteredSpotifyData(ctx, req.URL, req.Batch, time.Duration(req.Delay*float64(time.Second)), separator, func(tracks interface{}) {
+		runtime.EventsEmit(a.ctx, "metadata-stream", tracks)
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch metadata: %v", err)
 	}
@@ -283,7 +300,21 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		defer cancel()
 
 		trackURL := fmt.Sprintf("https://open.spotify.com/track/%s", req.SpotifyID)
-		trackData, err := backend.GetFilteredSpotifyData(ctx, trackURL, false, 0)
+		metadataSeparator := req.Separator
+		if metadataSeparator == "" {
+			metadataSeparator = ", "
+			metadataSettings, _ := a.LoadSettings()
+			if metadataSettings != nil {
+				if sep, ok := metadataSettings["separator"].(string); ok {
+					if sep == "semicolon" {
+						metadataSeparator = "; "
+					} else if sep == "comma" {
+						metadataSeparator = ", "
+					}
+				}
+			}
+		}
+		trackData, err := backend.GetFilteredSpotifyData(ctx, trackURL, false, 0, metadataSeparator, nil)
 		if err == nil {
 
 			var trackResp struct {

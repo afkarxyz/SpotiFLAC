@@ -11,10 +11,9 @@ import (
 	"time"
 )
 
-func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, apiBaseURL string, batch bool, delay time.Duration) (interface{}, error) {
+func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, apiBaseURL string, batch bool, delay time.Duration, separator string, callback MetadataCallback) (interface{}, error) {
 	if !useAPI || apiBaseURL == "" {
-
-		return GetFilteredSpotifyData(ctx, spotifyURL, batch, delay)
+		return GetFilteredSpotifyData(ctx, spotifyURL, batch, delay, separator, callback)
 	}
 
 	spotifyType, id := parseSpotifyURLToTypeAndID(spotifyURL)
@@ -77,6 +76,43 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 		data = &artistResp
 	default:
 		return nil, fmt.Errorf("unsupported Spotify type: %s", spotifyType)
+	}
+
+	if callback != nil {
+		switch payload := data.(type) {
+		case *AlbumResponsePayload:
+			if len(payload.TrackList) > 0 {
+				callback(payload.TrackList)
+			}
+		case PlaylistResponsePayload:
+			if len(payload.TrackList) > 0 {
+				callback(payload.TrackList)
+			}
+		case *ArtistDiscographyPayload:
+			if len(payload.TrackList) > 0 {
+				callback(payload.TrackList)
+			}
+		case TrackResponse:
+			t := payload.Track
+			callback([]AlbumTrackMetadata{{
+				SpotifyID:   t.SpotifyID,
+				Artists:     t.Artists,
+				Name:        t.Name,
+				AlbumName:   t.AlbumName,
+				AlbumArtist: t.AlbumArtist,
+				DurationMS:  t.DurationMS,
+				Images:      t.Images,
+				ReleaseDate: t.ReleaseDate,
+				TrackNumber: t.TrackNumber,
+				TotalTracks: t.TotalTracks,
+				DiscNumber:  t.DiscNumber,
+				TotalDiscs:  t.TotalDiscs,
+				ExternalURL: t.ExternalURL,
+				Plays:       t.Plays,
+				PreviewURL:  t.PreviewURL,
+				IsExplicit:  t.IsExplicit,
+			}})
+		}
 	}
 
 	return data, nil

@@ -21,6 +21,7 @@ interface ArtistInfoProps {
         header?: string;
         gallery?: string[];
         followers: number;
+        total_albums?: number;
         genres: string[];
         biography?: string;
         verified?: boolean;
@@ -99,6 +100,7 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
     const [downloadingGalleryIndex, setDownloadingGalleryIndex] = useState<number | null>(null);
     const [downloadingAllGallery, setDownloadingAllGallery] = useState(false);
     const [activeTab, setActiveTab] = useState<"albums" | "tracks" | "gallery">("albums");
+    const displayedAlbumCount = artistInfo.total_albums || albumList.length;
     const filteredAlbumGroups = useMemo(() => {
         const albumTypeMap = new Map(albumList.map(a => [a.name, a.album_type]));
         const albumGroups = trackList.reduce((acc, track) => {
@@ -330,9 +332,9 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                         </>)}
                     </div>
                     <div className="flex items-center gap-2 text-sm flex-wrap text-white/90">
-                      <span>{albumList.length} {albumList.length === 1 ? "album" : "albums"}</span>
+                      <span>{displayedAlbumCount.toLocaleString()} {displayedAlbumCount === 1 ? "album" : "albums"}</span>
                       <span>•</span>
-                      <span>{trackList.length} {trackList.length === 1 ? "track" : "tracks"}</span>
+                      <span>{trackList.length.toLocaleString()} {trackList.length === 1 ? "track" : "tracks"}</span>
                       {artistInfo.genres.length > 0 && (<>
                           <span>•</span>
                           <span>{artistInfo.genres.join(", ")}</span>
@@ -383,9 +385,9 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                     </>)}
                 </div>
                 <div className="flex items-center gap-2 text-sm flex-wrap">
-                  <span>{albumList.length} {albumList.length === 1 ? "album" : "albums"}</span>
+                  <span>{displayedAlbumCount.toLocaleString()} {displayedAlbumCount === 1 ? "album" : "albums"}</span>
                   <span>•</span>
-                  <span>{trackList.length} {trackList.length === 1 ? "track" : "tracks"}</span>
+                  <span>{trackList.length.toLocaleString()} {trackList.length === 1 ? "track" : "tracks"}</span>
                   {artistInfo.genres.length > 0 && (<>
                       <span>•</span>
                       <span>{artistInfo.genres.join(", ")}</span>
@@ -412,7 +414,7 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
 
       {activeTab === "gallery" && hasGallery && (<div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-2xl font-bold">Gallery ({artistInfo.gallery!.length})</h3>
+            <h3 className="text-2xl font-bold">Gallery ({artistInfo.gallery!.length.toLocaleString()})</h3>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button onClick={handleDownloadAllGallery} size="sm" variant="outline" disabled={downloadingAllGallery}>
