@@ -98,7 +98,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
             <div className="mt-auto flex flex-col gap-2">
                 <Tooltip delayDuration={0}>
                     <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-primary/10 hover:text-primary" onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC/issues/268")}>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 hover:bg-primary/10 hover:text-primary" onClick={() => openExternal("https://github.com/afkarxyz/SpotiFLAC/issues")}>
                             <GithubIcon size={20}/>
                         </Button>
                     </TooltipTrigger>

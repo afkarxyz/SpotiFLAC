@@ -77,7 +77,7 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 		return meta, err
 	}
 
-	req.Header.Set("User-Agent", fmt.Sprintf("SpotiFLAC/%s ( support@exyezed.cc )", AppVersion))
+	req.Header.Set("User-Agent", fmt.Sprintf("SpotiFLAC/%s ( hi@afkarxyz.qzz.io )", AppVersion))
 
 	var resp *http.Response
 	var lastErr error

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { openExternal } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, } from "@/components/ui/card";
-import { Star, GitFork, Clock, Download, Blocks, Heart, Copy, CircleCheck } from "lucide-react";
+import { Star, GitFork, Clock, Download, Blocks, Heart, Copy, CircleCheck, Info } from "lucide-react";
 import AudioTTSProIcon from "@/assets/audiotts-pro.webp";
 import ChatGPTTTSIcon from "@/assets/chatgpt-tts.webp";
 import XProIcon from "@/assets/x-pro.webp";
@@ -14,13 +14,14 @@ import KofiLogo from "@/assets/ko-fi.gif";
 import KofiSvg from "@/assets/kofi_symbol.svg";
 import UsdtBarcode from "@/assets/usdt.jpg";
 import { langColors } from "@/assets/github-lang-colors";
+
 export function AboutPage() {
     const [activeTab, setActiveTab] = useState<"projects" | "support">("projects");
     const [repoStats, setRepoStats] = useState<Record<string, any>>({});
     const [copiedUsdt, setCopiedUsdt] = useState(false);
     useEffect(() => {
         const fetchRepoStats = async () => {
-            const CACHE_KEY = "github_repo_stats";
+            const CACHE_KEY = "github_repo_stats_v3";
             const CACHE_DURATION = 1000 * 60 * 60;
             const cached = localStorage.getItem(CACHE_KEY);
             if (cached) {
@@ -55,10 +56,10 @@ export function AboutPage() {
                         }
                         return;
                     }
-                    if (repoRes.ok && releasesRes.ok && langsRes.ok) {
+                    if (repoRes.ok) {
                         const repoData = await repoRes.json();
-                        const releases = await releasesRes.json();
-                        const languages = await langsRes.json();
+                        const releases = releasesRes.ok ? await releasesRes.json() : [];
+                        const languages = langsRes.ok ? await langsRes.json() : {};
                         let totalDownloads = 0;
                         let latestDownloads = 0;
                         let latestVersion = "";
@@ -79,6 +80,7 @@ export function AboutPage() {
                             stars: repoData.stargazers_count,
                             forks: repoData.forks_count,
                             createdAt: repoData.created_at,
+                            description: repoData.description,
                             totalDownloads,
                             latestDownloads,
                             latestVersion,
@@ -128,6 +130,9 @@ export function AboutPage() {
     const getLangColor = (lang: string): string => {
         return langColors[lang] || "#858585";
     };
+    const getRepoDescription = (repoName: string): string => {
+        return repoStats[repoName]?.description || "";
+    };
     return (<div className="flex flex-col space-y-4">
       <div className="flex items-center justify-between shrink-0">
         <h2 className="text-2xl font-bold tracking-tight">About</h2>
@@ -150,7 +155,7 @@ export function AboutPage() {
         {activeTab === "projects" && (<div className="p-1 pr-2">
             <div className="grid gap-2 grid-cols-4">
               <div className="flex flex-col gap-2 h-full">
-                <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://exyezed.cc/")}>
+                <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://exyezed.qzz.io/")}>
                   <CardHeader>
                     <CardTitle>Browser Extensions & Scripts</CardTitle>
                     <CardDescription className="flex gap-3 pt-2">
@@ -185,7 +190,7 @@ export function AboutPage() {
                     SpotiDownloader
                   </CardTitle>
                   <CardDescription>
-                    Get Spotify tracks in MP3 and FLAC via spotidownloader.com
+                    {getRepoDescription("SpotiDownloader")}
                   </CardDescription>
                 </CardHeader>
                 {repoStats["SpotiDownloader"] && (<CardContent className="space-y-3">
@@ -223,7 +228,7 @@ export function AboutPage() {
                     </div>
                   </CardContent>)}
               </Card>
-              <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
+              <Card className="gap-2 hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
@@ -235,18 +240,18 @@ export function AboutPage() {
                     SpotiFLAC Next
                   </CardTitle>
                   <CardDescription>
-Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account required.
+                    {getRepoDescription("SpotiFLAC-Next")}
                   </CardDescription>
                 </CardHeader>
-                {repoStats["SpotiFLAC-Next"] && (<CardContent className="space-y-3">
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {repoStats["SpotiFLAC-Next"].languages?.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
+                {repoStats["SpotiFLAC-Next"] && (<CardContent className="space-y-2">
+                    {repoStats["SpotiFLAC-Next"].languages?.length > 0 && (<div className="flex flex-wrap gap-2 text-xs">
+                        {repoStats["SpotiFLAC-Next"].languages.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
                         backgroundColor: getLangColor(lang) + "20",
                         color: getLangColor(lang),
                     }}>
                             {lang}
                           </span>))}
-                    </div>
+                      </div>)}
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500"/>{" "}
@@ -261,15 +266,15 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
                         {formatTimeAgo(repoStats["SpotiFLAC-Next"].createdAt)}
                       </span>
                     </div>
-                    <div className="flex flex-col gap-1 text-xs text-muted-foreground items-start">
-                      <span className="flex items-center gap-1">
-                        <Download className="h-3.5 w-3.5"/> TOTAL:{" "}
-                        {formatNumber(repoStats["SpotiFLAC-Next"].totalDownloads)}
-                      </span>
-                      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                        <Download className="h-3.5 w-3.5"/> LATEST:{" "}
-                        {formatNumber(repoStats["SpotiFLAC-Next"].latestDownloads)}
-                      </span>
+                    <div className="rounded-md border border-sky-500/25 bg-sky-500/8 px-3 py-2">
+                      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                        <Info className="h-3.5 w-3.5"/>
+                        Note
+                      </div>
+                      <p className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
+                        SpotiFLAC Next is a separate project created as a thank-you
+                        to everyone who has supported SpotiFLAC on Ko-fi.
+                      </p>
                     </div>
                   </CardContent>)}
               </Card>
@@ -285,8 +290,7 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
                     Twitter/X Media Batch Downloader
                   </CardTitle>
                   <CardDescription>
-                    A GUI tool to download original-quality images and videos
-                    from Twitter/X accounts, powered by gallery-dl by @mikf
+                    {getRepoDescription("Twitter-X-Media-Batch-Downloader")}
                   </CardDescription>
                 </CardHeader>
                 {repoStats["Twitter-X-Media-Batch-Downloader"] && (<CardContent className="space-y-3">
@@ -345,7 +349,7 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
                 </div>
                 <Button className="h-10 w-full text-sm font-semibold text-white gap-2 group bg-[#72a4f2] hover:bg-[#5f8cd6]" onClick={() => openExternal("https://ko-fi.com/afkarxyz")}>
                   <img src={KofiSvg} className="w-5 h-5 shrink-0" alt="" aria-hidden="true"/>
-                  Support on Ko-fi
+                  Support me on Ko-fi
                 </Button>
               </div>
 
