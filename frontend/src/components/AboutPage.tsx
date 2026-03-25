@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, } from "@/co
 import { Star, GitFork, Clock, Download, Blocks, Heart, Copy, CircleCheck, Info } from "lucide-react";
 import AudioTTSProIcon from "@/assets/audiotts-pro.webp";
 import ChatGPTTTSIcon from "@/assets/chatgpt-tts.webp";
+import XIcon from "@/assets/x.webp";
 import XProIcon from "@/assets/x-pro.webp";
 import SpotubeDLIcon from "@/assets/icons/spotubedl.svg";
 import SpotiDownloaderIcon from "@/assets/icons/spotidownloader.svg";
@@ -156,11 +157,12 @@ export function AboutPage() {
             <div className="grid gap-2 grid-cols-4">
               <div className="flex flex-col gap-2 h-full">
                 <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://exyezed.qzz.io/")}>
-                  <CardHeader>
+                    <CardHeader>
                     <CardTitle>Browser Extensions & Scripts</CardTitle>
                     <CardDescription className="flex gap-3 pt-2">
                       <img src={AudioTTSProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="AudioTTS Pro"/>
                       <img src={ChatGPTTTSIcon} className="h-8 w-8 rounded-md shadow-sm" alt="ChatGPT TTS"/>
+                      <img src={XIcon} className="h-8 w-8 rounded-md shadow-sm" alt="X"/>
                       <img src={XProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="X Pro"/>
                     </CardDescription>
                   </CardHeader>
