@@ -10,6 +10,7 @@ import { CoffeeIcon } from "@/components/ui/coffee";
 import { BadgeAlertIcon } from "@/components/ui/badge-alert";
 import { GithubIcon } from "@/components/ui/github";
 import { BlocksIcon } from "@/components/ui/blocks-icon";
+import { AudioLinesIcon } from "@/components/ui/audio-lines";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -17,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/toolti
 import { Button } from "@/components/ui/button";
 import { openExternal } from "@/lib/utils";
 
-export type PageType = "main" | "settings" | "debug" | "audio-analysis" | "audio-converter" | "file-manager" | "about" | "history";
+export type PageType = "main" | "settings" | "debug" | "audio-analysis" | "audio-converter" | "audio-resampler" | "file-manager" | "about" | "history";
 interface SidebarProps {
     currentPage: PageType;
     onPageChange: (page: PageType) => void;
@@ -85,7 +86,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                     <Tooltip delayDuration={0}>
                         <DropdownMenuTrigger asChild>
                             <TooltipTrigger asChild>
-                                <Button variant={["audio-analysis", "audio-converter", "file-manager"].includes(currentPage) ? "secondary" : "ghost"} size="icon" className={`h-10 w-10 ${["audio-analysis", "audio-converter", "file-manager"].includes(currentPage) ? "bg-primary/10 text-primary hover:bg-primary/20" : "hover:bg-primary/10 hover:text-primary"}`}>
+                                <Button variant={["audio-analysis", "audio-converter", "audio-resampler", "file-manager"].includes(currentPage) ? "secondary" : "ghost"} size="icon" className={`h-10 w-10 ${["audio-analysis", "audio-converter", "audio-resampler", "file-manager"].includes(currentPage) ? "bg-primary/10 text-primary hover:bg-primary/20" : "hover:bg-primary/10 hover:text-primary"}`}>
                                     <BlocksIcon size={20} loop={true}/>
                                 </Button>
                             </TooltipTrigger>
@@ -102,6 +103,10 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
                         <DropdownMenuItem onClick={() => onPageChange("audio-converter")} className="gap-3 cursor-pointer py-2 px-3">
                             <FileMusicIcon size={16}/>
                             <span>Audio Converter</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onPageChange("audio-resampler")} className="gap-3 cursor-pointer py-2 px-3">
+                            <AudioLinesIcon size={16}/>
+                            <span>Audio Resampler</span>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => onPageChange("file-manager")} className="gap-3 cursor-pointer py-2 px-3">
                             <FilePenIcon size={16}/>

@@ -1157,12 +1157,31 @@ func (a *App) ConvertAudio(req ConvertAudioRequest) ([]backend.ConvertAudioResul
 	return backend.ConvertAudio(backendReq)
 }
 
+type ResampleAudioRequest struct {
+	InputFiles []string `json:"input_files"`
+	SampleRate string   `json:"sample_rate"`
+	BitDepth   string   `json:"bit_depth"`
+}
+
+func (a *App) ResampleAudio(req ResampleAudioRequest) ([]backend.ResampleResult, error) {
+	backendReq := backend.ResampleRequest{
+		InputFiles: req.InputFiles,
+		SampleRate: req.SampleRate,
+		BitDepth:   req.BitDepth,
+	}
+	return backend.ResampleAudio(backendReq)
+}
+
 func (a *App) SelectAudioFiles() ([]string, error) {
 	files, err := backend.SelectMultipleFiles(a.ctx)
 	if err != nil {
 		return nil, err
 	}
 	return files, nil
+}
+
+func (a *App) GetFlacInfoBatch(paths []string) []backend.FlacInfo {
+	return backend.GetFlacInfoBatch(paths)
 }
 
 func (a *App) GetFileSizes(files []string) map[string]int64 {

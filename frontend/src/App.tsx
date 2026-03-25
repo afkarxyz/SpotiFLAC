@@ -20,6 +20,7 @@ import { DownloadQueue } from "@/components/DownloadQueue";
 import { DownloadProgressToast } from "@/components/DownloadProgressToast";
 import { AudioAnalysisPage } from "@/components/AudioAnalysisPage";
 import { AudioConverterPage } from "@/components/AudioConverterPage";
+import { AudioResamplerPage } from "@/components/AudioResamplerPage";
 import { FileManagerPage } from "@/components/FileManagerPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { DebugLoggerPage } from "@/components/DebugLoggerPage";
@@ -428,6 +429,8 @@ function App() {
                 return <AudioAnalysisPage />;
             case "audio-converter":
                 return <AudioConverterPage />;
+            case "audio-resampler":
+                return <AudioResamplerPage />;
             case "file-manager":
                 return <FileManagerPage />;
             default:
