@@ -401,8 +401,8 @@ func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error
 		name string
 		fn   func(string) (string, error)
 	}{
-		{name: "isrcfinder", fn: s.lookupISRCViaISRCFinder},
 		{name: "phpstack", fn: lookupISRCViaPHPStack},
+		{name: "isrcfinder", fn: s.lookupISRCViaISRCFinder},
 		{name: "findmyisrc", fn: lookupISRCViaFindMyISRC},
 		{name: "mixvibe", fn: lookupISRCViaMixvibe},
 	}
@@ -519,6 +519,14 @@ func lookupISRCViaPHPStack(spotifyURL string) (string, error) {
 	}
 	req.Header.Set("User-Agent", songLinkUserAgent)
 	req.Header.Set("Referer", "https://phpstack-822472-6184058.cloudwaysapps.com/?")
+	req.Header.Set("Accept", "*/*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
+	req.Header.Set("Connection", "keep-alive")
+	req.Header.Set("Priority", "u=0")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Sec-GPG", "1")
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
