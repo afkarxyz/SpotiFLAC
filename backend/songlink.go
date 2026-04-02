@@ -2,7 +2,6 @@ package backend
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -46,13 +45,6 @@ type songLinkAPIResponse struct {
 	LinksByPlatform map[string]struct {
 		URL string `json:"url"`
 	} `json:"linksByPlatform"`
-}
-
-type resolvedTrackLinks struct {
-	TidalURL  string
-	AmazonURL string
-	DeezerURL string
-	ISRC      string
 }
 
 func NewSongLinkClient() *SongLinkClient {
@@ -274,61 +266,6 @@ func (s *SongLinkClient) GetISRC(spotifyID string) (string, error) {
 
 func (s *SongLinkClient) GetISRCDirect(spotifyID string) (string, error) {
 	return s.lookupSpotifyISRC(spotifyID)
-}
-
-func (s *SongLinkClient) resolveSpotifyTrackLinks(spotifyTrackID string, region string) (*resolvedTrackLinks, error) {
-	links := &resolvedTrackLinks{}
-	var attempts []string
-
-	isrc, err := s.lookupSpotifyISRC(spotifyTrackID)
-	if err != nil {
-		attempts = append(attempts, fmt.Sprintf("spotify isrc: %v", err))
-	} else {
-		links.ISRC = isrc
-	}
-
-	if links.ISRC != "" {
-		fmt.Printf("Fetching Songstats links for ISRC %s\n", links.ISRC)
-		if songstatsErr := s.populateLinksFromSongstats(links, links.ISRC); songstatsErr != nil {
-			attempts = append(attempts, fmt.Sprintf("songstats: %v", songstatsErr))
-		}
-	}
-
-	if links.ISRC != "" && links.DeezerURL == "" {
-		fmt.Printf("Resolving Deezer track from ISRC %s\n", links.ISRC)
-		deezerURL, deezerErr := s.lookupDeezerTrackURLByISRC(links.ISRC)
-		if deezerErr != nil {
-			attempts = append(attempts, fmt.Sprintf("deezer isrc: %v", deezerErr))
-		} else {
-			links.DeezerURL = deezerURL
-		}
-	}
-
-	if links.DeezerURL != "" {
-		fmt.Println("Resolving streaming URLs from song.link via Deezer URL...")
-		deezerResp, deezerSongLinkErr := s.fetchSongLinkLinksByURL(links.DeezerURL, region)
-		if deezerSongLinkErr != nil {
-			attempts = append(attempts, fmt.Sprintf("song.link deezer: %v", deezerSongLinkErr))
-		} else {
-			mergeSongLinkResponse(links, deezerResp)
-		}
-
-		if links.ISRC == "" {
-			if resolvedISRC, deezerISRCErr := getDeezerISRC(links.DeezerURL); deezerISRCErr == nil {
-				links.ISRC = resolvedISRC
-			}
-		}
-	}
-
-	if hasAnySongLinkData(links) {
-		return links, nil
-	}
-
-	if len(attempts) == 0 {
-		attempts = append(attempts, "no streaming URLs found")
-	}
-
-	return links, errors.New(strings.Join(attempts, " | "))
 }
 
 func (s *SongLinkClient) fetchSongLinkLinksByURL(rawURL string, region string) (*songLinkAPIResponse, error) {
