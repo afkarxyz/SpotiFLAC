@@ -28,7 +28,7 @@ export function AboutPage() {
     const [copiedUsdt, setCopiedUsdt] = useState(false);
     useEffect(() => {
         const fetchRepoStats = async () => {
-            const CACHE_KEY = "github_repo_stats_v3";
+            const CACHE_KEY = "github_repo_stats_v4";
             const CACHE_DURATION = 1000 * 60 * 60;
             const cached = localStorage.getItem(CACHE_KEY);
             if (cached) {
@@ -70,8 +70,10 @@ export function AboutPage() {
                         let totalDownloads = 0;
                         let latestDownloads = 0;
                         let latestVersion = "";
+                        let latestReleaseAt = "";
                         if (releases.length > 0) {
                             latestVersion = releases[0].tag_name || "";
+                            latestReleaseAt = releases[0].published_at || releases[0].created_at || "";
                             latestDownloads =
                                 releases[0].assets?.reduce((sum: number, asset: any) => sum + (asset.download_count || 0), 0) || 0;
                             totalDownloads = releases.reduce((sum: number, release: any) => {
@@ -91,6 +93,7 @@ export function AboutPage() {
                             totalDownloads,
                             latestDownloads,
                             latestVersion,
+                            latestReleaseAt,
                             languages: topLangs,
                         };
                     }
@@ -127,6 +130,39 @@ export function AboutPage() {
             return `${diffMonths}mo`;
         const diffYears = Math.floor(diffMonths / 12);
         return `${diffYears}y`;
+    };
+    const formatReleaseTimeAgo = (dateString: string): string => {
+        if (!dateString) {
+            return "";
+        }
+        const now = Date.now();
+        const releasedAt = new Date(dateString).getTime();
+        if (Number.isNaN(releasedAt)) {
+            return "";
+        }
+        const diffMs = Math.max(0, now - releasedAt);
+        const totalMinutes = Math.floor(diffMs / (1000 * 60));
+        const totalHours = Math.floor(totalMinutes / 60);
+        const totalDays = Math.floor(totalHours / 24);
+        const totalMonths = Math.floor(totalDays / 30);
+        const totalYears = Math.floor(totalMonths / 12);
+        if (totalYears > 0) {
+            const remainingMonths = totalMonths % 12;
+            return remainingMonths > 0 ? `${totalYears}y ${remainingMonths}m ago` : `${totalYears}y ago`;
+        }
+        if (totalMonths > 0) {
+            const remainingDays = totalDays % 30;
+            return remainingDays > 0 ? `${totalMonths}m ${remainingDays}d ago` : `${totalMonths}m ago`;
+        }
+        if (totalDays > 0) {
+            const remainingHours = totalHours % 24;
+            return remainingHours > 0 ? `${totalDays}d ${remainingHours}h ago` : `${totalDays}d ago`;
+        }
+        if (totalHours > 0) {
+            const remainingMinutes = totalMinutes % 60;
+            return `${totalHours}h ${remainingMinutes}m ago`;
+        }
+        return `${totalMinutes}m ago`;
     };
     const formatNumber = (num: number): string => {
         if (num >= 1000) {
@@ -165,9 +201,14 @@ export function AboutPage() {
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
-                    {repoStats["SpotiFLAC-Next"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                        {repoStats["SpotiFLAC-Next"].latestVersion}
-                      </span>)}
+                    <div className="flex items-center gap-2">
+                      {repoStats["SpotiFLAC-Next"]?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {formatReleaseTimeAgo(repoStats["SpotiFLAC-Next"].latestReleaseAt)}
+                        </span>)}
+                      {repoStats["SpotiFLAC-Next"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                          {repoStats["SpotiFLAC-Next"].latestVersion}
+                        </span>)}
+                    </div>
                   </div>
                   <CardTitle className="leading-tight">
                     SpotiFLAC Next
@@ -214,9 +255,14 @@ export function AboutPage() {
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiDownloaderIcon} className="h-6 w-6 shrink-0" alt="SpotiDownloader"/>
-                    {repoStats["SpotiDownloader"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                        {repoStats["SpotiDownloader"].latestVersion}
-                      </span>)}
+                    <div className="flex items-center gap-2">
+                      {repoStats["SpotiDownloader"]?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {formatReleaseTimeAgo(repoStats["SpotiDownloader"].latestReleaseAt)}
+                        </span>)}
+                      {repoStats["SpotiDownloader"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                          {repoStats["SpotiDownloader"].latestVersion}
+                        </span>)}
+                    </div>
                   </div>
                   <CardTitle className="leading-tight">
                     SpotiDownloader
@@ -264,9 +310,14 @@ export function AboutPage() {
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={XBatchDLIcon} className="h-6 w-6 shrink-0" alt="Twitter/X Media Batch Downloader"/>
-                    {repoStats["Twitter-X-Media-Batch-Downloader"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                        {repoStats["Twitter-X-Media-Batch-Downloader"].latestVersion}
-                      </span>)}
+                    <div className="flex items-center gap-2">
+                      {repoStats["Twitter-X-Media-Batch-Downloader"]?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {formatReleaseTimeAgo(repoStats["Twitter-X-Media-Batch-Downloader"].latestReleaseAt)}
+                        </span>)}
+                      {repoStats["Twitter-X-Media-Batch-Downloader"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                          {repoStats["Twitter-X-Media-Batch-Downloader"].latestVersion}
+                        </span>)}
+                    </div>
                   </div>
                   <CardTitle className="leading-tight">
                     Twitter/X Media Batch Downloader
