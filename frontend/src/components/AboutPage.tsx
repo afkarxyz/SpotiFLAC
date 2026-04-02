@@ -15,6 +15,14 @@ import KofiLogo from "@/assets/ko-fi.gif";
 import KofiSvg from "@/assets/kofi_symbol.svg";
 import UsdtBarcode from "@/assets/usdt.jpg";
 import { langColors } from "@/assets/github-lang-colors";
+
+const browserExtensionItems = [
+    { icon: AudioTTSProIcon, label: "AudioTTS Pro", alt: "AudioTTS Pro" },
+    { icon: ChatGPTTTSIcon, label: "ChatGPT TTS", alt: "ChatGPT TTS" },
+    { icon: XIcon, label: "Twitter/X Media Batch Downloader", alt: "Twitter/X Media Batch Downloader" },
+    { icon: XProIcon, label: "Twitter/X Media Batch Downloader Pro", alt: "Twitter/X Media Batch Downloader Pro" },
+];
+
 export function AboutPage() {
     const [activeTab, setActiveTab] = useState<"projects" | "support">("projects");
     const [repoStats, setRepoStats] = useState<Record<string, any>>({});
@@ -158,11 +166,15 @@ export function AboutPage() {
                 <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://exyezed.qzz.io/")}>
                     <CardHeader>
                     <CardTitle>Browser Extensions & Scripts</CardTitle>
-                    <CardDescription className="flex gap-3 pt-2">
-                      <img src={AudioTTSProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="AudioTTS Pro"/>
-                      <img src={ChatGPTTTSIcon} className="h-8 w-8 rounded-md shadow-sm" alt="ChatGPT TTS"/>
-                      <img src={XIcon} className="h-8 w-8 rounded-md shadow-sm" alt="X"/>
-                      <img src={XProIcon} className="h-8 w-8 rounded-md shadow-sm" alt="X Pro"/>
+                    <CardDescription className="flex flex-col gap-2 pt-2">
+                      {browserExtensionItems.map((item) => (
+                        <div key={item.alt} className="flex items-center gap-2">
+                          <img src={item.icon} className="h-[22px] w-[22px] rounded-sm shadow-sm" alt={item.alt}/>
+                          <span className="text-[11px] leading-tight text-muted-foreground">
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
                     </CardDescription>
                   </CardHeader>
                 </Card>
