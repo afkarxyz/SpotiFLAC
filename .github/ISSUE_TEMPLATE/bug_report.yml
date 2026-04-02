@@ -55,7 +55,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: SpotiDownloader Version
+      label: SpotiFLAC Version
       placeholder: e.g. v7.1.0
     validations:
       required: true
