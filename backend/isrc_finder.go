@@ -20,14 +20,16 @@ import (
 )
 
 const (
-	spotifyServerTimeURL   = "https://open.spotify.com/api/server-time"
-	spotifySessionTokenURL = "https://open.spotify.com/api/token"
-	spotifyTOTPSecretsURL  = "https://git.gay/thereallo/totp-secrets/raw/branch/main/secrets/secretDict.json"
-	spotifyGIDMetadataURL  = "https://spclient.wg.spotify.com/metadata/4/%s/%s?market=from_token"
-	spotifyTOTPPeriod      = 30
-	spotifyTOTPDigits      = 6
-	spotifyBase62Alphabet  = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	spotifyTokenCacheFile  = ".isrc-finder-token.json"
+	spotifyServerTimeURL    = "https://open.spotify.com/api/server-time"
+	spotifySessionTokenURL  = "https://open.spotify.com/api/token"
+	spotifyTOTPSecretsURL   = "https://git.gay/thereallo/totp-secrets/raw/branch/main/secrets/secretDict.json"
+	spotifyGIDMetadataURL   = "https://spclient.wg.spotify.com/metadata/4/%s/%s?market=from_token"
+	spotifyTOTPPeriod       = 30
+	spotifyTOTPDigits       = 6
+	spotifyBase62Alphabet   = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	spotifyTokenCacheFile   = ".isrc-finder-token.json"
+	spotifySecretsCacheFile = "spotify-secret-dict-cache.json"
+	spotifySecretsCacheTTL  = 24 * time.Hour
 )
 
 var spotifyAnonymousTokenMu sync.Mutex
@@ -41,11 +43,29 @@ type spotifyServerTimeResponse struct {
 	ServerTime int64 `json:"serverTime"`
 }
 
+type spotifySecretsCache struct {
+	FetchedAtUnix int64            `json:"fetched_at_unix"`
+	Secrets       map[string][]int `json:"secrets"`
+}
+
 type spotifyTrackRawData struct {
 	ExternalID []struct {
 		Type string `json:"type"`
 		ID   string `json:"id"`
 	} `json:"external_id"`
+}
+
+type spotFetchISRCResponse struct {
+	Input        string   `json:"input"`
+	TrackID      string   `json:"track_id"`
+	GID          string   `json:"gid"`
+	CanonicalURI string   `json:"canonical_uri"`
+	Name         string   `json:"name"`
+	Artists      []string `json:"artists"`
+	AlbumName    string   `json:"album_name"`
+	ReleaseDate  string   `json:"release_date"`
+	Label        string   `json:"label"`
+	ISRC         string   `json:"isrc"`
 }
 
 func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error) {
@@ -60,6 +80,26 @@ func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error
 	} else if cachedISRC != "" {
 		fmt.Printf("Found ISRC in cache: %s\n", cachedISRC)
 		return cachedISRC, nil
+	}
+
+	useSpotFetchAPI, spotFetchAPIURL := GetSpotFetchAPISettings()
+	if useSpotFetchAPI {
+		isrc, resolvedTrackID, err := s.lookupSpotifyISRCViaSpotFetchAPI(normalizedTrackID, spotFetchAPIURL)
+		if err == nil && isrc != "" {
+			fmt.Printf("Found ISRC via SpotFetch API: %s\n", isrc)
+			if err := PutCachedISRC(normalizedTrackID, isrc); err != nil {
+				fmt.Printf("Warning: failed to write ISRC cache: %v\n", err)
+			}
+			if resolvedTrackID != "" && resolvedTrackID != normalizedTrackID {
+				if err := PutCachedISRC(resolvedTrackID, isrc); err != nil {
+					fmt.Printf("Warning: failed to write ISRC cache for resolved track ID: %v\n", err)
+				}
+			}
+			return isrc, nil
+		}
+		if err != nil {
+			fmt.Printf("Warning: SpotFetch ISRC lookup failed, falling back to Spotify metadata: %v\n", err)
+		}
 	}
 
 	payload, err := fetchSpotifyTrackRawData(s.client, normalizedTrackID)
@@ -77,6 +117,49 @@ func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error
 		fmt.Printf("Warning: failed to write ISRC cache: %v\n", err)
 	}
 	return isrc, nil
+}
+
+func (s *SongLinkClient) lookupSpotifyISRCViaSpotFetchAPI(spotifyTrackID string, apiBaseURL string) (string, string, error) {
+	normalizedTrackID := strings.TrimSpace(spotifyTrackID)
+	baseURL := strings.TrimRight(strings.TrimSpace(apiBaseURL), "/")
+	if normalizedTrackID == "" {
+		return "", "", fmt.Errorf("spotify track ID is required")
+	}
+	if baseURL == "" {
+		return "", "", fmt.Errorf("spotfetch api url is required")
+	}
+
+	requestURL := fmt.Sprintf("%s/isrc/%s", baseURL, url.PathEscape(normalizedTrackID))
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create SpotFetch ISRC request: %w", err)
+	}
+	req.Header.Set("User-Agent", songLinkUserAgent)
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("SpotFetch ISRC request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyPreview, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		return "", "", fmt.Errorf("SpotFetch ISRC returned status %d (%s)", resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+	}
+
+	var payload spotFetchISRCResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", "", fmt.Errorf("failed to decode SpotFetch ISRC response: %w", err)
+	}
+
+	isrc := firstISRCMatch(payload.ISRC)
+	if isrc == "" {
+		return "", "", fmt.Errorf("ISRC missing in SpotFetch response")
+	}
+
+	return isrc, strings.TrimSpace(payload.TrackID), nil
 }
 
 func requestSpotifyBytes(client *http.Client, targetURL string, headers map[string]string) ([]byte, error) {
@@ -168,6 +251,50 @@ func saveSpotifyCachedToken(token *spotifyAnonymousToken) error {
 	return nil
 }
 
+func loadSpotifyCachedSecrets() (*spotifySecretsCache, error) {
+	cachePath, err := spotifySecretsCachePath()
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := os.ReadFile(cachePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read secrets cache: %w", err)
+	}
+
+	var cache spotifySecretsCache
+	if err := json.Unmarshal(body, &cache); err != nil {
+		return nil, fmt.Errorf("failed to parse secrets cache: %w", err)
+	}
+
+	return &cache, nil
+}
+
+func saveSpotifyCachedSecrets(cache *spotifySecretsCache) error {
+	cachePath, err := spotifySecretsCachePath()
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		return fmt.Errorf("failed to create secrets cache directory: %w", err)
+	}
+
+	body, err := json.MarshalIndent(cache, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(cachePath, body, 0o644); err != nil {
+		return fmt.Errorf("failed to write secrets cache: %w", err)
+	}
+
+	return nil
+}
+
 func spotifyTokenCachePath() (string, error) {
 	appDir, err := EnsureAppDir()
 	if err != nil {
@@ -177,12 +304,29 @@ func spotifyTokenCachePath() (string, error) {
 	return filepath.Join(appDir, spotifyTokenCacheFile), nil
 }
 
+func spotifySecretsCachePath() (string, error) {
+	appDir, err := EnsureAppDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(appDir, spotifySecretsCacheFile), nil
+}
+
 func spotifyTokenIsValid(token *spotifyAnonymousToken) bool {
 	if token == nil || token.AccessToken == "" || token.AccessTokenExpirationTimestampMs == 0 {
 		return false
 	}
 
 	return time.Now().UnixMilli() < token.AccessTokenExpirationTimestampMs-30_000
+}
+
+func spotifySecretsCacheIsValid(cache *spotifySecretsCache) bool {
+	if cache == nil || cache.FetchedAtUnix == 0 || len(cache.Secrets) == 0 {
+		return false
+	}
+
+	return time.Since(time.Unix(cache.FetchedAtUnix, 0)) < spotifySecretsCacheTTL
 }
 
 func deriveSpotifyTOTPSecret(ciphertext []int) []byte {
@@ -237,8 +381,30 @@ func requestSpotifyAnonymousAccessToken(client *http.Client) (string, error) {
 	}
 
 	var secrets map[string][]int
-	if err := requestSpotifyJSON(client, spotifyTOTPSecretsURL, nil, &secrets); err != nil {
-		return "", err
+	cachedSecrets, err := loadSpotifyCachedSecrets()
+	if err != nil {
+		fmt.Printf("Warning: failed to read Spotify secrets cache: %v\n", err)
+	}
+
+	if spotifySecretsCacheIsValid(cachedSecrets) {
+		secrets = cachedSecrets.Secrets
+	} else {
+		if err := requestSpotifyJSON(client, spotifyTOTPSecretsURL, nil, &secrets); err != nil {
+			if cachedSecrets != nil && len(cachedSecrets.Secrets) > 0 {
+				fmt.Printf("Warning: failed to refresh Spotify secrets cache, using stale cache: %v\n", err)
+				secrets = cachedSecrets.Secrets
+			} else {
+				return "", err
+			}
+		} else {
+			cache := &spotifySecretsCache{
+				FetchedAtUnix: time.Now().Unix(),
+				Secrets:       secrets,
+			}
+			if err := saveSpotifyCachedSecrets(cache); err != nil {
+				fmt.Printf("Warning: failed to write Spotify secrets cache: %v\n", err)
+			}
+		}
 	}
 
 	version, err := latestSpotifySecretVersion(secrets)
