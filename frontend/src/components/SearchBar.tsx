@@ -11,6 +11,7 @@ import { SearchSpotify, SearchSpotifyByType } from "../../wailsjs/go/main/App";
 import { backend } from "../../wailsjs/go/models";
 import { cn } from "@/lib/utils";
 import { useTypingEffect } from "@/hooks/useTypingEffect";
+import { getSettings, type Settings } from "@/lib/settings";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 const FETCH_PLACEHOLDERS = [
@@ -245,6 +246,7 @@ interface SearchBarProps {
 export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, history, onHistorySelect, onHistoryRemove, hasResult, searchMode, onSearchModeChange, region, onRegionChange, }: SearchBarProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<backend.SearchResponse | null>(null);
+    const [showRegionSelector, setShowRegionSelector] = useState(() => getSettings().linkResolver === "songlink");
     const [resultFilter, setResultFilter] = useState("");
     const [sortOrders, setSortOrders] = useState<Record<ResultTab, string>>({
         tracks: "default",
@@ -278,6 +280,18 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
         catch (error) {
             console.error("Failed to load recent searches:", error);
         }
+    }, []);
+    useEffect(() => {
+        const syncRegionVisibility = (settings?: Partial<Settings>) => {
+            const resolver = settings?.linkResolver ?? getSettings().linkResolver;
+            setShowRegionSelector(resolver === "songlink");
+        };
+        syncRegionVisibility();
+        const handleSettingsUpdate = (event: Event) => {
+            syncRegionVisibility((event as CustomEvent<Partial<Settings>>).detail);
+        };
+        window.addEventListener("settingsUpdated", handleSettingsUpdate);
+        return () => window.removeEventListener("settingsUpdated", handleSettingsUpdate);
     }, []);
     const saveRecentSearch = (query: string) => {
         const trimmed = query.trim();
@@ -589,19 +603,19 @@ export function SearchBar({ url, loading, onUrlChange, onFetch, onFetchUrl, hist
         </div>
 
         {!searchMode && (<>
-            <Select value={region} onValueChange={onRegionChange}>
-              <SelectTrigger className="w-[70px] shrink-0">
-                <SelectValue placeholder="Region"/>
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                {REGIONS.map((r) => (<SelectItem key={r} value={r} textValue={r}>
-                    {r}{" "}
-                    <span className="text-muted-foreground">
-                      ({getRegionName(r)})
-                    </span>
-                  </SelectItem>))}
-              </SelectContent>
-            </Select>
+            {showRegionSelector && (<Select value={region} onValueChange={onRegionChange}>
+                <SelectTrigger className="w-[70px] shrink-0">
+                  <SelectValue placeholder="Region"/>
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {REGIONS.map((r) => (<SelectItem key={r} value={r} textValue={r}>
+                      {r}{" "}
+                      <span className="text-muted-foreground">
+                        ({getRegionName(r)})
+                      </span>
+                    </SelectItem>))}
+                </SelectContent>
+              </Select>)}
             <Button onClick={handleFetchWithValidation} disabled={loading}>
               {loading ? (<>
                   <Spinner />
