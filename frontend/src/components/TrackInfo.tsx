@@ -146,10 +146,16 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
                 </div>) : (<p>Check Availability</p>)}
               </TooltipContent>
             </Tooltip>)}
-            {isDownloaded && (<Button onClick={onOpenFolder} variant="outline">
-              <FolderOpen className="h-4 w-4"/>
-              Open Folder
-            </Button>)}
+            {isDownloaded && (<Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={onOpenFolder} variant="outline" size="icon">
+                  <FolderOpen className="h-4 w-4"/>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Open Folder</p>
+              </TooltipContent>
+            </Tooltip>)}
           </div>)}
         </div>
       </div>

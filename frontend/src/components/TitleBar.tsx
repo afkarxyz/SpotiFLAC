@@ -1,8 +1,9 @@
-import { X, Minus, Maximize, SlidersHorizontal, Info } from "lucide-react";
+import { X, Minus, Maximize, SlidersHorizontal, Info, Globe } from "lucide-react";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
 import { Menubar, MenubarContent, MenubarMenu, MenubarItem, MenubarTrigger, MenubarLabel, MenubarSeparator } from "@/components/ui/menubar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getSettings, updateSettings } from "@/lib/settings";
+import { openExternal } from "@/lib/utils";
 import { useState, useEffect } from "react";
 export function TitleBar() {
     const [useSpotFetchAPI, setUseSpotFetchAPI] = useState(false);
@@ -64,6 +65,11 @@ export function TitleBar() {
                     <MenubarItem onClick={handleSpotFetchAPIToggle} className="justify-between">
                         <span>Use SpotFetch API</span>
                         <span className="ml-4">{useSpotFetchAPI ? "✓" : ""}</span>
+                    </MenubarItem>
+                    <MenubarSeparator />
+                    <MenubarItem onClick={() => openExternal("https://afkarxyz.qzz.io")} className="gap-2">
+                        <Globe className="w-4 h-4 opacity-70" />
+                        <span>Website</span>
                     </MenubarItem>
                 </MenubarContent>
             </MenubarMenu>

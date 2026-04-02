@@ -216,10 +216,16 @@ export function PlaylistInfo({ playlistInfo, trackList, searchQuery, sortBy, sel
                       <p>Download All Separate Covers</p>
                     </TooltipContent>
                   </Tooltip>)}
-                {downloadedTracks.size > 0 && (<Button onClick={onOpenFolder} variant="outline">
-                    <FolderOpen className="h-4 w-4"/>
-                    Open Folder
-                  </Button>)}
+                {downloadedTracks.size > 0 && (<Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button onClick={onOpenFolder} variant="outline" size="icon">
+                        <FolderOpen className="h-4 w-4"/>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Open Folder</p>
+                    </TooltipContent>
+                  </Tooltip>)}
               </div>
               {isDownloading && (<DownloadProgress progress={downloadProgress} currentTrack={currentDownloadInfo} onStop={onStopDownload}/>)}
             </div>
