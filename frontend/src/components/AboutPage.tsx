@@ -23,6 +23,8 @@ const browserExtensionItems = [
     { icon: XProIcon, label: "Twitter/X Media Batch Downloader Pro", alt: "Twitter/X Media Batch Downloader Pro" },
 ];
 
+const projectCardClass = "cursor-pointer transition-colors hover:bg-muted/50 dark:hover:bg-accent/50";
+
 export function AboutPage() {
     const [activeTab, setActiveTab] = useState<"projects" | "support">("projects");
     const [repoStats, setRepoStats] = useState<Record<string, any>>({});
@@ -163,7 +165,7 @@ export function AboutPage() {
         {activeTab === "projects" && (<div className="p-1 pr-2">
             <div className="grid gap-2 grid-cols-4">
               <div className="flex flex-col gap-2 h-full">
-                <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://exyezed.qzz.io/")}>
+                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://exyezed.qzz.io/")}>
                     <CardHeader>
                     <CardTitle>Browser Extensions & Scripts</CardTitle>
                     <CardDescription className="flex flex-col gap-2 pt-2">
@@ -178,7 +180,7 @@ export function AboutPage() {
                     </CardDescription>
                   </CardHeader>
                 </Card>
-                <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer flex-1" onClick={() => openExternal("https://spotubedl.com/")}>
+                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://spotubedl.com/")}>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/>{" "}
@@ -191,7 +193,7 @@ export function AboutPage() {
                   </CardHeader>
                 </Card>
               </div>
-              <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/afkarxyz/SpotiDownloader")}>
+              <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/SpotiDownloader")}>
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiDownloaderIcon} className="h-6 w-6 shrink-0" alt="SpotiDownloader"/>
@@ -241,7 +243,7 @@ export function AboutPage() {
                     </div>
                   </CardContent>)}
               </Card>
-              <Card className="gap-2 hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
+              <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
@@ -285,12 +287,12 @@ export function AboutPage() {
                         Note
                       </div>
                       <p className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
-                        This project is a thank-you to everyone who supported SpotiFLAC on Ko-fi.
+                        This project was created as a thank-you to everyone who has supported SpotiFLAC on Ko-fi.
                       </p>
                     </div>
                   </CardContent>)}
               </Card>
-              <Card className="hover:bg-muted/50 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => openExternal("https://github.com/afkarxyz/Twitter-X-Media-Batch-Downloader")}>
+              <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/Twitter-X-Media-Batch-Downloader")}>
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={XBatchDLIcon} className="h-6 w-6 shrink-0" alt="Twitter/X Media Batch Downloader"/>
