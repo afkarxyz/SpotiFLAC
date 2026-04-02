@@ -119,6 +119,7 @@ func (s *SongLinkClient) resolveLinksViaDeezerSongLink(links *resolvedTrackLinks
 			attempts = append(attempts, fmt.Sprintf("deezer isrc: %v", err))
 		} else {
 			links.DeezerURL = deezerURL
+			fmt.Printf("Found Deezer URL: %s\n", links.DeezerURL)
 		}
 	}
 
