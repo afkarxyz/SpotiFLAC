@@ -11,8 +11,8 @@ func SelectMultipleFiles(ctx context.Context) ([]string, error) {
 		Title: "Select Audio Files",
 		Filters: []runtime.FileFilter{
 			{
-				DisplayName: "Audio Files (*.mp3, *.m4a, *.flac)",
-				Pattern:     "*.mp3;*.m4a;*.flac",
+				DisplayName: "Audio Files (*.mp3, *.m4a, *.flac, *.aac)",
+				Pattern:     "*.mp3;*.m4a;*.flac;*.aac",
 			},
 			{
 				DisplayName: "MP3 Files (*.mp3)",
@@ -25,6 +25,10 @@ func SelectMultipleFiles(ctx context.Context) ([]string, error) {
 			{
 				DisplayName: "FLAC Files (*.flac)",
 				Pattern:     "*.flac",
+			},
+			{
+				DisplayName: "AAC Files (*.aac)",
+				Pattern:     "*.aac",
 			},
 			{
 				DisplayName: "All Files (*.*)",

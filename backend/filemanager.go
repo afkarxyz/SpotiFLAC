@@ -94,7 +94,7 @@ func ListAudioFiles(dirPath string) ([]FileInfo, error) {
 		}
 
 		ext := strings.ToLower(filepath.Ext(path))
-		if ext == ".flac" || ext == ".mp3" || ext == ".m4a" {
+		if ext == ".flac" || ext == ".mp3" || ext == ".m4a" || ext == ".aac" {
 			result = append(result, FileInfo{
 				Name:  info.Name(),
 				Path:  path,

@@ -7,6 +7,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "
 export interface SpectrumVisualizationHandle {
     getCanvasDataURL: () => string | null;
 }
+type ColorScheme = AnalyzerColorScheme;
+type FreqScale = AnalyzerFreqScale;
+type WindowFunction = AnalyzerWindowFunction;
+export interface SpectrogramRenderOptions {
+    spectrumData: SpectrumData;
+    sampleRate: number;
+    duration: number;
+    freqScale: FreqScale;
+    colorScheme: ColorScheme;
+    fileName?: string;
+    shouldCancel?: () => boolean;
+}
 interface SpectrumVisualizationProps {
     sampleRate: number;
     duration: number;
@@ -19,9 +31,6 @@ interface SpectrumVisualizationProps {
         message: string;
     };
 }
-type ColorScheme = AnalyzerColorScheme;
-type FreqScale = AnalyzerFreqScale;
-type WindowFunction = AnalyzerWindowFunction;
 const MARGIN = { top: 50, right: 120, bottom: 70, left: 90 };
 const CANVAS_W = 1100;
 const CANVAS_H = 600;
@@ -420,6 +429,20 @@ async function renderSpectrogram(ctx: CanvasRenderingContext2D, spectrum: Spectr
     addAxisLabels(ctx, plotWidth, plotHeight, sampleRate, duration, freqScale, fileName);
     drawColorBar(ctx, plotHeight, colorScheme);
 }
+export async function renderSpectrogramToCanvas(canvas: HTMLCanvasElement, options: SpectrogramRenderOptions): Promise<void> {
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+        throw new Error("Cannot get 2D canvas context");
+    }
+    await renderSpectrogram(ctx, options.spectrumData, options.sampleRate, options.duration, options.freqScale, options.colorScheme, options.fileName, options.shouldCancel ?? (() => false));
+}
+export async function createSpectrogramDataURL(options: SpectrogramRenderOptions): Promise<string> {
+    const canvas = document.createElement("canvas");
+    await renderSpectrogramToCanvas(canvas, options);
+    return canvas.toDataURL("image/png");
+}
 const COLOR_SCHEMES: {
     value: ColorScheme;
     label: string;
@@ -468,7 +491,15 @@ export const SpectrumVisualization = forwardRef<SpectrumVisualizationHandle, Spe
         let canceled = false;
         const shouldCancel = () => canceled;
         if (spectrumData) {
-            void renderSpectrogram(ctx, spectrumData, sampleRate, duration, freqScale, colorScheme, fileName, shouldCancel);
+            void renderSpectrogramToCanvas(canvas, {
+                spectrumData,
+                sampleRate,
+                duration,
+                freqScale,
+                colorScheme,
+                fileName,
+                shouldCancel,
+            });
         }
         else {
             ctx.fillStyle = "#000000";
