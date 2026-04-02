@@ -87,14 +87,7 @@ func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error
 		isrc, resolvedTrackID, err := s.lookupSpotifyISRCViaSpotFetchAPI(normalizedTrackID, spotFetchAPIURL)
 		if err == nil && isrc != "" {
 			fmt.Printf("Found ISRC via SpotFetch API: %s\n", isrc)
-			if err := PutCachedISRC(normalizedTrackID, isrc); err != nil {
-				fmt.Printf("Warning: failed to write ISRC cache: %v\n", err)
-			}
-			if resolvedTrackID != "" && resolvedTrackID != normalizedTrackID {
-				if err := PutCachedISRC(resolvedTrackID, isrc); err != nil {
-					fmt.Printf("Warning: failed to write ISRC cache for resolved track ID: %v\n", err)
-				}
-			}
+			cacheResolvedSpotifyTrackISRC(normalizedTrackID, resolvedTrackID, isrc)
 			return isrc, nil
 		}
 		if err != nil {
@@ -102,21 +95,46 @@ func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error
 		}
 	}
 
-	payload, err := fetchSpotifyTrackRawData(s.client, normalizedTrackID)
-	if err != nil {
-		return "", err
+	payload, metadataErr := fetchSpotifyTrackRawData(s.client, normalizedTrackID)
+	if metadataErr == nil {
+		isrc, extractErr := extractSpotifyTrackISRC(payload)
+		if extractErr == nil {
+			fmt.Printf("Found ISRC via Spotify metadata: %s\n", isrc)
+			cacheResolvedSpotifyTrackISRC(normalizedTrackID, "", isrc)
+			return isrc, nil
+		}
+		metadataErr = extractErr
 	}
 
-	isrc, err := extractSpotifyTrackISRC(payload)
-	if err != nil {
-		return "", err
+	if metadataErr != nil {
+		fmt.Printf("Warning: Spotify metadata ISRC lookup failed, falling back to Soundplate: %v\n", metadataErr)
 	}
 
-	fmt.Printf("Found ISRC via Spotify metadata: %s\n", isrc)
-	if err := PutCachedISRC(normalizedTrackID, isrc); err != nil {
+	isrc, resolvedTrackID, soundplateErr := s.lookupSpotifyISRCViaSoundplate(normalizedTrackID)
+	if soundplateErr == nil && isrc != "" {
+		fmt.Printf("Found ISRC via Soundplate: %s\n", isrc)
+		cacheResolvedSpotifyTrackISRC(normalizedTrackID, resolvedTrackID, isrc)
+		return isrc, nil
+	}
+
+	if metadataErr != nil && soundplateErr != nil {
+		return "", fmt.Errorf("spotify metadata lookup failed: %v | soundplate lookup failed: %w", metadataErr, soundplateErr)
+	}
+	if soundplateErr != nil {
+		return "", soundplateErr
+	}
+	return "", metadataErr
+}
+
+func cacheResolvedSpotifyTrackISRC(trackID string, resolvedTrackID string, isrc string) {
+	if err := PutCachedISRC(trackID, isrc); err != nil {
 		fmt.Printf("Warning: failed to write ISRC cache: %v\n", err)
 	}
-	return isrc, nil
+	if resolvedTrackID != "" && resolvedTrackID != trackID {
+		if err := PutCachedISRC(resolvedTrackID, isrc); err != nil {
+			fmt.Printf("Warning: failed to write ISRC cache for resolved track ID: %v\n", err)
+		}
+	}
 }
 
 func (s *SongLinkClient) lookupSpotifyISRCViaSpotFetchAPI(spotifyTrackID string, apiBaseURL string) (string, string, error) {
