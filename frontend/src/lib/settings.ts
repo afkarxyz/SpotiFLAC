@@ -5,6 +5,8 @@ export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-
 export interface Settings {
     downloadPath: string;
     downloader: "auto" | "tidal" | "qobuz" | "amazon";
+    linkResolver: "songstats" | "songlink";
+    allowResolverFallback: boolean;
     theme: string;
     themeMode: "auto" | "light" | "dark";
     fontFamily: FontFamily;
@@ -93,6 +95,8 @@ function detectOS(): "Windows" | "linux/MacOS" {
 export const DEFAULT_SETTINGS: Settings = {
     downloadPath: "",
     downloader: "auto",
+    linkResolver: "songstats",
+    allowResolverFallback: true,
     theme: "yellow",
     themeMode: "auto",
     fontFamily: "google-sans",
@@ -225,6 +229,12 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('allowFallback' in parsed)) {
                 parsed.allowFallback = true;
             }
+            if (!('linkResolver' in parsed)) {
+                parsed.linkResolver = "songstats";
+            }
+            if (!('allowResolverFallback' in parsed)) {
+                parsed.allowResolverFallback = true;
+            }
             if (!('separator' in parsed)) {
                 parsed.separator = "semicolon";
             }
@@ -303,6 +313,12 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('allowFallback' in parsed)) {
                 parsed.allowFallback = true;
+            }
+            if (!('linkResolver' in parsed)) {
+                parsed.linkResolver = "songstats";
+            }
+            if (!('allowResolverFallback' in parsed)) {
+                parsed.allowResolverFallback = true;
             }
             if (!('createPlaylistFolder' in parsed)) {
                 parsed.createPlaylistFolder = true;

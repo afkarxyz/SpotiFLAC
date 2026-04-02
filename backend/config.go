@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func GetDefaultMusicPath() string {
@@ -66,4 +67,35 @@ func GetSpotFetchAPISettings() (bool, string) {
 	}
 
 	return true, apiURL
+}
+
+func GetLinkResolverSetting() string {
+	settings, err := LoadConfigSettings()
+	if err != nil || settings == nil {
+		return linkResolverProviderSongstats
+	}
+
+	resolver, _ := settings["linkResolver"].(string)
+	switch strings.TrimSpace(strings.ToLower(resolver)) {
+	case "songlink", linkResolverProviderDeezerSongLink:
+		return linkResolverProviderDeezerSongLink
+	case "", "songstats":
+		return linkResolverProviderSongstats
+	default:
+		return linkResolverProviderSongstats
+	}
+}
+
+func GetLinkResolverAllowFallback() bool {
+	settings, err := LoadConfigSettings()
+	if err != nil || settings == nil {
+		return true
+	}
+
+	allowFallback, ok := settings["allowResolverFallback"].(bool)
+	if !ok {
+		return true
+	}
+
+	return allowFallback
 }

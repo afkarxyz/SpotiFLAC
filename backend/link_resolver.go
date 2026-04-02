@@ -30,32 +30,23 @@ func (s *SongLinkClient) resolveSpotifyTrackLinks(spotifyTrackID string, region 
 	}
 
 	if links.ISRC != "" {
-		resolvers := prioritizeProviders("link_resolver", []string{
-			linkResolverProviderSongstats,
-			linkResolverProviderDeezerSongLink,
-		})
+		resolvers := orderedLinkResolvers()
 
 		for _, resolver := range resolvers {
 			switch resolver {
 			case linkResolverProviderSongstats:
 				addedData, songstatsErr := s.resolveLinksViaSongstats(links)
-				if addedData {
-					recordProviderSuccess("link_resolver", linkResolverProviderSongstats)
-				} else if songstatsErr != nil {
-					recordProviderFailure("link_resolver", linkResolverProviderSongstats)
-				}
 				if songstatsErr != nil {
 					attempts = append(attempts, fmt.Sprintf("songstats: %v", songstatsErr))
+				} else if addedData {
+					fmt.Println("Using Songstats as configured link resolver")
 				}
 			case linkResolverProviderDeezerSongLink:
 				addedData, deezerSongLinkErr := s.resolveLinksViaDeezerSongLink(links, region)
-				if addedData {
-					recordProviderSuccess("link_resolver", linkResolverProviderDeezerSongLink)
-				} else if deezerSongLinkErr != nil {
-					recordProviderFailure("link_resolver", linkResolverProviderDeezerSongLink)
-				}
 				if deezerSongLinkErr != nil {
 					attempts = append(attempts, fmt.Sprintf("deezer-songlink: %v", deezerSongLinkErr))
+				} else if addedData {
+					fmt.Println("Using Songlink as configured link resolver")
 				}
 			}
 
@@ -74,6 +65,28 @@ func (s *SongLinkClient) resolveSpotifyTrackLinks(spotifyTrackID string, region 
 	}
 
 	return links, errors.New(strings.Join(attempts, " | "))
+}
+
+func orderedLinkResolvers() []string {
+	preferred := GetLinkResolverSetting()
+	if !GetLinkResolverAllowFallback() {
+		if preferred == linkResolverProviderDeezerSongLink {
+			return []string{linkResolverProviderDeezerSongLink}
+		}
+		return []string{linkResolverProviderSongstats}
+	}
+
+	if preferred == linkResolverProviderDeezerSongLink {
+		return []string{
+			linkResolverProviderDeezerSongLink,
+			linkResolverProviderSongstats,
+		}
+	}
+
+	return []string{
+		linkResolverProviderSongstats,
+		linkResolverProviderDeezerSongLink,
+	}
 }
 
 func (s *SongLinkClient) resolveLinksViaSongstats(links *resolvedTrackLinks) (bool, error) {

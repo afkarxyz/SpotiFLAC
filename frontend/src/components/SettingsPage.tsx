@@ -14,6 +14,8 @@ import { SelectFolder, OpenConfigFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { ApiStatusTab } from "./ApiStatusTab";
 import { AmazonIcon, QobuzIcon, TidalIcon } from "./PlatformIcons";
+import songlinkIcon from "@/assets/icons/songlink.ico";
+import songstatsIcon from "@/assets/icons/songstats.png";
 interface SettingsPageProps {
     onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
     onResetRequest?: (resetFn: () => void) => void;
@@ -230,6 +232,44 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
             </div>
 
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="link-resolver">Link Resolver</Label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <Select value={tempSettings.linkResolver} onValueChange={(value: "songstats" | "songlink") => setTempSettings((prev) => ({
+                ...prev,
+                linkResolver: value,
+            }))}>
+                    <SelectTrigger id="link-resolver" className="h-9 w-fit min-w-[140px]">
+                      <SelectValue placeholder="Select a link resolver"/>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="songstats">
+                        <span className="flex items-center gap-2">
+                          <img src={songstatsIcon} alt="Songstats" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy" />
+                          Songstats
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="songlink">
+                        <span className="flex items-center gap-2">
+                          <img src={songlinkIcon} alt="Songlink" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy" />
+                          Songlink
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <div className="flex items-center gap-3">
+                    <Switch id="allow-link-resolver-fallback" checked={tempSettings.allowResolverFallback} onCheckedChange={(checked) => setTempSettings((prev) => ({
+                ...prev,
+                allowResolverFallback: checked,
+            }))}/>
+                    <Label htmlFor="allow-link-resolver-fallback" className="text-sm font-normal cursor-pointer">
+                      Allow Fallback
+                    </Label>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="downloader">Source</Label>
                 <div className="flex gap-2 flex-wrap">
