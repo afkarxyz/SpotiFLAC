@@ -408,7 +408,10 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if req.Service == "qobuz" {
 			go func() {
 				client := backend.NewSongLinkClient()
-				isrc, _ := client.GetISRCDirect(req.SpotifyID)
+				isrc, err := client.GetISRCDirect(req.SpotifyID)
+				if err != nil {
+					fmt.Printf("Warning: failed to resolve ISRC for Qobuz: %v\n", err)
+				}
 				isrcChan <- isrc
 			}()
 		} else {
@@ -455,7 +458,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if quality == "" {
 			quality = "6"
 		}
-		filename, err = downloader.DownloadTrackWithISRC(isrc, req.SpotifyID, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
+		filename, err = downloader.DownloadTrackWithISRC(isrc, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
 
 	default:
 		return DownloadResponse{

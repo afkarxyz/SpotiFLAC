@@ -362,29 +362,29 @@ func buildQobuzFilename(title, artist, album, albumArtist, releaseDate string, t
 }
 
 func (q *QobuzDownloader) DownloadTrack(spotifyID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
-	var deezerISRC string
+	var isrc string
 	if spotifyID != "" {
-		songlinkClient := NewSongLinkClient()
-		isrc, err := songlinkClient.GetISRCDirect(spotifyID)
+		linkClient := NewSongLinkClient()
+		resolvedISRC, err := linkClient.GetISRCDirect(spotifyID)
 		if err != nil {
 			return "", fmt.Errorf("failed to get ISRC: %v", err)
 		}
-		deezerISRC = isrc
+		isrc = resolvedISRC
 	} else {
 		return "", fmt.Errorf("spotify ID is required for Qobuz download")
 	}
 
-	return q.DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyURL, allowFallback, useFirstArtistOnly, useSingleGenre, embedGenre)
+	return q.DownloadTrackWithISRC(isrc, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyURL, allowFallback, useFirstArtistOnly, useSingleGenre, embedGenre)
 }
 
-func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
-	fmt.Printf("Fetching track info for ISRC: %s\n", deezerISRC)
+func (q *QobuzDownloader) DownloadTrackWithISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
+	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	metaChan := make(chan Metadata, 1)
-	if embedGenre && deezerISRC != "" {
+	if embedGenre && isrc != "" {
 		go func() {
 			fmt.Println("Fetching MusicBrainz metadata...")
-			if fetchedMeta, err := FetchMusicBrainzMetadata(deezerISRC, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useSingleGenre, embedGenre); err == nil {
+			if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useSingleGenre, embedGenre); err == nil {
 				fmt.Println("✓ MusicBrainz metadata fetched")
 				metaChan <- fetchedMeta
 			} else {
@@ -402,7 +402,7 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir
 		}
 	}
 
-	track, err := q.searchByISRC(deezerISRC)
+	track, err := q.searchByISRC(isrc)
 	if err != nil {
 		return "", err
 	}
@@ -477,7 +477,7 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir
 	}
 
 	var mbMeta Metadata
-	if deezerISRC != "" {
+	if isrc != "" {
 		mbMeta = <-metaChan
 	}
 
@@ -502,7 +502,7 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir
 		Copyright:   spotifyCopyright,
 		Publisher:   spotifyPublisher,
 		Description: "https://github.com/afkarxyz/SpotiFLAC",
-		ISRC:        deezerISRC,
+		ISRC:        isrc,
 		Genre:       mbMeta.Genre,
 	}
 
