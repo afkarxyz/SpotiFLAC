@@ -54,6 +54,14 @@ func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error
 		return "", err
 	}
 
+	cachedISRC, err := GetCachedISRC(normalizedTrackID)
+	if err != nil {
+		fmt.Printf("Warning: failed to read ISRC cache: %v\n", err)
+	} else if cachedISRC != "" {
+		fmt.Printf("Found ISRC in cache: %s\n", cachedISRC)
+		return cachedISRC, nil
+	}
+
 	payload, err := fetchSpotifyTrackRawData(s.client, normalizedTrackID)
 	if err != nil {
 		return "", err
@@ -65,6 +73,9 @@ func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error
 	}
 
 	fmt.Printf("Found ISRC via Spotify metadata: %s\n", isrc)
+	if err := PutCachedISRC(normalizedTrackID, isrc); err != nil {
+		fmt.Printf("Warning: failed to write ISRC cache: %v\n", err)
+	}
 	return isrc, nil
 }
 
@@ -158,17 +169,12 @@ func saveSpotifyCachedToken(token *spotifyAnonymousToken) error {
 }
 
 func spotifyTokenCachePath() (string, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err == nil && cacheDir != "" {
-		return filepath.Join(cacheDir, "SpotiFLAC", spotifyTokenCacheFile), nil
-	}
-
-	wd, err := os.Getwd()
+	appDir, err := EnsureAppDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to determine working directory: %w", err)
+		return "", err
 	}
 
-	return filepath.Join(wd, spotifyTokenCacheFile), nil
+	return filepath.Join(appDir, spotifyTokenCacheFile), nil
 }
 
 func spotifyTokenIsValid(token *spotifyAnonymousToken) bool {

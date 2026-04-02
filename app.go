@@ -46,10 +46,14 @@ func (a *App) startup(ctx context.Context) {
 	if err := backend.InitHistoryDB("SpotiFLAC"); err != nil {
 		fmt.Printf("Failed to init history DB: %v\n", err)
 	}
+	if err := backend.InitISRCCacheDB(); err != nil {
+		fmt.Printf("Failed to init ISRC cache DB: %v\n", err)
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	backend.CloseHistoryDB()
+	backend.CloseISRCCacheDB()
 }
 
 type SpotifyMetadataRequest struct {
@@ -629,12 +633,8 @@ func (a *App) OpenFolder(path string) error {
 }
 
 func (a *App) OpenConfigFolder() error {
-	homeDir, err := os.UserHomeDir()
+	configDir, err := backend.EnsureAppDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
-	}
-	configDir := filepath.Join(homeDir, ".spotiflac")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %v", err)
 	}
 	return backend.OpenFolderInExplorer(configDir)
