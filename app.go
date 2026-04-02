@@ -23,8 +23,32 @@ type App struct {
 	ctx context.Context
 }
 
+const checkOperationTimeout = 10 * time.Second
+
 func NewApp() *App {
 	return &App{}
+}
+
+type timedResult[T any] struct {
+	value T
+	err   error
+}
+
+func runWithTimeout[T any](timeout time.Duration, fn func() (T, error)) (T, error) {
+	resultCh := make(chan timedResult[T], 1)
+
+	go func() {
+		value, err := fn()
+		resultCh <- timedResult[T]{value: value, err: err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		return result.value, result.err
+	case <-time.After(timeout):
+		var zero T
+		return zero, fmt.Errorf("operation timed out after %s", timeout)
+	}
 }
 
 func (a *App) getFirstArtist(artistString string) string {
@@ -757,49 +781,57 @@ func (a *App) ExportFailedDownloads() (string, error) {
 }
 
 func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
-	var checkURL string
-	if apiType == "tidal" {
-		checkURL = fmt.Sprintf("%s/track/?id=441821360&quality=HI_RES_LOSSLESS", apiURL)
-	} else if apiType == "qobuz" {
-		checkURL = fmt.Sprintf("%s/api/stream?trackId=360735657&format_id=27", apiURL)
-	} else if apiType == "qbz" {
-		checkURL = fmt.Sprintf("%s/api/track/360735657?quality=27", apiURL)
-	} else if apiType == "amazon" {
-		checkURL = fmt.Sprintf("%s/status", apiURL)
-	} else {
-		checkURL = apiURL
-	}
+	isOnline, err := runWithTimeout(checkOperationTimeout, func() (bool, error) {
+		var checkURL string
+		if apiType == "tidal" {
+			checkURL = fmt.Sprintf("%s/track/?id=441821360&quality=HI_RES_LOSSLESS", apiURL)
+		} else if apiType == "qobuz" {
+			checkURL = fmt.Sprintf("%s/api/stream?trackId=360735657&format_id=27", apiURL)
+		} else if apiType == "qbz" {
+			checkURL = fmt.Sprintf("%s/api/track/360735657?quality=27", apiURL)
+		} else if apiType == "amazon" {
+			checkURL = fmt.Sprintf("%s/status", apiURL)
+		} else {
+			checkURL = apiURL
+		}
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", checkURL, nil)
-	if err != nil {
-		return false
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+		client := &http.Client{Timeout: 10 * time.Second}
+		req, err := http.NewRequest("GET", checkURL, nil)
+		if err != nil {
+			return false, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
 
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		resp, err := client.Do(req)
-		if err == nil {
-			statusCode := resp.StatusCode
-			if apiType == "amazon" && statusCode == 200 {
-				body, readErr := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				if readErr == nil && strings.Contains(string(body), `"amazonMusic":"up"`) {
-					return true
-				}
-			} else {
-				resp.Body.Close()
-				if statusCode == 200 {
-					return true
+		maxRetries := 3
+		for i := 0; i < maxRetries; i++ {
+			resp, err := client.Do(req)
+			if err == nil {
+				statusCode := resp.StatusCode
+				if apiType == "amazon" && statusCode == 200 {
+					body, readErr := io.ReadAll(resp.Body)
+					resp.Body.Close()
+					if readErr == nil && strings.Contains(string(body), `"amazonMusic":"up"`) {
+						return true, nil
+					}
+				} else {
+					resp.Body.Close()
+					if statusCode == 200 {
+						return true, nil
+					}
 				}
 			}
+			if i < maxRetries-1 {
+				time.Sleep(1 * time.Second)
+			}
 		}
-		if i < maxRetries-1 {
-			time.Sleep(1 * time.Second)
-		}
+		return false, nil
+	})
+	if err != nil {
+		fmt.Printf("CheckAPIStatus timeout/error for %s (%s): %v\n", apiType, apiURL, err)
+		return false
 	}
-	return false
+
+	return isOnline
 }
 
 func (a *App) Quit() {
@@ -1085,18 +1117,20 @@ func (a *App) CheckTrackAvailability(spotifyTrackID string) (string, error) {
 		return "", fmt.Errorf("spotify track ID is required")
 	}
 
-	client := backend.NewSongLinkClient()
-	availability, err := client.CheckTrackAvailability(spotifyTrackID)
-	if err != nil {
-		return "", err
-	}
+	return runWithTimeout(checkOperationTimeout, func() (string, error) {
+		client := backend.NewSongLinkClient()
+		availability, err := client.CheckTrackAvailability(spotifyTrackID)
+		if err != nil {
+			return "", err
+		}
 
-	jsonData, err := json.Marshal(availability)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode response: %v", err)
-	}
+		jsonData, err := json.Marshal(availability)
+		if err != nil {
+			return "", fmt.Errorf("failed to encode response: %v", err)
+		}
 
-	return string(jsonData), nil
+		return string(jsonData), nil
+	})
 }
 
 func (a *App) IsFFmpegInstalled() (bool, error) {

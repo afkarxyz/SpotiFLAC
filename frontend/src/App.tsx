@@ -32,6 +32,7 @@ import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
 import { useCover } from "@/hooks/useCover";
 import { useAvailability } from "@/hooks/useAvailability";
+import { ensureApiStatusCheckStarted } from "@/lib/api-status";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 const HISTORY_KEY = "spotiflac_fetch_history";
@@ -179,6 +180,7 @@ function App() {
         };
         mediaQuery.addEventListener("change", handleChange);
         checkForUpdates();
+        ensureApiStatusCheckStarted();
         loadHistory();
         const handleScroll = () => {
             setShowScrollTop(window.scrollY > 300);

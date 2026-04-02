@@ -273,8 +273,7 @@ export function AboutPage() {
                         Note
                       </div>
                       <p className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
-                        SpotiFLAC Next is a separate project created as a thank-you
-                        to everyone who has supported SpotiFLAC on Ko-fi.
+                        This project is a thank-you to everyone who supported SpotiFLAC on Ko-fi.
                       </p>
                     </div>
                   </CardContent>)}
