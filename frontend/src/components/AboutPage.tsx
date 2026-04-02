@@ -164,35 +164,55 @@ export function AboutPage() {
 
         {activeTab === "projects" && (<div className="p-1 pr-2">
             <div className="grid gap-2 grid-cols-4">
-              <div className="flex flex-col gap-2 h-full">
-                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://exyezed.qzz.io/")}>
-                    <CardHeader>
-                    <CardTitle>Browser Extensions & Scripts</CardTitle>
-                    <CardDescription className="flex flex-col gap-2 pt-2">
-                      {browserExtensionItems.map((item) => (
-                        <div key={item.alt} className="flex items-center gap-2">
-                          <img src={item.icon} className="h-[22px] w-[22px] rounded-sm shadow-sm" alt={item.alt}/>
-                          <span className="text-[11px] leading-tight text-muted-foreground">
-                            {item.label}
-                          </span>
-                        </div>
-                      ))}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://spotubedl.com/")}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/>{" "}
-                      SpotubeDL
-                    </CardTitle>
-                    <CardDescription>
-                      Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus
-                      with High Quality.
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              </div>
+              <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
+                <CardHeader>
+                  <div className="flex justify-between items-start mb-2">
+                    <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
+                    {repoStats["SpotiFLAC-Next"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                        {repoStats["SpotiFLAC-Next"].latestVersion}
+                      </span>)}
+                  </div>
+                  <CardTitle className="leading-tight">
+                    SpotiFLAC Next
+                  </CardTitle>
+                  <CardDescription>
+                    {getRepoDescription("SpotiFLAC-Next")}
+                  </CardDescription>
+                </CardHeader>
+                {repoStats["SpotiFLAC-Next"] && (<CardContent className="space-y-2">
+                    {repoStats["SpotiFLAC-Next"].languages?.length > 0 && (<div className="flex flex-wrap gap-2 text-xs">
+                        {repoStats["SpotiFLAC-Next"].languages.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
+                            backgroundColor: getLangColor(lang) + "20",
+                            color: getLangColor(lang),
+                        }}>
+                            {lang}
+                          </span>))}
+                      </div>)}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500"/>{" "}
+                        {formatNumber(repoStats["SpotiFLAC-Next"].stars)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <GitFork className="h-3.5 w-3.5"/>{" "}
+                        {repoStats["SpotiFLAC-Next"].forks}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5"/>{" "}
+                        {formatTimeAgo(repoStats["SpotiFLAC-Next"].createdAt)}
+                      </span>
+                    </div>
+                    <div className="rounded-md border border-sky-500/25 bg-sky-500/8 px-3 py-2">
+                      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
+                        <Info className="h-3.5 w-3.5"/>
+                        Note
+                      </div>
+                      <p className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
+                        This project was created as a thank-you to everyone who has supported SpotiFLAC on Ko-fi.
+                      </p>
+                    </div>
+                  </CardContent>)}
+              </Card>
               <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/SpotiDownloader")}>
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
@@ -240,55 +260,6 @@ export function AboutPage() {
                         <Download className="h-3.5 w-3.5"/> LATEST:{" "}
                         {formatNumber(repoStats["SpotiDownloader"].latestDownloads)}
                       </span>
-                    </div>
-                  </CardContent>)}
-              </Card>
-              <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
-                <CardHeader>
-                  <div className="flex justify-between items-start mb-2">
-                    <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
-                    {repoStats["SpotiFLAC-Next"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                        {repoStats["SpotiFLAC-Next"].latestVersion}
-                      </span>)}
-                  </div>
-                  <CardTitle className="leading-tight">
-                    SpotiFLAC Next
-                  </CardTitle>
-                  <CardDescription>
-                    {getRepoDescription("SpotiFLAC-Next")}
-                  </CardDescription>
-                </CardHeader>
-                {repoStats["SpotiFLAC-Next"] && (<CardContent className="space-y-2">
-                    {repoStats["SpotiFLAC-Next"].languages?.length > 0 && (<div className="flex flex-wrap gap-2 text-xs">
-                        {repoStats["SpotiFLAC-Next"].languages.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
-                            backgroundColor: getLangColor(lang) + "20",
-                            color: getLangColor(lang),
-                        }}>
-                            {lang}
-                          </span>))}
-                      </div>)}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500"/>{" "}
-                        {formatNumber(repoStats["SpotiFLAC-Next"].stars)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <GitFork className="h-3.5 w-3.5"/>{" "}
-                        {repoStats["SpotiFLAC-Next"].forks}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5"/>{" "}
-                        {formatTimeAgo(repoStats["SpotiFLAC-Next"].createdAt)}
-                      </span>
-                    </div>
-                    <div className="rounded-md border border-sky-500/25 bg-sky-500/8 px-3 py-2">
-                      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-sky-700 dark:text-sky-300">
-                        <Info className="h-3.5 w-3.5"/>
-                        Note
-                      </div>
-                      <p className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
-                        This project was created as a thank-you to everyone who has supported SpotiFLAC on Ko-fi.
-                      </p>
                     </div>
                   </CardContent>)}
               </Card>
@@ -345,6 +316,35 @@ export function AboutPage() {
                     </div>
                   </CardContent>)}
               </Card>
+              <div className="flex flex-col gap-2 h-full">
+                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://exyezed.qzz.io/")}>
+                    <CardHeader>
+                    <CardTitle>Browser Extensions & Scripts</CardTitle>
+                    <CardDescription className="flex flex-col gap-2 pt-2">
+                      {browserExtensionItems.map((item) => (
+                        <div key={item.alt} className="flex items-center gap-2">
+                          <img src={item.icon} className="h-[22px] w-[22px] rounded-sm shadow-sm" alt={item.alt}/>
+                          <span className="text-[11px] leading-tight text-muted-foreground">
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+                <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://spotubedl.com/")}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/>{" "}
+                      SpotubeDL
+                    </CardTitle>
+                    <CardDescription>
+                      Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus
+                      with High Quality.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              </div>
             </div>
           </div>)}
 
