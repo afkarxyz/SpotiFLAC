@@ -5,7 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/tooltip";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, } from "@/components/ui/pagination";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
-import { TidalIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
+import { TidalAvailabilityIcon, QobuzAvailabilityIcon, AmazonAvailabilityIcon } from "./PlatformIcons";
 import { usePreview } from "@/hooks/usePreview";
 interface TrackListProps {
     tracks: TrackMetadata[];
@@ -328,9 +328,9 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                     </TooltipTrigger>
                     <TooltipContent>
                       {availabilityMap?.has(track.spotify_id) ? (<div className="flex items-center gap-2">
-                        <TidalIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`}/>
-                        <QobuzIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`}/>
-                        <AmazonIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`}/>
+                        <TidalAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`}/>
+                        <QobuzAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`}/>
+                        <AmazonAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`}/>
                       </div>) : (<p>Check Availability</p>)}
                     </TooltipContent>
                   </Tooltip>)}
