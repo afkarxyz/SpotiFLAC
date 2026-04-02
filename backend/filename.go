@@ -1,9 +1,7 @@
 package backend
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -139,25 +137,17 @@ func NormalizePath(folderPath string) string {
 }
 
 func GetSeparator() string {
-	dir, err := GetFFmpegDir()
-	if err != nil {
-		return "; "
-	}
-	configPath := filepath.Join(dir, "config.json")
-	data, err := os.ReadFile(configPath)
-	if err != nil {
+	settings, err := LoadConfigSettings()
+	if err != nil || settings == nil {
 		return "; "
 	}
 
-	var settings map[string]interface{}
-	if err := json.Unmarshal(data, &settings); err == nil {
-		if sep, ok := settings["separator"].(string); ok {
-			if sep == "comma" {
-				return ", "
-			}
-			if sep == "semicolon" {
-				return "; "
-			}
+	if sep, ok := settings["separator"].(string); ok {
+		if sep == "comma" {
+			return ", "
+		}
+		if sep == "semicolon" {
+			return "; "
 		}
 	}
 	return "; "

@@ -3,7 +3,6 @@ package backend
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"time"
@@ -35,12 +34,9 @@ const (
 
 func InitHistoryDB(appName string) error {
 
-	appDir, err := GetFFmpegDir()
+	appDir, err := EnsureAppDir()
 	if err != nil {
 		return err
-	}
-	if _, err := os.Stat(appDir); os.IsNotExist(err) {
-		os.MkdirAll(appDir, 0755)
 	}
 	dbPath := filepath.Join(appDir, "history.db")
 

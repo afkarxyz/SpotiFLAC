@@ -1,6 +1,8 @@
 package backend
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,6 +24,16 @@ type AnalysisResult struct {
 	DynamicRange  float64 `json:"dynamic_range"`
 	PeakAmplitude float64 `json:"peak_amplitude"`
 	RMSLevel      float64 `json:"rms_level"`
+}
+
+type AnalysisDecodeResponse struct {
+	PCMBase64     string  `json:"pcm_base64"`
+	SampleRate    uint32  `json:"sample_rate"`
+	Channels      uint8   `json:"channels"`
+	BitsPerSample uint8   `json:"bits_per_sample"`
+	Duration      float64 `json:"duration"`
+	BitrateKbps   int     `json:"bitrate_kbps,omitempty"`
+	BitDepth      string  `json:"bit_depth,omitempty"`
 }
 
 func GetTrackMetadata(filepath string) (*AnalysisResult, error) {
@@ -112,4 +124,91 @@ func GetMetadataWithFFprobe(filePath string) (*AnalysisResult, error) {
 	}
 
 	return res, nil
+}
+
+func DecodeAudioForAnalysis(filePath string) (*AnalysisDecodeResponse, error) {
+	metadata, err := GetTrackMetadata(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	pcmBase64, err := extractAnalysisPCMBase64(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &AnalysisDecodeResponse{
+		PCMBase64:     pcmBase64,
+		SampleRate:    metadata.SampleRate,
+		Channels:      metadata.Channels,
+		BitsPerSample: metadata.BitsPerSample,
+		Duration:      metadata.Duration,
+		BitDepth:      metadata.BitDepth,
+	}
+
+	if metadata.Bitrate > 0 {
+		resp.BitrateKbps = metadata.Bitrate / 1000
+	}
+
+	return resp, nil
+}
+
+func extractAnalysisPCMBase64(filePath string) (string, error) {
+	ffmpegPath, err := GetFFmpegPath()
+	if err != nil {
+		return "", err
+	}
+
+	argSets := [][]string{
+		{
+			"-v", "error",
+			"-i", filePath,
+			"-vn",
+			"-map", "0:a:0",
+			"-af", "pan=mono|c0=c0",
+			"-f", "s16le",
+			"-acodec", "pcm_s16le",
+			"pipe:1",
+		},
+		{
+			"-v", "error",
+			"-i", filePath,
+			"-vn",
+			"-map", "0:a:0",
+			"-ac", "1",
+			"-f", "s16le",
+			"-acodec", "pcm_s16le",
+			"pipe:1",
+		},
+	}
+
+	var lastErr error
+
+	for _, args := range argSets {
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+
+		cmd := exec.Command(ffmpegPath, args...)
+		setHideWindow(cmd)
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+
+		if err := cmd.Run(); err != nil {
+			lastErr = fmt.Errorf("ffmpeg analysis decode failed: %w - %s", err, strings.TrimSpace(stderr.String()))
+			continue
+		}
+
+		if stdout.Len() == 0 {
+			lastErr = fmt.Errorf("ffmpeg analysis decode returned empty PCM output")
+			continue
+		}
+
+		return base64.StdEncoding.EncodeToString(stdout.Bytes()), nil
+	}
+
+	if lastErr != nil {
+		return "", lastErr
+	}
+
+	return "", fmt.Errorf("ffmpeg analysis decode failed")
 }

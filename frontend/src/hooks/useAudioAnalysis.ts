@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 
 import type { AnalysisResult } from "@/types/api";
 import { logger } from "@/lib/logger";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
-import { analyzeAudioArrayBuffer, analyzeAudioFile, analyzeSpectrumFromSamples, type AnalysisProgress, } from "@/lib/flac-analysis";
+import { analyzeAudioArrayBuffer, analyzeAudioFile, analyzeDecodedSamples, analyzeSpectrumFromSamples, parseAudioMetadataFromInput, pcm16MonoArrayBufferToFloat32Samples, type AnalysisProgress, type FrontendAnalysisPayload, type ParsedAudioMetadata, } from "@/lib/flac-analysis";
 import { loadAudioAnalysisPreferences } from "@/lib/audio-analysis-preferences";
 type WindowFunction = "hann" | "hamming" | "blackman" | "rectangular";
 function toWindowFunction(value: string): WindowFunction {
@@ -49,6 +49,8 @@ let sessionResult: AnalysisResult | null = null;
 let sessionSelectedFilePath = "";
 let sessionError: string | null = null;
 let sessionSamples: Float32Array | null = null;
+let sessionCurrentAnalysisKey = "";
+const sessionSamplesByKey = new Map<string, Float32Array>();
 interface ProgressState {
     percent: number;
     message: string;
@@ -59,6 +61,35 @@ const DEFAULT_PROGRESS_STATE: ProgressState = {
 };
 interface CancelToken {
     cancelled: boolean;
+}
+interface AnalyzeExecutionOptions {
+    analysisKey?: string;
+    displayPath?: string;
+    suppressToast?: boolean;
+}
+export interface AnalyzeExecutionOutcome {
+    result: AnalysisResult | null;
+    error: string | null;
+    cancelled: boolean;
+}
+interface WailsWindow extends Window {
+    go?: {
+        main?: {
+            App?: {
+                ReadFileAsBase64?: (path: string) => Promise<string>;
+                DecodeAudioForAnalysis?: (path: string) => Promise<BackendAnalysisDecodeResponse>;
+            };
+        };
+    };
+}
+interface BackendAnalysisDecodeResponse {
+    pcm_base64: string;
+    sample_rate: number;
+    channels: number;
+    bits_per_sample: number;
+    duration: number;
+    bitrate_kbps?: number;
+    bit_depth?: string;
 }
 function cancelToken(tokenRef: MutableRefObject<CancelToken | null>): void {
     if (tokenRef.current) {
@@ -81,6 +112,23 @@ function toProgressState(progress: AnalysisProgress): ProgressState {
         message: progress.message,
     };
 }
+function isDecodeFailure(error: unknown): boolean {
+    return error instanceof Error && /decode/i.test(error.message);
+}
+function mergeBackendDecodedMetadata(parsed: ParsedAudioMetadata, decoded: BackendAnalysisDecodeResponse): ParsedAudioMetadata {
+    const sampleRate = decoded.sample_rate > 0 ? decoded.sample_rate : parsed.sampleRate;
+    const bitsPerSample = decoded.bits_per_sample > 0 ? decoded.bits_per_sample : parsed.bitsPerSample;
+    const duration = decoded.duration > 0 ? decoded.duration : parsed.duration;
+    return {
+        ...parsed,
+        sampleRate,
+        channels: decoded.channels > 0 ? decoded.channels : parsed.channels,
+        bitsPerSample,
+        totalSamples: duration > 0 && sampleRate > 0 ? Math.floor(duration * sampleRate) : parsed.totalSamples,
+        duration,
+        bitrateKbps: decoded.bitrate_kbps ?? parsed.bitrateKbps,
+    };
+}
 export function useAudioAnalysis() {
     const [analyzing, setAnalyzing] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState<ProgressState>(DEFAULT_PROGRESS_STATE);
@@ -90,6 +138,7 @@ export function useAudioAnalysis() {
     const [spectrumLoading, setSpectrumLoading] = useState(false);
     const [spectrumProgress, setSpectrumProgress] = useState<ProgressState>(DEFAULT_PROGRESS_STATE);
     const samplesRef = useRef<Float32Array | null>(sessionSamples);
+    const currentAnalysisKeyRef = useRef(sessionCurrentAnalysisKey);
     const analysisTokenRef = useRef<CancelToken | null>(null);
     const spectrumTokenRef = useRef<CancelToken | null>(null);
     useEffect(() => {
@@ -110,12 +159,32 @@ export function useAudioAnalysis() {
         sessionError = next;
         setError(next);
     }, []);
-    const analyzeFile = useCallback(async (file: File) => {
+    const setCurrentAnalysisKey = useCallback((analysisKey: string) => {
+        currentAnalysisKeyRef.current = analysisKey;
+        sessionCurrentAnalysisKey = analysisKey;
+    }, []);
+    const storeSuccessfulAnalysis = useCallback((analysisKey: string, displayPath: string, payload: FrontendAnalysisPayload) => {
+        sessionSamplesByKey.set(analysisKey, payload.samples);
+        samplesRef.current = payload.samples;
+        sessionSamples = payload.samples;
+        setCurrentAnalysisKey(analysisKey);
+        setResultWithSession(payload.result);
+        setSelectedFilePathWithSession(displayPath);
+        setErrorWithSession(null);
+    }, [setCurrentAnalysisKey, setErrorWithSession, setResultWithSession, setSelectedFilePathWithSession]);
+    const analyzeFile = useCallback(async (file: File, options?: AnalyzeExecutionOptions): Promise<AnalyzeExecutionOutcome> => {
         if (!file) {
-            setErrorWithSession("No file provided");
-            return null;
+            const errorMessage = "No file provided";
+            setErrorWithSession(errorMessage);
+            return {
+                result: null,
+                error: errorMessage,
+                cancelled: false,
+            };
         }
         const token = createToken(analysisTokenRef);
+        const analysisKey = options?.analysisKey || file.name;
+        const displayPath = options?.displayPath || file.name;
         cancelToken(spectrumTokenRef);
         setAnalyzing(true);
         setAnalysisProgress({
@@ -124,32 +193,44 @@ export function useAudioAnalysis() {
         });
         setErrorWithSession(null);
         setResultWithSession(null);
-        setSelectedFilePathWithSession(file.name);
+        setSelectedFilePathWithSession(displayPath);
+        setCurrentAnalysisKey(analysisKey);
         try {
-            logger.info(`Analyzing audio file (frontend): ${file.name}`);
+            logger.info(`Analyzing audio file (frontend): ${displayPath}`);
             const start = Date.now();
             const prefs = loadAudioAnalysisPreferences();
             const payload = await analyzeAudioFile(file, {
                 fftSize: prefs.fftSize,
                 windowFunction: prefs.windowFunction,
             }, (progress) => {
-                if (token.cancelled)
+                if (token.cancelled) {
                     return;
+                }
                 setAnalysisProgress(toProgressState(progress));
             }, () => token.cancelled);
             if (token.cancelled) {
-                return null;
+                return {
+                    result: null,
+                    error: null,
+                    cancelled: true,
+                };
             }
-            samplesRef.current = payload.samples;
-            sessionSamples = payload.samples;
-            setResultWithSession(payload.result);
+            storeSuccessfulAnalysis(analysisKey, displayPath, payload);
             const elapsed = ((Date.now() - start) / 1000).toFixed(2);
             logger.success(`Audio analysis completed in ${elapsed}s`);
-            return payload.result;
+            return {
+                result: payload.result,
+                error: null,
+                cancelled: false,
+            };
         }
         catch (err) {
             if (isCancelledError(err)) {
-                return null;
+                return {
+                    result: null,
+                    error: null,
+                    cancelled: true,
+                };
             }
             const errorMessage = err instanceof Error ? err.message : "Failed to analyze audio file";
             logger.error(`Analysis error: ${errorMessage}`);
@@ -158,10 +239,16 @@ export function useAudioAnalysis() {
                 percent: 0,
                 message: "Analysis failed",
             });
-            toast.error("Audio Analysis Failed", {
-                description: errorMessage,
-            });
-            return null;
+            if (!options?.suppressToast) {
+                toast.error("Audio Analysis Failed", {
+                    description: errorMessage,
+                });
+            }
+            return {
+                result: null,
+                error: errorMessage,
+                cancelled: false,
+            };
         }
         finally {
             if (analysisTokenRef.current === token) {
@@ -169,13 +256,20 @@ export function useAudioAnalysis() {
                 setAnalyzing(false);
             }
         }
-    }, [setErrorWithSession, setResultWithSession, setSelectedFilePathWithSession]);
-    const analyzeFilePath = useCallback(async (filePath: string) => {
+    }, [setCurrentAnalysisKey, setErrorWithSession, setResultWithSession, setSelectedFilePathWithSession, storeSuccessfulAnalysis]);
+    const analyzeFilePath = useCallback(async (filePath: string, options?: AnalyzeExecutionOptions): Promise<AnalyzeExecutionOutcome> => {
         if (!filePath) {
-            setErrorWithSession("No file path provided");
-            return null;
+            const errorMessage = "No file path provided";
+            setErrorWithSession(errorMessage);
+            return {
+                result: null,
+                error: errorMessage,
+                cancelled: false,
+            };
         }
         const token = createToken(analysisTokenRef);
+        const analysisKey = options?.analysisKey || filePath;
+        const displayPath = options?.displayPath || filePath;
         cancelToken(spectrumTokenRef);
         setAnalyzing(true);
         setAnalysisProgress({
@@ -184,18 +278,23 @@ export function useAudioAnalysis() {
         });
         setErrorWithSession(null);
         setResultWithSession(null);
-        setSelectedFilePathWithSession(filePath);
+        setSelectedFilePathWithSession(displayPath);
+        setCurrentAnalysisKey(analysisKey);
         try {
             logger.info(`Analyzing audio file (frontend from path): ${filePath}`);
             const start = Date.now();
             const prefs = loadAudioAnalysisPreferences();
-            const readFileAsBase64 = (window as any)?.go?.main?.App?.ReadFileAsBase64 as ((path: string) => Promise<string>) | undefined;
+            const readFileAsBase64 = (window as WailsWindow).go?.main?.App?.ReadFileAsBase64;
             if (!readFileAsBase64) {
                 throw new Error("ReadFileAsBase64 backend method is unavailable");
             }
             let base64Data = await readFileAsBase64(filePath);
             if (token.cancelled) {
-                return null;
+                return {
+                    result: null,
+                    error: null,
+                    cancelled: true,
+                };
             }
             setAnalysisProgress({
                 percent: 10,
@@ -204,42 +303,105 @@ export function useAudioAnalysis() {
             const arrayBuffer = await base64ToArrayBuffer(base64Data, () => token.cancelled);
             base64Data = "";
             if (token.cancelled) {
-                return null;
+                return {
+                    result: null,
+                    error: null,
+                    cancelled: true,
+                };
             }
             setAnalysisProgress({
                 percent: 15,
                 message: "Preparing audio buffer...",
             });
             const fileName = fileNameFromPath(filePath);
-            const payload = await analyzeAudioArrayBuffer({
+            const input = {
                 fileName,
                 fileSize: arrayBuffer.byteLength,
                 arrayBuffer,
-            }, {
+            };
+            const analysisParams = {
                 fftSize: prefs.fftSize,
                 windowFunction: prefs.windowFunction,
-            }, (progress) => {
-                if (token.cancelled)
+            } as const;
+            const updateProgress = (progress: AnalysisProgress) => {
+                if (token.cancelled) {
                     return;
+                }
                 const mappedPercent = 10 + (progress.percent * 0.9);
                 setAnalysisProgress({
                     percent: Math.round(Math.max(0, Math.min(100, mappedPercent))),
                     message: progress.message,
                 });
-            }, () => token.cancelled);
-            if (token.cancelled) {
-                return null;
+            };
+            let payload: FrontendAnalysisPayload;
+            try {
+                payload = await analyzeAudioArrayBuffer(input, analysisParams, updateProgress, () => token.cancelled);
             }
-            samplesRef.current = payload.samples;
-            sessionSamples = payload.samples;
-            setResultWithSession(payload.result);
+            catch (err) {
+                if (!isDecodeFailure(err)) {
+                    throw err;
+                }
+                const decodeAudioForAnalysis = (window as WailsWindow).go?.main?.App?.DecodeAudioForAnalysis;
+                if (!decodeAudioForAnalysis) {
+                    throw err;
+                }
+                logger.warning(`Browser decoder failed for ${fileName}; trying FFmpeg fallback`);
+                setAnalysisProgress({
+                    percent: 18,
+                    message: "Browser decoder failed, trying FFmpeg fallback...",
+                });
+                const decoded = await decodeAudioForAnalysis(filePath);
+                if (token.cancelled) {
+                    return {
+                        result: null,
+                        error: null,
+                        cancelled: true,
+                    };
+                }
+                setAnalysisProgress({
+                    percent: 24,
+                    message: "Decoding audio with FFmpeg...",
+                });
+                const pcmBase64 = decoded.pcm_base64 || "";
+                if (!pcmBase64) {
+                    throw new Error("FFmpeg analysis decode returned no PCM data");
+                }
+                const pcmBuffer = await base64ToArrayBuffer(pcmBase64, () => token.cancelled);
+                if (token.cancelled) {
+                    return {
+                        result: null,
+                        error: null,
+                        cancelled: true,
+                    };
+                }
+                const parsedMetadata = parseAudioMetadataFromInput(input);
+                const mergedMetadata = mergeBackendDecodedMetadata(parsedMetadata, decoded);
+                const samples = pcm16MonoArrayBufferToFloat32Samples(pcmBuffer);
+                payload = await analyzeDecodedSamples(input, mergedMetadata, samples, analysisParams, updateProgress, () => token.cancelled, mergedMetadata.duration);
+            }
+            if (token.cancelled) {
+                return {
+                    result: null,
+                    error: null,
+                    cancelled: true,
+                };
+            }
+            storeSuccessfulAnalysis(analysisKey, displayPath, payload);
             const elapsed = ((Date.now() - start) / 1000).toFixed(2);
             logger.success(`Audio analysis completed in ${elapsed}s`);
-            return payload.result;
+            return {
+                result: payload.result,
+                error: null,
+                cancelled: false,
+            };
         }
         catch (err) {
             if (isCancelledError(err)) {
-                return null;
+                return {
+                    result: null,
+                    error: null,
+                    cancelled: true,
+                };
             }
             const errorMessage = err instanceof Error ? err.message : "Failed to analyze audio file";
             logger.error(`Analysis error: ${errorMessage}`);
@@ -248,10 +410,16 @@ export function useAudioAnalysis() {
                 percent: 0,
                 message: "Analysis failed",
             });
-            toast.error("Audio Analysis Failed", {
-                description: errorMessage,
-            });
-            return null;
+            if (!options?.suppressToast) {
+                toast.error("Audio Analysis Failed", {
+                    description: errorMessage,
+                });
+            }
+            return {
+                result: null,
+                error: errorMessage,
+                cancelled: false,
+            };
         }
         finally {
             if (analysisTokenRef.current === token) {
@@ -259,10 +427,46 @@ export function useAudioAnalysis() {
                 setAnalyzing(false);
             }
         }
-    }, [setErrorWithSession, setResultWithSession, setSelectedFilePathWithSession]);
-    const reAnalyzeSpectrum = useCallback(async (fftSize: number, windowFunction: string) => {
-        if (!result || !samplesRef.current)
+    }, [setCurrentAnalysisKey, setErrorWithSession, setResultWithSession, setSelectedFilePathWithSession, storeSuccessfulAnalysis]);
+    const loadStoredAnalysis = useCallback((analysisKey: string, nextResult: AnalysisResult, displayPath: string) => {
+        setCurrentAnalysisKey(analysisKey);
+        samplesRef.current = sessionSamplesByKey.get(analysisKey) ?? null;
+        sessionSamples = samplesRef.current;
+        setResultWithSession(nextResult);
+        setSelectedFilePathWithSession(displayPath);
+        setErrorWithSession(null);
+    }, [setCurrentAnalysisKey, setErrorWithSession, setResultWithSession, setSelectedFilePathWithSession]);
+    const clearStoredAnalysis = useCallback((analysisKey?: string) => {
+        if (analysisKey) {
+            sessionSamplesByKey.delete(analysisKey);
+            if (currentAnalysisKeyRef.current === analysisKey) {
+                currentAnalysisKeyRef.current = "";
+                sessionCurrentAnalysisKey = "";
+                samplesRef.current = null;
+                sessionSamples = null;
+            }
             return;
+        }
+        sessionSamplesByKey.clear();
+        currentAnalysisKeyRef.current = "";
+        sessionCurrentAnalysisKey = "";
+        samplesRef.current = null;
+        sessionSamples = null;
+    }, []);
+    const cancelAnalysis = useCallback(() => {
+        cancelToken(analysisTokenRef);
+        setAnalyzing(false);
+        setAnalysisProgress((prev) => prev.percent > 0
+            ? {
+                percent: prev.percent,
+                message: "Analysis stopped",
+            }
+            : DEFAULT_PROGRESS_STATE);
+    }, []);
+    const reAnalyzeSpectrum = useCallback(async (fftSize: number, windowFunction: string) => {
+        if (!result || !samplesRef.current) {
+            return null;
+        }
         const token = createToken(spectrumTokenRef);
         setSpectrumLoading(true);
         setSpectrumProgress({
@@ -275,22 +479,24 @@ export function useAudioAnalysis() {
                 fftSize,
                 windowFunction: toWindowFunction(windowFunction),
             }, (progress) => {
-                if (token.cancelled)
+                if (token.cancelled) {
                     return;
+                }
                 setSpectrumProgress(toProgressState(progress));
             }, () => token.cancelled);
             if (token.cancelled) {
-                return;
+                return null;
             }
-            setResult((prev) => {
-                const next = prev ? { ...prev, spectrum } : prev;
-                sessionResult = next;
-                return next;
-            });
+            const nextResult = {
+                ...result,
+                spectrum,
+            };
+            setResultWithSession(nextResult);
+            return nextResult;
         }
         catch (err) {
             if (isCancelledError(err)) {
-                return;
+                return null;
             }
             const errorMessage = err instanceof Error ? err.message : "Failed to re-analyze spectrum";
             logger.error(`Spectrum re-analysis error: ${errorMessage}`);
@@ -301,6 +507,7 @@ export function useAudioAnalysis() {
             toast.error("Spectrum Analysis Failed", {
                 description: errorMessage,
             });
+            return null;
         }
         finally {
             if (spectrumTokenRef.current === token) {
@@ -308,7 +515,7 @@ export function useAudioAnalysis() {
                 setSpectrumLoading(false);
             }
         }
-    }, [result]);
+    }, [result, setResultWithSession]);
     const clearResult = useCallback(() => {
         cancelToken(analysisTokenRef);
         cancelToken(spectrumTokenRef);
@@ -319,6 +526,8 @@ export function useAudioAnalysis() {
         setSpectrumLoading(false);
         setAnalysisProgress(DEFAULT_PROGRESS_STATE);
         setSpectrumProgress(DEFAULT_PROGRESS_STATE);
+        currentAnalysisKeyRef.current = "";
+        sessionCurrentAnalysisKey = "";
         samplesRef.current = null;
         sessionSamples = null;
     }, [setErrorWithSession, setResultWithSession, setSelectedFilePathWithSession]);
@@ -332,6 +541,9 @@ export function useAudioAnalysis() {
         spectrumProgress,
         analyzeFile,
         analyzeFilePath,
+        cancelAnalysis,
+        loadStoredAnalysis,
+        clearStoredAnalysis,
         reAnalyzeSpectrum,
         clearResult,
     };

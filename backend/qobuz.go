@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -171,15 +170,16 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 
 	fmt.Printf("Getting download URL for track ID: %d with requested quality: %s\n", trackID, qualityCode)
 
-	standardAPIs := []string{
+	standardAPIs := prioritizeProviders("qobuz", []string{
 		"https://dab.yeet.su/api/stream?trackId=",
 		"https://dabmusic.xyz/api/stream?trackId=",
 		"https://qbz.afkarxyz.qzz.io/api/track/",
-	}
+	})
 
 	downloadFunc := func(qual string) (string, error) {
 		type Provider struct {
 			Name string
+			API  string
 			Func func() (string, error)
 		}
 
@@ -189,27 +189,26 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 			currentAPI := api
 			providers = append(providers, Provider{
 				Name: "Standard(" + currentAPI + ")",
+				API:  currentAPI,
 				Func: func() (string, error) {
 					return q.DownloadFromStandard(currentAPI, trackID, qual)
 				},
 			})
 		}
 
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(providers), func(i, j int) { providers[i], providers[j] = providers[j], providers[i] })
-
 		var lastErr error
 		for _, p := range providers {
-
 			fmt.Printf("Trying Provider: %s (Quality: %s)...\n", p.Name, qual)
 
 			url, err := p.Func()
 			if err == nil {
 				fmt.Printf("✓ Success\n")
+				recordProviderSuccess("qobuz", p.API)
 				return url, nil
 			}
 
 			fmt.Printf("Provider failed: %v\n", err)
+			recordProviderFailure("qobuz", p.API)
 			lastErr = err
 		}
 		return "", lastErr
@@ -362,29 +361,29 @@ func buildQobuzFilename(title, artist, album, albumArtist, releaseDate string, t
 }
 
 func (q *QobuzDownloader) DownloadTrack(spotifyID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
-	var deezerISRC string
+	var isrc string
 	if spotifyID != "" {
-		songlinkClient := NewSongLinkClient()
-		isrc, err := songlinkClient.GetISRCDirect(spotifyID)
+		linkClient := NewSongLinkClient()
+		resolvedISRC, err := linkClient.GetISRCDirect(spotifyID)
 		if err != nil {
 			return "", fmt.Errorf("failed to get ISRC: %v", err)
 		}
-		deezerISRC = isrc
+		isrc = resolvedISRC
 	} else {
 		return "", fmt.Errorf("spotify ID is required for Qobuz download")
 	}
 
-	return q.DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyURL, allowFallback, useFirstArtistOnly, useSingleGenre, embedGenre)
+	return q.DownloadTrackWithISRC(isrc, outputDir, quality, filenameFormat, includeTrackNumber, position, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate, useAlbumTrackNumber, spotifyCoverURL, embedMaxQualityCover, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks, spotifyTotalDiscs, spotifyCopyright, spotifyPublisher, spotifyURL, allowFallback, useFirstArtistOnly, useSingleGenre, embedGenre)
 }
 
-func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
-	fmt.Printf("Fetching track info for ISRC: %s\n", deezerISRC)
+func (q *QobuzDownloader) DownloadTrackWithISRC(isrc, outputDir, quality, filenameFormat string, includeTrackNumber bool, position int, spotifyTrackName, spotifyArtistName, spotifyAlbumName, spotifyAlbumArtist, spotifyReleaseDate string, useAlbumTrackNumber bool, spotifyCoverURL string, embedMaxQualityCover bool, spotifyTrackNumber, spotifyDiscNumber, spotifyTotalTracks int, spotifyTotalDiscs int, spotifyCopyright, spotifyPublisher, spotifyURL string, allowFallback bool, useFirstArtistOnly bool, useSingleGenre bool, embedGenre bool) (string, error) {
+	fmt.Printf("Fetching track info for ISRC: %s\n", isrc)
 
 	metaChan := make(chan Metadata, 1)
-	if embedGenre && deezerISRC != "" {
+	if embedGenre && isrc != "" {
 		go func() {
 			fmt.Println("Fetching MusicBrainz metadata...")
-			if fetchedMeta, err := FetchMusicBrainzMetadata(deezerISRC, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useSingleGenre, embedGenre); err == nil {
+			if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useSingleGenre, embedGenre); err == nil {
 				fmt.Println("✓ MusicBrainz metadata fetched")
 				metaChan <- fetchedMeta
 			} else {
@@ -402,7 +401,7 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir
 		}
 	}
 
-	track, err := q.searchByISRC(deezerISRC)
+	track, err := q.searchByISRC(isrc)
 	if err != nil {
 		return "", err
 	}
@@ -477,7 +476,7 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir
 	}
 
 	var mbMeta Metadata
-	if deezerISRC != "" {
+	if isrc != "" {
 		mbMeta = <-metaChan
 	}
 
@@ -499,10 +498,11 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(deezerISRC, spotifyID, outputDir
 		DiscNumber:  spotifyDiscNumber,
 		TotalDiscs:  spotifyTotalDiscs,
 		URL:         spotifyURL,
+		Comment:     spotifyURL,
 		Copyright:   spotifyCopyright,
 		Publisher:   spotifyPublisher,
 		Description: "https://github.com/afkarxyz/SpotiFLAC",
-		ISRC:        deezerISRC,
+		ISRC:        isrc,
 		Genre:       mbMeta.Genre,
 	}
 

@@ -58,12 +58,29 @@ func ValidateExecutable(path string) error {
 	return nil
 }
 
-func GetFFmpegDir() (string, error) {
+func GetAppDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 	return filepath.Join(homeDir, ".spotiflac"), nil
+}
+
+func EnsureAppDir() (string, error) {
+	appDir, err := GetAppDir()
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.MkdirAll(appDir, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create app directory: %w", err)
+	}
+
+	return appDir, nil
+}
+
+func GetFFmpegDir() (string, error) {
+	return EnsureAppDir()
 }
 
 func GetFFmpegPath() (string, error) {

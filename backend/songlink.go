@@ -2,12 +2,9 @@ package backend
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
-	"net/http/cookiejar"
 	"net/url"
 	"regexp"
 	"strings"
@@ -17,12 +14,9 @@ import (
 const songLinkUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
 
 var (
-	errSongLinkRateLimited = errors.New("song.link rate limited")
-	isrcPattern            = regexp.MustCompile(`\b([A-Z]{2}[A-Z0-9]{3}\d{7})\b`)
-	csrfTokenPattern       = regexp.MustCompile(`name=["']csrfmiddlewaretoken["'][^>]*value=["']([^"']+)["']`)
-	songstatsScriptPattern = regexp.MustCompile(`(?is)<script[^>]+type=["']application/ld\+json["'][^>]*>(.*?)</script>`)
-	amazonAlbumTrackPath   = regexp.MustCompile(`/albums/[A-Z0-9]{10}/(B[0-9A-Z]{9})`)
-	amazonTrackPath        = regexp.MustCompile(`/tracks/(B[0-9A-Z]{9})`)
+	isrcPattern          = regexp.MustCompile(`\b([A-Z]{2}[A-Z0-9]{3}\d{7})\b`)
+	amazonAlbumTrackPath = regexp.MustCompile(`/albums/[A-Z0-9]{10}/(B[0-9A-Z]{9})`)
+	amazonTrackPath      = regexp.MustCompile(`/tracks/(B[0-9A-Z]{9})`)
 )
 
 type SongLinkClient struct {
@@ -51,13 +45,6 @@ type songLinkAPIResponse struct {
 	LinksByPlatform map[string]struct {
 		URL string `json:"url"`
 	} `json:"linksByPlatform"`
-}
-
-type resolvedTrackLinks struct {
-	TidalURL  string
-	AmazonURL string
-	DeezerURL string
-	ISRC      string
 }
 
 func NewSongLinkClient() *SongLinkClient {
@@ -113,8 +100,8 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string) (*TrackAv
 	}
 
 	if isrc == "" && availability.DeezerURL != "" {
-		if deezerISRC, deezerErr := getDeezerISRC(availability.DeezerURL); deezerErr == nil {
-			isrc = deezerISRC
+		if resolvedISRC, deezerErr := getDeezerISRC(availability.DeezerURL); deezerErr == nil {
+			isrc = resolvedISRC
 		}
 	}
 
@@ -145,7 +132,11 @@ func checkQobuzAvailability(isrc string) bool {
 	client := &http.Client{Timeout: 10 * time.Second}
 	appID := "798273057"
 
-	searchURL := fmt.Sprintf("https://www.qobuz.com/api.json/0.2/track/search?query=%s&limit=1&app_id=%s", isrc, appID)
+	searchURL := fmt.Sprintf(
+		"https://www.qobuz.com/api.json/0.2/track/search?query=%s&limit=1&app_id=%s",
+		url.QueryEscape(strings.TrimSpace(isrc)),
+		appID,
+	)
 
 	resp, err := client.Get(searchURL)
 	if err != nil {
@@ -153,7 +144,7 @@ func checkQobuzAvailability(isrc string) bool {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return false
 	}
 
@@ -222,7 +213,7 @@ func getDeezerISRC(deezerURL string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("Deezer API returned status %d", resp.StatusCode)
 	}
 
@@ -277,84 +268,13 @@ func (s *SongLinkClient) GetISRCDirect(spotifyID string) (string, error) {
 	return s.lookupSpotifyISRC(spotifyID)
 }
 
-func (s *SongLinkClient) resolveSpotifyTrackLinks(spotifyTrackID string, region string) (*resolvedTrackLinks, error) {
-	links := &resolvedTrackLinks{}
-	var attempts []string
-
-	spotifyURL := fmt.Sprintf("https://open.spotify.com/track/%s", spotifyTrackID)
-
-	fmt.Println("Getting streaming URLs from song.link...")
-	resp, err := s.fetchSongLinkLinksByURL(spotifyURL, region)
-	if err == nil {
-		mergeSongLinkResponse(links, resp)
-		if links.DeezerURL != "" && links.ISRC == "" {
-			if isrc, deezerErr := getDeezerISRC(links.DeezerURL); deezerErr == nil {
-				links.ISRC = isrc
-			}
-		}
-		if hasAnySongLinkData(links) {
-			return links, nil
-		}
-		attempts = append(attempts, "song.link spotify: no links found")
-	} else {
-		if errors.Is(err, errSongLinkRateLimited) {
-			fmt.Println("song.link rate limited for Spotify URL, switching to fallback 1 (songstats)...")
-		} else {
-			fmt.Printf("song.link primary lookup failed: %v\n", err)
-		}
-		attempts = append(attempts, fmt.Sprintf("song.link spotify: %v", err))
-	}
-
-	isrc, lookupErr := s.lookupSpotifyISRC(spotifyTrackID)
-	if lookupErr != nil {
-		attempts = append(attempts, fmt.Sprintf("isrc lookup: %v", lookupErr))
-	} else {
-		links.ISRC = isrc
-	}
-
-	if links.ISRC != "" {
-		fmt.Printf("Fallback 1: fetching Songstats links for ISRC %s\n", links.ISRC)
-		if songstatsErr := s.populateLinksFromSongstats(links, links.ISRC); songstatsErr != nil {
-			attempts = append(attempts, fmt.Sprintf("songstats: %v", songstatsErr))
-		} else if links.TidalURL != "" && links.AmazonURL != "" {
-			return links, nil
-		}
-
-		fmt.Printf("Fallback 2: resolving Deezer track from ISRC %s\n", links.ISRC)
-		deezerURL, deezerErr := s.lookupDeezerTrackURLByISRC(links.ISRC)
-		if deezerErr != nil {
-			attempts = append(attempts, fmt.Sprintf("deezer isrc: %v", deezerErr))
-		} else {
-			if links.DeezerURL == "" {
-				links.DeezerURL = deezerURL
-			}
-			deezerResp, deezerSongLinkErr := s.fetchSongLinkLinksByURL(deezerURL, region)
-			if deezerSongLinkErr != nil {
-				attempts = append(attempts, fmt.Sprintf("song.link deezer: %v", deezerSongLinkErr))
-			} else {
-				mergeSongLinkResponse(links, deezerResp)
-			}
-		}
-	}
-
-	if hasAnySongLinkData(links) {
-		return links, nil
-	}
-
-	if len(attempts) == 0 {
-		attempts = append(attempts, "no streaming URLs found")
-	}
-
-	return links, errors.New(strings.Join(attempts, " | "))
-}
-
 func (s *SongLinkClient) fetchSongLinkLinksByURL(rawURL string, region string) (*songLinkAPIResponse, error) {
 	apiURL := fmt.Sprintf("https://api.song.link/v1-alpha.1/links?url=%s", url.QueryEscape(rawURL))
 	if region != "" {
 		apiURL += fmt.Sprintf("&userCountry=%s", url.QueryEscape(region))
 	}
 
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -366,9 +286,6 @@ func (s *SongLinkClient) fetchSongLinkLinksByURL(rawURL string, region string) (
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return nil, errSongLinkRateLimited
-	}
 	if resp.StatusCode != http.StatusOK {
 		bodyPreview, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
 		return nil, fmt.Errorf("song.link returned status %d (%s)", resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
@@ -394,319 +311,10 @@ func (s *SongLinkClient) fetchSongLinkLinksByURL(rawURL string, region string) (
 	return &parsed, nil
 }
 
-func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error) {
-	spotifyURL := fmt.Sprintf("https://open.spotify.com/track/%s", spotifyTrackID)
-
-	providers := []struct {
-		name string
-		fn   func(string) (string, error)
-	}{
-		{name: "isrcfinder", fn: s.lookupISRCViaISRCFinder},
-		{name: "phpstack", fn: lookupISRCViaPHPStack},
-		{name: "findmyisrc", fn: lookupISRCViaFindMyISRC},
-		{name: "mixvibe", fn: lookupISRCViaMixvibe},
-	}
-
-	var errorsList []string
-	for _, provider := range providers {
-		fmt.Printf("Trying ISRC provider: %s\n", provider.name)
-		isrc, err := provider.fn(spotifyURL)
-		if err == nil && isrc != "" {
-			fmt.Printf("Found ISRC via %s: %s\n", provider.name, isrc)
-			return isrc, nil
-		}
-
-		if err != nil {
-			errorsList = append(errorsList, fmt.Sprintf("%s: %v", provider.name, err))
-		} else {
-			errorsList = append(errorsList, fmt.Sprintf("%s: no ISRC found", provider.name))
-		}
-	}
-
-	return "", errors.New(strings.Join(errorsList, " | "))
-}
-
-func (s *SongLinkClient) lookupISRCViaISRCFinder(spotifyURL string) (string, error) {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create cookie jar: %w", err)
-	}
-
-	client := &http.Client{
-		Timeout: 20 * time.Second,
-		Jar:     jar,
-	}
-
-	req, err := http.NewRequest("GET", "https://www.isrcfinder.com/", nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create GET request: %w", err)
-	}
-	req.Header.Set("User-Agent", songLinkUserAgent)
-	req.Header.Set("Referer", "https://www.isrcfinder.com/")
-	req.Header.Set("Origin", "https://www.isrcfinder.com")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to load isrcfinder: %w", err)
-	}
-	body, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if err != nil {
-		return "", fmt.Errorf("failed to read isrcfinder response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("isrcfinder returned status %d", resp.StatusCode)
-	}
-
-	token := extractCSRFToken(string(body))
-	if token == "" {
-		if parsedURL, parseErr := url.Parse("https://www.isrcfinder.com/"); parseErr == nil {
-			for _, cookie := range jar.Cookies(parsedURL) {
-				if cookie.Name == "csrftoken" {
-					token = cookie.Value
-					break
-				}
-			}
-		}
-	}
-	if token == "" {
-		return "", fmt.Errorf("csrf token not found")
-	}
-
-	form := url.Values{}
-	form.Set("csrfmiddlewaretoken", token)
-	form.Set("URI", spotifyURL)
-
-	postReq, err := http.NewRequest("POST", "https://www.isrcfinder.com/", strings.NewReader(form.Encode()))
-	if err != nil {
-		return "", fmt.Errorf("failed to create POST request: %w", err)
-	}
-	postReq.Header.Set("User-Agent", songLinkUserAgent)
-	postReq.Header.Set("Referer", "https://www.isrcfinder.com/")
-	postReq.Header.Set("Origin", "https://www.isrcfinder.com")
-	postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	postResp, err := client.Do(postReq)
-	if err != nil {
-		return "", fmt.Errorf("failed to submit isrcfinder form: %w", err)
-	}
-	postBody, err := io.ReadAll(postResp.Body)
-	postResp.Body.Close()
-	if err != nil {
-		return "", fmt.Errorf("failed to read isrcfinder POST response: %w", err)
-	}
-	if postResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("isrcfinder POST returned status %d", postResp.StatusCode)
-	}
-
-	isrc := firstISRCMatch(string(postBody))
-	if isrc == "" {
-		return "", fmt.Errorf("ISRC not found in isrcfinder response")
-	}
-
-	return isrc, nil
-}
-
-func lookupISRCViaPHPStack(spotifyURL string) (string, error) {
-	apiURL := fmt.Sprintf(
-		"https://phpstack-822472-6184058.cloudwaysapps.com/api/spotify.php?q=%s",
-		url.QueryEscape(spotifyURL),
-	)
-
-	req, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", songLinkUserAgent)
-	req.Header.Set("Referer", "https://phpstack-822472-6184058.cloudwaysapps.com/?")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("phpstack request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("phpstack returned status %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		ISRC string `json:"isrc"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", fmt.Errorf("failed to decode phpstack response: %w", err)
-	}
-	if payload.ISRC == "" {
-		return "", fmt.Errorf("ISRC missing in phpstack response")
-	}
-
-	return strings.ToUpper(strings.TrimSpace(payload.ISRC)), nil
-}
-
-func lookupISRCViaFindMyISRC(spotifyURL string) (string, error) {
-	payloadBytes, err := json.Marshal(map[string][]string{
-		"uris": []string{spotifyURL},
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to encode payload: %w", err)
-	}
-
-	req, err := http.NewRequest(
-		"POST",
-		"https://lxtzsnh4l3.execute-api.ap-southeast-2.amazonaws.com/prod/find-my-isrc",
-		strings.NewReader(string(payloadBytes)),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", songLinkUserAgent)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://www.findmyisrc.com")
-	req.Header.Set("Referer", "https://www.findmyisrc.com/")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("findmyisrc request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("findmyisrc returned status %d", resp.StatusCode)
-	}
-
-	var payload []struct {
-		Data struct {
-			ISRC string `json:"isrc"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", fmt.Errorf("failed to decode findmyisrc response: %w", err)
-	}
-
-	for _, item := range payload {
-		if item.Data.ISRC != "" {
-			return strings.ToUpper(strings.TrimSpace(item.Data.ISRC)), nil
-		}
-	}
-
-	return "", fmt.Errorf("ISRC missing in findmyisrc response")
-}
-
-func lookupISRCViaMixvibe(spotifyURL string) (string, error) {
-	payloadBytes, err := json.Marshal(map[string]string{
-		"url": spotifyURL,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to encode payload: %w", err)
-	}
-
-	req, err := http.NewRequest(
-		"POST",
-		"https://tools.mixviberecords.com/api/find-isrc",
-		strings.NewReader(string(payloadBytes)),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", songLinkUserAgent)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Origin", "https://tools.mixviberecords.com")
-	req.Header.Set("Referer", "https://tools.mixviberecords.com/isrc-finder")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("mixvibe request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read mixvibe response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("mixvibe returned status %d", resp.StatusCode)
-	}
-
-	var payload interface{}
-	if err := json.Unmarshal(body, &payload); err == nil {
-		if isrc := findISRCInValue(payload); isrc != "" {
-			return isrc, nil
-		}
-	}
-
-	if isrc := firstISRCMatch(string(body)); isrc != "" {
-		return isrc, nil
-	}
-
-	return "", fmt.Errorf("ISRC missing in mixvibe response")
-}
-
-func (s *SongLinkClient) populateLinksFromSongstats(links *resolvedTrackLinks, isrc string) error {
-	pageURL := fmt.Sprintf("https://songstats.com/%s?ref=ISRCFinder", strings.ToUpper(strings.TrimSpace(isrc)))
-
-	req, err := http.NewRequest("GET", pageURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", songLinkUserAgent)
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to fetch Songstats page: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Songstats returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read Songstats response: %w", err)
-	}
-
-	matches := songstatsScriptPattern.FindAllStringSubmatch(string(body), -1)
-	if len(matches) == 0 {
-		return fmt.Errorf("Songstats JSON-LD not found")
-	}
-
-	found := false
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
-		}
-
-		scriptBody := strings.TrimSpace(html.UnescapeString(match[1]))
-		if scriptBody == "" {
-			continue
-		}
-
-		var payload interface{}
-		if err := json.Unmarshal([]byte(scriptBody), &payload); err != nil {
-			continue
-		}
-
-		before := *links
-		collectSongstatsLinks(payload, links)
-		if *links != before {
-			found = true
-		}
-	}
-
-	if !found && !hasAnySongLinkData(links) {
-		return fmt.Errorf("no platform links found in Songstats")
-	}
-
-	return nil
-}
-
 func (s *SongLinkClient) lookupDeezerTrackURLByISRC(isrc string) (string, error) {
 	apiURL := fmt.Sprintf("https://api.deezer.com/track/isrc:%s", strings.ToUpper(strings.TrimSpace(isrc)))
 
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -759,62 +367,6 @@ func mergeSongLinkResponse(links *resolvedTrackLinks, resp *songLinkAPIResponse)
 	if link, ok := resp.LinksByPlatform["deezer"]; ok && link.URL != "" && links.DeezerURL == "" {
 		links.DeezerURL = normalizeDeezerTrackURL(link.URL)
 		fmt.Println("✓ Deezer URL found")
-	}
-}
-
-func collectSongstatsLinks(value interface{}, links *resolvedTrackLinks) {
-	switch typed := value.(type) {
-	case map[string]interface{}:
-		if sameAs, ok := typed["sameAs"]; ok {
-			applySongstatsSameAs(sameAs, links)
-		}
-		for _, nested := range typed {
-			collectSongstatsLinks(nested, links)
-		}
-	case []interface{}:
-		for _, nested := range typed {
-			collectSongstatsLinks(nested, links)
-		}
-	}
-}
-
-func applySongstatsSameAs(value interface{}, links *resolvedTrackLinks) {
-	switch typed := value.(type) {
-	case string:
-		assignSongstatsLink(typed, links)
-	case []interface{}:
-		for _, item := range typed {
-			if link, ok := item.(string); ok {
-				assignSongstatsLink(link, links)
-			}
-		}
-	}
-}
-
-func assignSongstatsLink(rawLink string, links *resolvedTrackLinks) {
-	link := strings.TrimSpace(rawLink)
-	if link == "" {
-		return
-	}
-
-	switch {
-	case strings.Contains(link, "listen.tidal.com/track"):
-		if links.TidalURL == "" {
-			links.TidalURL = link
-			fmt.Println("✓ Tidal URL found via Songstats")
-		}
-	case strings.Contains(link, "music.amazon.com"):
-		if links.AmazonURL == "" {
-			if normalized := normalizeAmazonMusicURL(link); normalized != "" {
-				links.AmazonURL = normalized
-				fmt.Println("✓ Amazon URL found via Songstats")
-			}
-		}
-	case strings.Contains(link, "deezer.com"):
-		if links.DeezerURL == "" {
-			links.DeezerURL = normalizeDeezerTrackURL(link)
-			fmt.Println("✓ Deezer URL found via Songstats")
-		}
 	}
 }
 
@@ -880,46 +432,10 @@ func hasAnySongLinkData(links *resolvedTrackLinks) bool {
 	return links.TidalURL != "" || links.AmazonURL != "" || links.DeezerURL != ""
 }
 
-func extractCSRFToken(body string) string {
-	match := csrfTokenPattern.FindStringSubmatch(body)
-	if len(match) < 2 {
-		return ""
-	}
-	return strings.TrimSpace(match[1])
-}
-
 func firstISRCMatch(body string) string {
 	match := isrcPattern.FindStringSubmatch(strings.ToUpper(body))
 	if len(match) < 2 {
 		return ""
 	}
 	return strings.TrimSpace(match[1])
-}
-
-func findISRCInValue(value interface{}) string {
-	switch typed := value.(type) {
-	case map[string]interface{}:
-		for key, nested := range typed {
-			if strings.EqualFold(key, "isrc") {
-				if isrc, ok := nested.(string); ok {
-					if normalized := firstISRCMatch(isrc); normalized != "" {
-						return normalized
-					}
-				}
-			}
-			if isrc := findISRCInValue(nested); isrc != "" {
-				return isrc
-			}
-		}
-	case []interface{}:
-		for _, nested := range typed {
-			if isrc := findISRCInValue(nested); isrc != "" {
-				return isrc
-			}
-		}
-	case string:
-		return firstISRCMatch(typed)
-	}
-
-	return ""
 }

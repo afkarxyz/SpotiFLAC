@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 
 	"path/filepath"
@@ -23,8 +25,71 @@ type App struct {
 	ctx context.Context
 }
 
+const checkOperationTimeout = 10 * time.Second
+
 func NewApp() *App {
 	return &App{}
+}
+
+type timedResult[T any] struct {
+	value T
+	err   error
+}
+
+func runWithTimeout[T any](timeout time.Duration, fn func() (T, error)) (T, error) {
+	resultCh := make(chan timedResult[T], 1)
+
+	go func() {
+		value, err := fn()
+		resultCh <- timedResult[T]{value: value, err: err}
+	}()
+
+	select {
+	case result := <-resultCh:
+		return result.value, result.err
+	case <-time.After(timeout):
+		var zero T
+		return zero, fmt.Errorf("operation timed out after %s", timeout)
+	}
+}
+
+func containsStreamingURL(body []byte) bool {
+	trimmedBody := strings.TrimSpace(string(body))
+	if trimmedBody == "" {
+		return false
+	}
+
+	var directResp struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(body, &directResp); err == nil && isStreamingURL(directResp.URL) {
+		return true
+	}
+
+	var nestedResp struct {
+		Data struct {
+			URL string `json:"url"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &nestedResp); err == nil && isStreamingURL(nestedResp.Data.URL) {
+		return true
+	}
+
+	return isStreamingURL(trimmedBody)
+}
+
+func isStreamingURL(raw string) bool {
+	candidate := strings.TrimSpace(raw)
+	if candidate == "" {
+		return false
+	}
+
+	parsed, err := url.Parse(candidate)
+	if err != nil {
+		return false
+	}
+
+	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
 }
 
 func (a *App) getFirstArtist(artistString string) string {
@@ -46,10 +111,18 @@ func (a *App) startup(ctx context.Context) {
 	if err := backend.InitHistoryDB("SpotiFLAC"); err != nil {
 		fmt.Printf("Failed to init history DB: %v\n", err)
 	}
+	if err := backend.InitISRCCacheDB(); err != nil {
+		fmt.Printf("Failed to init ISRC cache DB: %v\n", err)
+	}
+	if err := backend.InitProviderPriorityDB(); err != nil {
+		fmt.Printf("Failed to init provider priority DB: %v\n", err)
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	backend.CloseHistoryDB()
+	backend.CloseISRCCacheDB()
+	backend.CloseProviderPriorityDB()
 }
 
 type SpotifyMetadataRequest struct {
@@ -408,7 +481,10 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if req.Service == "qobuz" {
 			go func() {
 				client := backend.NewSongLinkClient()
-				isrc, _ := client.GetISRCDirect(req.SpotifyID)
+				isrc, err := client.GetISRCDirect(req.SpotifyID)
+				if err != nil {
+					fmt.Printf("Warning: failed to resolve ISRC for Qobuz: %v\n", err)
+				}
 				isrcChan <- isrc
 			}()
 		} else {
@@ -455,7 +531,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		if quality == "" {
 			quality = "6"
 		}
-		filename, err = downloader.DownloadTrackWithISRC(isrc, req.SpotifyID, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
+		filename, err = downloader.DownloadTrackWithISRC(isrc, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
 
 	default:
 		return DownloadResponse{
@@ -500,7 +576,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				Success: false,
 				Error:   errorMessage,
 				ItemID:  itemID,
-			}, fmt.Errorf(errorMessage)
+			}, errors.New(errorMessage)
 		}
 		if !validated {
 			fmt.Printf("[DownloadValidation] Skipped duration validation for %s (expected=%ds)\n", filename, req.Duration)
@@ -626,12 +702,8 @@ func (a *App) OpenFolder(path string) error {
 }
 
 func (a *App) OpenConfigFolder() error {
-	homeDir, err := os.UserHomeDir()
+	configDir, err := backend.EnsureAppDir()
 	if err != nil {
-		return fmt.Errorf("failed to get home directory: %v", err)
-	}
-	configDir := filepath.Join(homeDir, ".spotiflac")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %v", err)
 	}
 	return backend.OpenFolderInExplorer(configDir)
@@ -750,49 +822,65 @@ func (a *App) ExportFailedDownloads() (string, error) {
 }
 
 func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
-	var checkURL string
-	if apiType == "tidal" {
-		checkURL = fmt.Sprintf("%s/track/?id=441821360&quality=HI_RES_LOSSLESS", apiURL)
-	} else if apiType == "qobuz" {
-		checkURL = fmt.Sprintf("%s/api/stream?trackId=360735657&format_id=27", apiURL)
-	} else if apiType == "qbz" {
-		checkURL = fmt.Sprintf("%s/api/track/360735657?quality=27", apiURL)
-	} else if apiType == "amazon" {
-		checkURL = fmt.Sprintf("%s/status", apiURL)
-	} else {
-		checkURL = apiURL
-	}
+	isOnline, err := runWithTimeout(checkOperationTimeout, func() (bool, error) {
+		var checkURL string
+		if apiType == "tidal" {
+			checkURL = fmt.Sprintf("%s/track/?id=441821360&quality=HI_RES_LOSSLESS", apiURL)
+		} else if apiType == "qobuz" {
+			checkURL = fmt.Sprintf("%s/api/stream?trackId=360735657&quality=27", apiURL)
+		} else if apiType == "qbz" {
+			checkURL = fmt.Sprintf("%s/api/track/360735657?quality=27", apiURL)
+		} else if apiType == "amazon" {
+			checkURL = fmt.Sprintf("%s/status", apiURL)
+		} else {
+			checkURL = apiURL
+		}
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	req, err := http.NewRequest("GET", checkURL, nil)
-	if err != nil {
-		return false
-	}
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+		client := &http.Client{Timeout: 10 * time.Second}
+		req, err := http.NewRequest("GET", checkURL, nil)
+		if err != nil {
+			return false, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
 
-	maxRetries := 3
-	for i := 0; i < maxRetries; i++ {
-		resp, err := client.Do(req)
-		if err == nil {
-			statusCode := resp.StatusCode
-			if apiType == "amazon" && statusCode == 200 {
+		maxRetries := 3
+		for i := 0; i < maxRetries; i++ {
+			resp, err := client.Do(req)
+			if err == nil {
+				statusCode := resp.StatusCode
 				body, readErr := io.ReadAll(resp.Body)
 				resp.Body.Close()
-				if readErr == nil && strings.Contains(string(body), `"amazonMusic":"up"`) {
-					return true
+				if readErr != nil {
+					if i < maxRetries-1 {
+						time.Sleep(1 * time.Second)
+					}
+					continue
 				}
-			} else {
-				resp.Body.Close()
-				if statusCode == 200 {
-					return true
+
+				if apiType == "amazon" && statusCode == 200 && strings.Contains(string(body), `"amazonMusic":"up"`) {
+					return true, nil
+				}
+
+				if (apiType == "qobuz" || apiType == "qbz") && statusCode == 200 && containsStreamingURL(body) {
+					return true, nil
+				}
+
+				if apiType != "amazon" && apiType != "qobuz" && apiType != "qbz" && statusCode == 200 {
+					return true, nil
 				}
 			}
+			if i < maxRetries-1 {
+				time.Sleep(1 * time.Second)
+			}
 		}
-		if i < maxRetries-1 {
-			time.Sleep(1 * time.Second)
-		}
+		return false, nil
+	})
+	if err != nil {
+		fmt.Printf("CheckAPIStatus timeout/error for %s (%s): %v\n", apiType, apiURL, err)
+		return false
 	}
-	return false
+
+	return isOnline
 }
 
 func (a *App) Quit() {
@@ -1078,18 +1166,20 @@ func (a *App) CheckTrackAvailability(spotifyTrackID string) (string, error) {
 		return "", fmt.Errorf("spotify track ID is required")
 	}
 
-	client := backend.NewSongLinkClient()
-	availability, err := client.CheckTrackAvailability(spotifyTrackID)
-	if err != nil {
-		return "", err
-	}
+	return runWithTimeout(checkOperationTimeout, func() (string, error) {
+		client := backend.NewSongLinkClient()
+		availability, err := client.CheckTrackAvailability(spotifyTrackID)
+		if err != nil {
+			return "", err
+		}
 
-	jsonData, err := json.Marshal(availability)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode response: %v", err)
-	}
+		jsonData, err := json.Marshal(availability)
+		if err != nil {
+			return "", fmt.Errorf("failed to encode response: %v", err)
+		}
 
-	return string(jsonData), nil
+		return string(jsonData), nil
+	})
 }
 
 func (a *App) IsFFmpegInstalled() (bool, error) {
@@ -1255,6 +1345,14 @@ func (a *App) ReadFileAsBase64(filePath string) (string, error) {
 	}
 
 	return base64.StdEncoding.EncodeToString(content), nil
+}
+
+func (a *App) DecodeAudioForAnalysis(filePath string) (*backend.AnalysisDecodeResponse, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("file path is required")
+	}
+
+	return backend.DecodeAudioForAnalysis(filePath)
 }
 
 func (a *App) RenameFileTo(oldPath, newName string) error {

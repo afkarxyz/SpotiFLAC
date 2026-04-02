@@ -17,8 +17,8 @@ const MP4_CONTAINER_TYPES = new Set([
     "moov", "trak", "mdia", "minf", "stbl", "edts", "dinf",
     "udta", "ilst", "meta", "stsd", "wave",
 ]);
-type SupportedAudioFileType = "FLAC" | "MP3" | "M4A" | "AAC";
-interface ParsedAudioMetadata {
+export type SupportedAudioFileType = "FLAC" | "MP3" | "M4A" | "AAC";
+export interface ParsedAudioMetadata {
     fileType: SupportedAudioFileType;
     sampleRate: number;
     channels: number;
@@ -417,7 +417,7 @@ function parseM4aMetadata(buffer: ArrayBuffer): ParsedAudioMetadata {
                     }
                 }
             }
-            else if ((box.type === "mp4a" || box.type === "aac ") && box.offset + 36 <= boxEnd) {
+            else if ((box.type === "mp4a" || box.type === "aac " || box.type === "alac") && box.offset + 36 <= boxEnd) {
                 channels = view.getUint16(box.offset + 24, false) || channels;
                 bitsPerSample = view.getUint16(box.offset + 26, false) || bitsPerSample;
                 if (!sampleRate) {
@@ -455,7 +455,7 @@ function parseM4aMetadata(buffer: ArrayBuffer): ParsedAudioMetadata {
         duration,
     };
 }
-function parseAudioMetadata(input: AudioArrayBufferInput): ParsedAudioMetadata {
+export function parseAudioMetadataFromInput(input: AudioArrayBufferInput): ParsedAudioMetadata {
     const fileType = detectAudioFileType(input.arrayBuffer, input.fileName);
     switch (fileType) {
         case "FLAC": return parseFlacMetadata(input.arrayBuffer);
@@ -464,6 +464,15 @@ function parseAudioMetadata(input: AudioArrayBufferInput): ParsedAudioMetadata {
         case "AAC": return parseAacMetadata(input.arrayBuffer);
         default: throw new Error(`Unsupported audio format: ${input.fileName || "unknown"}`);
     }
+}
+export function pcm16MonoArrayBufferToFloat32Samples(buffer: ArrayBuffer): Float32Array {
+    const sampleCount = Math.floor(buffer.byteLength / 2);
+    const samples = new Float32Array(sampleCount);
+    const view = new DataView(buffer);
+    for (let i = 0; i < sampleCount; i++) {
+        samples[i] = view.getInt16(i * 2, true) / 32768;
+    }
+    return samples;
 }
 function buildWindowCoefficients(size: number, windowFunction: SpectrumParams["windowFunction"]): Float32Array {
     const coeffs = new Float32Array(size);
@@ -649,7 +658,7 @@ export async function analyzeAudioFile(file: File, params: SpectrumParams = DEFA
 export async function analyzeAudioArrayBuffer(input: AudioArrayBufferInput, params: SpectrumParams = DEFAULT_PARAMS, onProgress?: AnalysisProgressCallback, shouldCancel?: AnalysisCancelCheck): Promise<FrontendAnalysisPayload> {
     throwIfCancelled(shouldCancel);
     reportProgress(onProgress, "parse", 5, "Parsing audio metadata...");
-    const metadata = parseAudioMetadata(input);
+    const metadata = parseAudioMetadataFromInput(input);
     throwIfCancelled(shouldCancel);
     reportProgress(onProgress, "decode", 15, "Decoding audio stream...");
     const audioContext = createAnalysisAudioContext(metadata.sampleRate);
@@ -658,70 +667,81 @@ export async function analyzeAudioArrayBuffer(input: AudioArrayBufferInput, para
         throwIfCancelled(shouldCancel);
         reportProgress(onProgress, "decode", 35, "Audio decoded");
         const samples = audioBuffer.getChannelData(0);
-        reportProgress(onProgress, "metrics", 40, "Calculating peak/RMS...");
-        let peak = 0;
-        let sumSquares = 0;
-        let lastMetricsYieldAt = nowMs();
-        for (let i = 0; i < samples.length; i++) {
-            throwIfCancelled(shouldCancel);
-            const sample = samples[i];
-            const absSample = Math.abs(sample);
-            if (absSample > peak)
-                peak = absSample;
-            sumSquares += sample * sample;
-            if ((i + 1) % METRICS_CHUNK_SIZE === 0 || i === samples.length - 1) {
-                const metricsProgress = 40 + (((i + 1) / samples.length) * 10);
-                reportProgress(onProgress, "metrics", metricsProgress, "Calculating peak/RMS...");
-                const now = nowMs();
-                if (now - lastMetricsYieldAt >= 16) {
-                    await nextTick();
-                    lastMetricsYieldAt = nowMs();
-                    throwIfCancelled(shouldCancel);
-                }
-            }
-        }
-        const peakDB = peak > 0 ? 20 * Math.log10(peak) : -120;
-        const rms = samples.length > 0 ? Math.sqrt(sumSquares / samples.length) : 0;
-        const rmsDB = rms > 0 ? 20 * Math.log10(rms) : -120;
-        const dynamicRange = peakDB - rmsDB;
-        const duration = audioBuffer.duration > 0 ? audioBuffer.duration : metadata.duration;
-        const totalSamples = metadata.totalSamples > 0
-            ? metadata.totalSamples
-            : Math.floor(duration * metadata.sampleRate);
-        reportProgress(onProgress, "metrics", 50, "Signal metrics complete");
-        const spectrum = await analyzeSpectrumFromSamples(samples, metadata.sampleRate, params, (progress) => {
-            const mappedPercent = 50 + (progress.percent * 0.45);
-            reportProgress(onProgress, "spectrum", mappedPercent, progress.message);
-        }, shouldCancel);
-        reportProgress(onProgress, "finalize", 97, "Finalizing result...");
-        const payload: FrontendAnalysisPayload = {
-            result: {
-                file_path: input.fileName,
-                file_size: input.fileSize,
-                file_type: metadata.fileType,
-                sample_rate: metadata.sampleRate,
-                channels: metadata.channels || audioBuffer.numberOfChannels,
-                bits_per_sample: metadata.bitsPerSample,
-                total_samples: totalSamples,
-                duration,
-                bit_depth: `${metadata.bitsPerSample}-bit`,
-                dynamic_range: dynamicRange,
-                peak_amplitude: peakDB,
-                rms_level: rmsDB,
-                codec_mode: metadata.codecMode,
-                bitrate_kbps: metadata.bitrateKbps,
-                total_frames: metadata.totalFrames,
-                codec_version: metadata.codecVersion,
-                spectrum,
-            },
-            samples,
-        };
-        reportProgress(onProgress, "finalize", 100, "Analysis complete");
-        return payload;
+        return analyzeDecodedSamples(input, metadata, samples, params, onProgress, shouldCancel, audioBuffer.duration);
     }
     finally {
         await audioContext.close();
     }
+}
+export async function analyzeDecodedSamples(input: AudioArrayBufferInput, metadata: ParsedAudioMetadata, samples: Float32Array, params: SpectrumParams = DEFAULT_PARAMS, onProgress?: AnalysisProgressCallback, shouldCancel?: AnalysisCancelCheck, durationOverride?: number): Promise<FrontendAnalysisPayload> {
+    throwIfCancelled(shouldCancel);
+    const analysisSampleRate = metadata.sampleRate > 0 ? metadata.sampleRate : 44100;
+    const analysisChannels = metadata.channels > 0 ? metadata.channels : 1;
+    const bitDepthLabel = metadata.bitsPerSample > 0 ? `${metadata.bitsPerSample}-bit` : "Unknown";
+    reportProgress(onProgress, "metrics", 40, "Calculating peak/RMS...");
+    let peak = 0;
+    let sumSquares = 0;
+    let lastMetricsYieldAt = nowMs();
+    for (let i = 0; i < samples.length; i++) {
+        throwIfCancelled(shouldCancel);
+        const sample = samples[i];
+        const absSample = Math.abs(sample);
+        if (absSample > peak)
+            peak = absSample;
+        sumSquares += sample * sample;
+        if ((i + 1) % METRICS_CHUNK_SIZE === 0 || i === samples.length - 1) {
+            const metricsProgress = 40 + (((i + 1) / Math.max(1, samples.length)) * 10);
+            reportProgress(onProgress, "metrics", metricsProgress, "Calculating peak/RMS...");
+            const now = nowMs();
+            if (now - lastMetricsYieldAt >= 16) {
+                await nextTick();
+                lastMetricsYieldAt = nowMs();
+                throwIfCancelled(shouldCancel);
+            }
+        }
+    }
+    const peakDB = peak > 0 ? 20 * Math.log10(peak) : -120;
+    const rms = samples.length > 0 ? Math.sqrt(sumSquares / samples.length) : 0;
+    const rmsDB = rms > 0 ? 20 * Math.log10(rms) : -120;
+    const dynamicRange = peakDB - rmsDB;
+    const duration = durationOverride && durationOverride > 0
+        ? durationOverride
+        : (metadata.duration > 0
+            ? metadata.duration
+            : (analysisSampleRate > 0 ? samples.length / analysisSampleRate : 0));
+    const totalSamples = metadata.totalSamples > 0
+        ? metadata.totalSamples
+        : (duration > 0 ? Math.floor(duration * analysisSampleRate) : samples.length);
+    reportProgress(onProgress, "metrics", 50, "Signal metrics complete");
+    const spectrum = await analyzeSpectrumFromSamples(samples, analysisSampleRate, params, (progress) => {
+        const mappedPercent = 50 + (progress.percent * 0.45);
+        reportProgress(onProgress, "spectrum", mappedPercent, progress.message);
+    }, shouldCancel);
+    reportProgress(onProgress, "finalize", 97, "Finalizing result...");
+    const payload: FrontendAnalysisPayload = {
+        result: {
+            file_path: input.fileName,
+            file_size: input.fileSize,
+            file_type: metadata.fileType,
+            sample_rate: analysisSampleRate,
+            channels: analysisChannels,
+            bits_per_sample: metadata.bitsPerSample,
+            total_samples: totalSamples,
+            duration,
+            bit_depth: bitDepthLabel,
+            dynamic_range: dynamicRange,
+            peak_amplitude: peakDB,
+            rms_level: rmsDB,
+            codec_mode: metadata.codecMode,
+            bitrate_kbps: metadata.bitrateKbps,
+            total_frames: metadata.totalFrames,
+            codec_version: metadata.codecVersion,
+            spectrum,
+        },
+        samples,
+    };
+    reportProgress(onProgress, "finalize", 100, "Analysis complete");
+    return payload;
 }
 export const analyzeFlacFile = analyzeAudioFile;
 export const analyzeFlacArrayBuffer = analyzeAudioArrayBuffer;
