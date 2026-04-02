@@ -1298,6 +1298,14 @@ func (a *App) ReadFileAsBase64(filePath string) (string, error) {
 	return base64.StdEncoding.EncodeToString(content), nil
 }
 
+func (a *App) DecodeAudioForAnalysis(filePath string) (*backend.AnalysisDecodeResponse, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("file path is required")
+	}
+
+	return backend.DecodeAudioForAnalysis(filePath)
+}
+
 func (a *App) RenameFileTo(oldPath, newName string) error {
 	dir := filepath.Dir(oldPath)
 	ext := filepath.Ext(oldPath)

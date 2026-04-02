@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect, type MutableRefObject } from 
 import type { AnalysisResult } from "@/types/api";
 import { logger } from "@/lib/logger";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
-import { analyzeAudioArrayBuffer, analyzeAudioFile, analyzeSpectrumFromSamples, type AnalysisProgress, } from "@/lib/flac-analysis";
+import { analyzeAudioArrayBuffer, analyzeAudioFile, analyzeDecodedSamples, analyzeSpectrumFromSamples, parseAudioMetadataFromInput, pcm16MonoArrayBufferToFloat32Samples, type AnalysisProgress, type FrontendAnalysisPayload, type ParsedAudioMetadata, } from "@/lib/flac-analysis";
 import { loadAudioAnalysisPreferences } from "@/lib/audio-analysis-preferences";
 type WindowFunction = "hann" | "hamming" | "blackman" | "rectangular";
 function toWindowFunction(value: string): WindowFunction {
@@ -60,6 +60,25 @@ const DEFAULT_PROGRESS_STATE: ProgressState = {
 interface CancelToken {
     cancelled: boolean;
 }
+interface WailsWindow extends Window {
+    go?: {
+        main?: {
+            App?: {
+                ReadFileAsBase64?: (path: string) => Promise<string>;
+                DecodeAudioForAnalysis?: (path: string) => Promise<BackendAnalysisDecodeResponse>;
+            };
+        };
+    };
+}
+interface BackendAnalysisDecodeResponse {
+    pcm_base64: string;
+    sample_rate: number;
+    channels: number;
+    bits_per_sample: number;
+    duration: number;
+    bitrate_kbps?: number;
+    bit_depth?: string;
+}
 function cancelToken(tokenRef: MutableRefObject<CancelToken | null>): void {
     if (tokenRef.current) {
         tokenRef.current.cancelled = true;
@@ -79,6 +98,23 @@ function toProgressState(progress: AnalysisProgress): ProgressState {
     return {
         percent: Math.round(Math.max(0, Math.min(100, progress.percent))),
         message: progress.message,
+    };
+}
+function isDecodeFailure(error: unknown): boolean {
+    return error instanceof Error && /decode/i.test(error.message);
+}
+function mergeBackendDecodedMetadata(parsed: ParsedAudioMetadata, decoded: BackendAnalysisDecodeResponse): ParsedAudioMetadata {
+    const sampleRate = decoded.sample_rate > 0 ? decoded.sample_rate : parsed.sampleRate;
+    const bitsPerSample = decoded.bits_per_sample > 0 ? decoded.bits_per_sample : parsed.bitsPerSample;
+    const duration = decoded.duration > 0 ? decoded.duration : parsed.duration;
+    return {
+        ...parsed,
+        sampleRate,
+        channels: decoded.channels > 0 ? decoded.channels : parsed.channels,
+        bitsPerSample,
+        totalSamples: duration > 0 && sampleRate > 0 ? Math.floor(duration * sampleRate) : parsed.totalSamples,
+        duration,
+        bitrateKbps: decoded.bitrate_kbps ?? parsed.bitrateKbps,
     };
 }
 export function useAudioAnalysis() {
@@ -189,7 +225,7 @@ export function useAudioAnalysis() {
             logger.info(`Analyzing audio file (frontend from path): ${filePath}`);
             const start = Date.now();
             const prefs = loadAudioAnalysisPreferences();
-            const readFileAsBase64 = (window as any)?.go?.main?.App?.ReadFileAsBase64 as ((path: string) => Promise<string>) | undefined;
+            const readFileAsBase64 = (window as WailsWindow).go?.main?.App?.ReadFileAsBase64;
             if (!readFileAsBase64) {
                 throw new Error("ReadFileAsBase64 backend method is unavailable");
             }
@@ -211,14 +247,16 @@ export function useAudioAnalysis() {
                 message: "Preparing audio buffer...",
             });
             const fileName = fileNameFromPath(filePath);
-            const payload = await analyzeAudioArrayBuffer({
+            const input = {
                 fileName,
                 fileSize: arrayBuffer.byteLength,
                 arrayBuffer,
-            }, {
+            };
+            const analysisParams = {
                 fftSize: prefs.fftSize,
                 windowFunction: prefs.windowFunction,
-            }, (progress) => {
+            } as const;
+            const updateProgress = (progress: AnalysisProgress) => {
                 if (token.cancelled)
                     return;
                 const mappedPercent = 10 + (progress.percent * 0.9);
@@ -226,7 +264,45 @@ export function useAudioAnalysis() {
                     percent: Math.round(Math.max(0, Math.min(100, mappedPercent))),
                     message: progress.message,
                 });
-            }, () => token.cancelled);
+            };
+            let payload: FrontendAnalysisPayload;
+            try {
+                payload = await analyzeAudioArrayBuffer(input, analysisParams, updateProgress, () => token.cancelled);
+            }
+            catch (err) {
+                if (!isDecodeFailure(err)) {
+                    throw err;
+                }
+                const decodeAudioForAnalysis = (window as WailsWindow).go?.main?.App?.DecodeAudioForAnalysis;
+                if (!decodeAudioForAnalysis) {
+                    throw err;
+                }
+                logger.warning(`Browser decoder failed for ${fileName}; trying FFmpeg fallback`);
+                setAnalysisProgress({
+                    percent: 18,
+                    message: "Browser decoder failed, trying FFmpeg fallback...",
+                });
+                const decoded = await decodeAudioForAnalysis(filePath);
+                if (token.cancelled) {
+                    return null;
+                }
+                setAnalysisProgress({
+                    percent: 24,
+                    message: "Decoding audio with FFmpeg...",
+                });
+                const pcmBase64 = decoded.pcm_base64 || "";
+                if (!pcmBase64) {
+                    throw new Error("FFmpeg analysis decode returned no PCM data");
+                }
+                const pcmBuffer = await base64ToArrayBuffer(pcmBase64, () => token.cancelled);
+                if (token.cancelled) {
+                    return null;
+                }
+                const parsedMetadata = parseAudioMetadataFromInput(input);
+                const mergedMetadata = mergeBackendDecodedMetadata(parsedMetadata, decoded);
+                const samples = pcm16MonoArrayBufferToFloat32Samples(pcmBuffer);
+                payload = await analyzeDecodedSamples(input, mergedMetadata, samples, analysisParams, updateProgress, () => token.cancelled, mergedMetadata.duration);
+            }
             if (token.cancelled) {
                 return null;
             }
