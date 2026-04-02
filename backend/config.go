@@ -72,17 +72,19 @@ func GetSpotFetchAPISettings() (bool, string) {
 func GetLinkResolverSetting() string {
 	settings, err := LoadConfigSettings()
 	if err != nil || settings == nil {
-		return linkResolverProviderSongstats
+		return linkResolverProviderDeezerSongLink
 	}
 
 	resolver, _ := settings["linkResolver"].(string)
 	switch strings.TrimSpace(strings.ToLower(resolver)) {
 	case "songlink", linkResolverProviderDeezerSongLink:
 		return linkResolverProviderDeezerSongLink
-	case "", "songstats":
+	case "songstats":
 		return linkResolverProviderSongstats
+	case "":
+		return linkResolverProviderDeezerSongLink
 	default:
-		return linkResolverProviderSongstats
+		return linkResolverProviderDeezerSongLink
 	}
 }
 

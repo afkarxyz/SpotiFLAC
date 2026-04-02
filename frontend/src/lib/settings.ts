@@ -95,7 +95,7 @@ function detectOS(): "Windows" | "linux/MacOS" {
 export const DEFAULT_SETTINGS: Settings = {
     downloadPath: "",
     downloader: "auto",
-    linkResolver: "songstats",
+    linkResolver: "songlink",
     allowResolverFallback: true,
     theme: "yellow",
     themeMode: "auto",
@@ -230,7 +230,7 @@ function getSettingsFromLocalStorage(): Settings {
                 parsed.allowFallback = true;
             }
             if (!('linkResolver' in parsed)) {
-                parsed.linkResolver = "songstats";
+                parsed.linkResolver = "songlink";
             }
             if (!('allowResolverFallback' in parsed)) {
                 parsed.allowResolverFallback = true;
@@ -315,7 +315,7 @@ export async function loadSettings(): Promise<Settings> {
                 parsed.allowFallback = true;
             }
             if (!('linkResolver' in parsed)) {
-                parsed.linkResolver = "songstats";
+                parsed.linkResolver = "songlink";
             }
             if (!('allowResolverFallback' in parsed)) {
                 parsed.allowResolverFallback = true;
