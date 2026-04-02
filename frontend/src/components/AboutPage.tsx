@@ -15,16 +15,13 @@ import KofiLogo from "@/assets/ko-fi.gif";
 import KofiSvg from "@/assets/kofi_symbol.svg";
 import UsdtBarcode from "@/assets/usdt.jpg";
 import { langColors } from "@/assets/github-lang-colors";
-
 const browserExtensionItems = [
     { icon: AudioTTSProIcon, label: "AudioTTS Pro", alt: "AudioTTS Pro" },
     { icon: ChatGPTTTSIcon, label: "ChatGPT TTS", alt: "ChatGPT TTS" },
     { icon: XIcon, label: "Twitter/X Media Batch Downloader", alt: "Twitter/X Media Batch Downloader" },
     { icon: XProIcon, label: "Twitter/X Media Batch Downloader Pro", alt: "Twitter/X Media Batch Downloader Pro" },
 ];
-
 const projectCardClass = "cursor-pointer transition-colors hover:bg-muted/50 dark:hover:bg-accent/50";
-
 export function AboutPage() {
     const [activeTab, setActiveTab] = useState<"projects" | "support">("projects");
     const [repoStats, setRepoStats] = useState<Record<string, any>>({});
@@ -321,14 +318,12 @@ export function AboutPage() {
                     <CardHeader>
                     <CardTitle>Browser Extensions & Scripts</CardTitle>
                     <CardDescription className="flex flex-col gap-2 pt-2">
-                      {browserExtensionItems.map((item) => (
-                        <div key={item.alt} className="flex items-center gap-2">
+                      {browserExtensionItems.map((item) => (<div key={item.alt} className="flex items-center gap-2">
                           <img src={item.icon} className="h-[22px] w-[22px] rounded-sm shadow-sm" alt={item.alt}/>
                           <span className="text-[11px] leading-tight text-muted-foreground">
                             {item.label}
                           </span>
-                        </div>
-                      ))}
+                        </div>))}
                     </CardDescription>
                   </CardHeader>
                 </Card>

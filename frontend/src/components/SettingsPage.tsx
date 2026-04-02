@@ -245,13 +245,13 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     <SelectContent>
                       <SelectItem value="songlink">
                         <span className="flex items-center gap-2">
-                          <img src={songlinkIcon} alt="Songlink" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy" />
+                          <img src={songlinkIcon} alt="Songlink" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy"/>
                           Songlink
                         </span>
                       </SelectItem>
                       <SelectItem value="songstats">
                         <span className="flex items-center gap-2">
-                          <img src={songstatsIcon} alt="Songstats" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy" />
+                          <img src={songstatsIcon} alt="Songstats" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy"/>
                           Songstats
                         </span>
                       </SelectItem>

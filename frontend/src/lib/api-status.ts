@@ -1,15 +1,12 @@
 import { CheckAPIStatus } from "../../wailsjs/go/main/App";
 import { CHECK_TIMEOUT_MS, withTimeout } from "@/lib/async-timeout";
-
 export type ApiCheckStatus = "checking" | "online" | "offline" | "idle";
-
 export interface ApiSource {
     id: string;
     type: string;
     name: string;
     url: string;
 }
-
 export const API_SOURCES: ApiSource[] = [
     { id: "tidal1", type: "tidal", name: "Tidal A", url: "https://hifi-one.spotisaver.net" },
     { id: "tidal2", type: "tidal", name: "Tidal B", url: "https://hifi-two.spotisaver.net" },
@@ -23,32 +20,25 @@ export const API_SOURCES: ApiSource[] = [
     { id: "qobuz3", type: "qbz", name: "Qobuz C", url: "https://qbz.afkarxyz.qzz.io" },
     { id: "amazon1", type: "amazon", name: "Amazon Music", url: "https://amzn.afkarxyz.qzz.io" },
 ];
-
 type ApiStatusState = {
     isCheckingAll: boolean;
     statuses: Record<string, ApiCheckStatus>;
 };
-
 let apiStatusState: ApiStatusState = {
     isCheckingAll: false,
     statuses: {},
 };
-
 let activeCheckAll: Promise<void> | null = null;
-
 const listeners = new Set<() => void>();
-
 function emitApiStatusChange() {
     for (const listener of listeners) {
         listener();
     }
 }
-
 function setApiStatusState(updater: (current: ApiStatusState) => ApiStatusState) {
     apiStatusState = updater(apiStatusState);
     emitApiStatusChange();
 }
-
 async function checkSingleApiStatus(source: ApiSource): Promise<void> {
     setApiStatusState((current) => ({
         ...current,
@@ -57,14 +47,8 @@ async function checkSingleApiStatus(source: ApiSource): Promise<void> {
             [source.id]: "checking",
         },
     }));
-
     try {
-        const isOnline = await withTimeout(
-            CheckAPIStatus(source.type, source.url),
-            CHECK_TIMEOUT_MS,
-            `API status check timed out after 10 seconds for ${source.url}`,
-        );
-
+        const isOnline = await withTimeout(CheckAPIStatus(source.type, source.url), CHECK_TIMEOUT_MS, `API status check timed out after 10 seconds for ${source.url}`);
         setApiStatusState((current) => ({
             ...current,
             statuses: {
@@ -72,7 +56,8 @@ async function checkSingleApiStatus(source: ApiSource): Promise<void> {
                 [source.id]: isOnline ? "online" : "offline",
             },
         }));
-    } catch {
+    }
+    catch {
         setApiStatusState((current) => ({
             ...current,
             statuses: {
@@ -82,45 +67,39 @@ async function checkSingleApiStatus(source: ApiSource): Promise<void> {
         }));
     }
 }
-
 export function getApiStatusState(): ApiStatusState {
     return apiStatusState;
 }
-
 export function subscribeApiStatus(listener: () => void): () => void {
     listeners.add(listener);
     return () => {
         listeners.delete(listener);
     };
 }
-
 export function hasApiStatusResults(): boolean {
     return API_SOURCES.some((source) => {
         const status = apiStatusState.statuses[source.id];
         return status === "online" || status === "offline";
     });
 }
-
 export function ensureApiStatusCheckStarted(): void {
     if (!activeCheckAll && !hasApiStatusResults()) {
         void checkAllApiStatuses();
     }
 }
-
 export async function checkAllApiStatuses(): Promise<void> {
     if (activeCheckAll) {
         return activeCheckAll;
     }
-
     activeCheckAll = (async () => {
         setApiStatusState((current) => ({
             ...current,
             isCheckingAll: true,
         }));
-
         try {
             await Promise.allSettled(API_SOURCES.map((source) => checkSingleApiStatus(source)));
-        } finally {
+        }
+        finally {
             setApiStatusState((current) => ({
                 ...current,
                 isCheckingAll: false,
@@ -128,6 +107,5 @@ export async function checkAllApiStatuses(): Promise<void> {
             activeCheckAll = null;
         }
     })();
-
     return activeCheckAll;
 }

@@ -21,11 +21,7 @@ export function useAvailability() {
         setError(null);
         try {
             logger.info(`Checking availability for track: ${spotifyId}`);
-            const response = await withTimeout(
-                CheckTrackAvailability(spotifyId),
-                CHECK_TIMEOUT_MS,
-                `Availability check timed out after 10 seconds for ${spotifyId}`,
-            );
+            const response = await withTimeout(CheckTrackAvailability(spotifyId), CHECK_TIMEOUT_MS, `Availability check timed out after 10 seconds for ${spotifyId}`);
             const availability: TrackAvailability = JSON.parse(response);
             setAvailabilityMap((prev) => {
                 const newMap = new Map(prev);

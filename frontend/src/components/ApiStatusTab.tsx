@@ -2,7 +2,6 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { TidalIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 import { useApiStatus } from "@/hooks/useApiStatus";
-
 export function ApiStatusTab() {
     const { sources, statuses, isCheckingAll, refreshAll } = useApiStatus();
     return (<div className="space-y-6">
