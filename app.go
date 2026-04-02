@@ -49,11 +49,15 @@ func (a *App) startup(ctx context.Context) {
 	if err := backend.InitISRCCacheDB(); err != nil {
 		fmt.Printf("Failed to init ISRC cache DB: %v\n", err)
 	}
+	if err := backend.InitProviderPriorityDB(); err != nil {
+		fmt.Printf("Failed to init provider priority DB: %v\n", err)
+	}
 }
 
 func (a *App) shutdown(ctx context.Context) {
 	backend.CloseHistoryDB()
 	backend.CloseISRCCacheDB()
+	backend.CloseProviderPriorityDB()
 }
 
 type SpotifyMetadataRequest struct {

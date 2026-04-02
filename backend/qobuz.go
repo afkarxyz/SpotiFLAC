@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -171,15 +170,16 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 
 	fmt.Printf("Getting download URL for track ID: %d with requested quality: %s\n", trackID, qualityCode)
 
-	standardAPIs := []string{
+	standardAPIs := prioritizeProviders("qobuz", []string{
 		"https://dab.yeet.su/api/stream?trackId=",
 		"https://dabmusic.xyz/api/stream?trackId=",
 		"https://qbz.afkarxyz.qzz.io/api/track/",
-	}
+	})
 
 	downloadFunc := func(qual string) (string, error) {
 		type Provider struct {
 			Name string
+			API  string
 			Func func() (string, error)
 		}
 
@@ -189,27 +189,26 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 			currentAPI := api
 			providers = append(providers, Provider{
 				Name: "Standard(" + currentAPI + ")",
+				API:  currentAPI,
 				Func: func() (string, error) {
 					return q.DownloadFromStandard(currentAPI, trackID, qual)
 				},
 			})
 		}
 
-		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(providers), func(i, j int) { providers[i], providers[j] = providers[j], providers[i] })
-
 		var lastErr error
 		for _, p := range providers {
-
 			fmt.Printf("Trying Provider: %s (Quality: %s)...\n", p.Name, qual)
 
 			url, err := p.Func()
 			if err == nil {
 				fmt.Printf("✓ Success\n")
+				recordProviderSuccess("qobuz", p.API)
 				return url, nil
 			}
 
 			fmt.Printf("Provider failed: %v\n", err)
+			recordProviderFailure("qobuz", p.API)
 			lastErr = err
 		}
 		return "", lastErr

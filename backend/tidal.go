@@ -6,7 +6,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -86,7 +85,7 @@ func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
 		"https://monochrome-api.samidy.com",
 		"https://tidal.kinoplus.online",
 	}
-	return apis, nil
+	return prioritizeProviders("tidal", apis), nil
 }
 
 func (t *TidalDownloader) GetTidalURLFromSpotify(spotifyTrackID string) (string, error) {
@@ -906,15 +905,13 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 		return "", "", fmt.Errorf("no APIs available")
 	}
 
-	rand.Seed(time.Now().UnixNano())
-	rand.Shuffle(len(apis), func(i, j int) { apis[i], apis[j] = apis[j], apis[i] })
-
-	fmt.Printf("Rotating through %d APIs...\n", len(apis))
+	orderedAPIs := prioritizeProviders("tidal", apis)
+	fmt.Printf("Trying %d prioritized APIs...\n", len(orderedAPIs))
 
 	var lastError error
 	var errors []string
 
-	for _, apiURL := range apis {
+	for _, apiURL := range orderedAPIs {
 		fmt.Printf("Trying API: %s\n", apiURL)
 
 		client := &http.Client{
@@ -925,6 +922,7 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 		resp, err := client.Get(url)
 		if err != nil {
 			lastError = err
+			recordProviderFailure("tidal", apiURL)
 			errors = append(errors, fmt.Sprintf("%s: %v", apiURL, err))
 			continue
 		}
@@ -932,6 +930,7 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 		if resp.StatusCode != 200 {
 			resp.Body.Close()
 			lastError = fmt.Errorf("HTTP %d", resp.StatusCode)
+			recordProviderFailure("tidal", apiURL)
 			errors = append(errors, fmt.Sprintf("%s: %v", apiURL, lastError))
 			continue
 		}
@@ -940,6 +939,7 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 		resp.Body.Close()
 		if err != nil {
 			lastError = err
+			recordProviderFailure("tidal", apiURL)
 			errors = append(errors, fmt.Sprintf("%s: read body failed", apiURL))
 			continue
 		}
@@ -947,6 +947,7 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 		var v2Response TidalAPIResponseV2
 		if err := json.Unmarshal(body, &v2Response); err == nil && v2Response.Data.Manifest != "" {
 			fmt.Printf("✓ Success with: %s\n", apiURL)
+			recordProviderSuccess("tidal", apiURL)
 			return apiURL, "MANIFEST:" + v2Response.Data.Manifest, nil
 		}
 
@@ -955,12 +956,14 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 			for _, item := range v1Responses {
 				if item.OriginalTrackURL != "" {
 					fmt.Printf("✓ Success with: %s\n", apiURL)
+					recordProviderSuccess("tidal", apiURL)
 					return apiURL, item.OriginalTrackURL, nil
 				}
 			}
 		}
 
 		lastError = fmt.Errorf("no download URL or manifest in response")
+		recordProviderFailure("tidal", apiURL)
 		errors = append(errors, fmt.Sprintf("%s: %v", apiURL, lastError))
 	}
 
