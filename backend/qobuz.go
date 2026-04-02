@@ -498,6 +498,7 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(isrc, outputDir, quality, filena
 		DiscNumber:  spotifyDiscNumber,
 		TotalDiscs:  spotifyTotalDiscs,
 		URL:         spotifyURL,
+		Comment:     spotifyURL,
 		Copyright:   spotifyCopyright,
 		Publisher:   spotifyPublisher,
 		Description: "https://github.com/afkarxyz/SpotiFLAC",

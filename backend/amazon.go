@@ -387,6 +387,7 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, quality, filename
 		DiscNumber:  spotifyDiscNumber,
 		TotalDiscs:  spotifyTotalDiscs,
 		URL:         spotifyURL,
+		Comment:     spotifyURL,
 		Copyright:   spotifyCopyright,
 		Publisher:   spotifyPublisher,
 		Description: "https://github.com/afkarxyz/SpotiFLAC",

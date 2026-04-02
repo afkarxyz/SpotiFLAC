@@ -28,6 +28,7 @@ type Metadata struct {
 	DiscNumber  int
 	TotalDiscs  int
 	URL         string
+	Comment     string
 	Copyright   string
 	Publisher   string
 	Lyrics      string
@@ -87,6 +88,9 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 	}
 	if metadata.Description != "" {
 		_ = cmt.Add("DESCRIPTION", metadata.Description)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		_ = cmt.Add("COMMENT", comment)
 	}
 
 	if metadata.ISRC != "" {
@@ -164,6 +168,14 @@ func extractYear(releaseDate string) string {
 		return releaseDate[:4]
 	}
 	return releaseDate
+}
+
+func resolveMetadataComment(metadata Metadata) string {
+	if comment := strings.TrimSpace(metadata.Comment); comment != "" {
+		return comment
+	}
+
+	return strings.TrimSpace(metadata.URL)
 }
 
 func EmbedLyricsOnly(filepath string, lyrics string) error {
@@ -891,7 +903,11 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 			metadata.Publisher = value
 		case "url":
 			metadata.URL = value
-		case "description", "comment":
+		case "comment", "comments":
+			if metadata.Comment == "" {
+				metadata.Comment = value
+			}
+		case "description":
 			if metadata.Description == "" {
 				metadata.Description = value
 			}
@@ -982,6 +998,16 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 		tag.AddTextFrame("TSRC", id3v2.EncodingUTF8, metadata.ISRC)
 	}
 
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		tag.DeleteFrames(tag.CommonID("Comments"))
+		tag.AddCommentFrame(id3v2.CommentFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Language:    "eng",
+			Description: "",
+			Text:        comment,
+		})
+	}
+
 	if coverPath != "" && fileExists(coverPath) {
 
 		tag.DeleteFrames(tag.CommonID("Attached picture"))
@@ -1067,6 +1093,9 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	}
 	if metadata.ISRC != "" {
 		args = append(args, "-metadata", "isrc="+metadata.ISRC)
+	}
+	if comment := resolveMetadataComment(metadata); comment != "" {
+		args = append(args, "-metadata", "comment="+comment)
 	}
 
 	tmpOutputFile := strings.TrimSuffix(filePath, pathfilepath.Ext(filePath)) + ".tmp" + pathfilepath.Ext(filePath)
