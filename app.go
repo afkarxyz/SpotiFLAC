@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 
 	"path/filepath"
@@ -49,6 +51,45 @@ func runWithTimeout[T any](timeout time.Duration, fn func() (T, error)) (T, erro
 		var zero T
 		return zero, fmt.Errorf("operation timed out after %s", timeout)
 	}
+}
+
+func containsStreamingURL(body []byte) bool {
+	trimmedBody := strings.TrimSpace(string(body))
+	if trimmedBody == "" {
+		return false
+	}
+
+	var directResp struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(body, &directResp); err == nil && isStreamingURL(directResp.URL) {
+		return true
+	}
+
+	var nestedResp struct {
+		Data struct {
+			URL string `json:"url"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &nestedResp); err == nil && isStreamingURL(nestedResp.Data.URL) {
+		return true
+	}
+
+	return isStreamingURL(trimmedBody)
+}
+
+func isStreamingURL(raw string) bool {
+	candidate := strings.TrimSpace(raw)
+	if candidate == "" {
+		return false
+	}
+
+	parsed, err := url.Parse(candidate)
+	if err != nil {
+		return false
+	}
+
+	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
 }
 
 func (a *App) getFirstArtist(artistString string) string {
@@ -535,7 +576,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				Success: false,
 				Error:   errorMessage,
 				ItemID:  itemID,
-			}, fmt.Errorf(errorMessage)
+			}, errors.New(errorMessage)
 		}
 		if !validated {
 			fmt.Printf("[DownloadValidation] Skipped duration validation for %s (expected=%ds)\n", filename, req.Duration)
@@ -786,7 +827,7 @@ func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
 		if apiType == "tidal" {
 			checkURL = fmt.Sprintf("%s/track/?id=441821360&quality=HI_RES_LOSSLESS", apiURL)
 		} else if apiType == "qobuz" {
-			checkURL = fmt.Sprintf("%s/api/stream?trackId=360735657&format_id=27", apiURL)
+			checkURL = fmt.Sprintf("%s/api/stream?trackId=360735657&quality=27", apiURL)
 		} else if apiType == "qbz" {
 			checkURL = fmt.Sprintf("%s/api/track/360735657?quality=27", apiURL)
 		} else if apiType == "amazon" {
@@ -807,17 +848,25 @@ func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
 			resp, err := client.Do(req)
 			if err == nil {
 				statusCode := resp.StatusCode
-				if apiType == "amazon" && statusCode == 200 {
-					body, readErr := io.ReadAll(resp.Body)
-					resp.Body.Close()
-					if readErr == nil && strings.Contains(string(body), `"amazonMusic":"up"`) {
-						return true, nil
+				body, readErr := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				if readErr != nil {
+					if i < maxRetries-1 {
+						time.Sleep(1 * time.Second)
 					}
-				} else {
-					resp.Body.Close()
-					if statusCode == 200 {
-						return true, nil
-					}
+					continue
+				}
+
+				if apiType == "amazon" && statusCode == 200 && strings.Contains(string(body), `"amazonMusic":"up"`) {
+					return true, nil
+				}
+
+				if (apiType == "qobuz" || apiType == "qbz") && statusCode == 200 && containsStreamingURL(body) {
+					return true, nil
+				}
+
+				if apiType != "amazon" && apiType != "qobuz" && apiType != "qbz" && statusCode == 200 {
+					return true, nil
 				}
 			}
 			if i < maxRetries-1 {
