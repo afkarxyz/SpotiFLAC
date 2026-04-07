@@ -39,9 +39,16 @@ type DeezerDownloader struct {
 	arl    string
 }
 
-type lucidaTokenData struct {
-	Token       string `json:"token"`
-	TokenExpiry int64  `json:"tokenExpiry"`
+type lucidaPageData struct {
+	Token       string          `json:"token"`
+	TokenExpiry int64           `json:"tokenExpiry"`
+	Info        json.RawMessage `json:"info"`
+}
+
+type lucidaTrackInfo struct {
+	Type string `json:"type"`
+	URL  string `json:"url"`
+	CSRF string `json:"csrf"`
 }
 
 type lucidaLoadResponse struct {
@@ -101,13 +108,14 @@ func NewDeezerDownloader(method, arl string) *DeezerDownloader {
 
 // ---- Lucida Method ----
 
-func (d *DeezerDownloader) lucidaFetchToken(deezerURL string) (*lucidaTokenData, error) {
+func (d *DeezerDownloader) lucidaFetchPageData(deezerURL string) (*lucidaPageData, error) {
 	reqURL := fmt.Sprintf("%s/?url=%s", lucidaBaseURL, url.QueryEscape(deezerURL))
 	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", deezerUserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
@@ -126,72 +134,54 @@ func (d *DeezerDownloader) lucidaFetchToken(deezerURL string) (*lucidaTokenData,
 
 	bodyStr := string(body)
 
-	// Extract SvelteKit page data JSON embedded in the HTML
-	// Look for the data section containing token and tokenExpiry
-	dataMarker := `{"type":"data","data":`
-	dataIdx := strings.Index(bodyStr, dataMarker)
-	if dataIdx == -1 {
+	// Extract SvelteKit page data embedded in the HTML
+	// The data is between: ,{"type":"data","data": ... ,"uses":{"url":1}}];
+	startMarker := `,{"type":"data","data":`
+	endMarker := `,"uses":{"url":1}}]`
+
+	startIdx := strings.Index(bodyStr, startMarker)
+	if startIdx == -1 {
 		return nil, fmt.Errorf("could not find SvelteKit data marker in Lucida page")
 	}
 
-	// Extract the data JSON object
-	dataStart := dataIdx + len(dataMarker)
-	// Find the matching closing brace by counting braces
-	braceCount := 0
-	dataEnd := dataStart
-	for i := dataStart; i < len(bodyStr); i++ {
-		if bodyStr[i] == '{' {
-			braceCount++
-		} else if bodyStr[i] == '}' {
-			braceCount--
-			if braceCount == 0 {
-				dataEnd = i + 1
-				break
-			}
-		}
+	dataStart := startIdx + len(startMarker)
+	remaining := bodyStr[dataStart:]
+
+	endIdx := strings.Index(remaining, endMarker)
+	if endIdx == -1 {
+		return nil, fmt.Errorf("could not find SvelteKit data end marker in Lucida page")
 	}
 
-	if dataEnd <= dataStart {
-		return nil, fmt.Errorf("could not parse SvelteKit data from Lucida page")
-	}
+	dataJSON := remaining[:endIdx]
 
-	dataJSON := bodyStr[dataStart:dataEnd]
-
-	// Parse token and tokenExpiry from the data
-	var pageData struct {
-		Token       string `json:"token"`
-		TokenExpiry int64  `json:"tokenExpiry"`
-	}
+	var pageData lucidaPageData
 	if err := json.Unmarshal([]byte(dataJSON), &pageData); err != nil {
-		// Fallback: try regex extraction
-		tokenRegex := regexp.MustCompile(`"token"\s*:\s*"([^"]+)"`)
-		matches := tokenRegex.FindStringSubmatch(dataJSON)
-		expiryRegex := regexp.MustCompile(`"tokenExpiry"\s*:\s*(\d+)`)
-		expiryMatches := expiryRegex.FindStringSubmatch(dataJSON)
-
-		if len(matches) < 2 {
-			return nil, fmt.Errorf("could not find CSRF token in Lucida page")
-		}
-
-		tokenData := &lucidaTokenData{Token: matches[1]}
-		if len(expiryMatches) >= 2 {
-			fmt.Sscanf(expiryMatches[1], "%d", &tokenData.TokenExpiry)
-		}
-		return tokenData, nil
+		return nil, fmt.Errorf("failed to parse Lucida page data: %w (first 200 chars: %s)", err, dataJSON[:min(200, len(dataJSON))])
 	}
 
-	return &lucidaTokenData{
-		Token:       pageData.Token,
-		TokenExpiry: pageData.TokenExpiry,
-	}, nil
+	if pageData.Token == "" {
+		return nil, fmt.Errorf("Lucida page data missing token")
+	}
+
+	return &pageData, nil
 }
 
-func (d *DeezerDownloader) lucidaRequestDownload(tokenData *lucidaTokenData, deezerURL string) (*lucidaLoadResponse, error) {
+func (d *DeezerDownloader) lucidaRequestDownload(pageData *lucidaPageData, deezerURL string) (*lucidaLoadResponse, error) {
+	// For single tracks, the global token is used as the CSRF primary.
+	// For album tracks, each track has its own csrf field in the info.
+	csrfToken := pageData.Token
+
+	// Try to extract per-track csrf from the info if available
+	var trackInfo lucidaTrackInfo
+	if err := json.Unmarshal(pageData.Info, &trackInfo); err == nil && trackInfo.CSRF != "" {
+		csrfToken = trackInfo.CSRF
+	}
+
 	payload := map[string]interface{}{
 		"url": deezerURL,
 		"token": map[string]interface{}{
-			"expiry":  tokenData.TokenExpiry,
-			"primary": tokenData.Token,
+			"expiry":  pageData.TokenExpiry,
+			"primary": csrfToken,
 		},
 		"account": map[string]string{
 			"id":   "auto",
@@ -327,14 +317,14 @@ func (d *DeezerDownloader) lucidaDownloadFile(server, handoff, filepath string) 
 func (d *DeezerDownloader) downloadViaLucida(deezerURL, outputDir string) (string, error) {
 	fmt.Println("Downloading via Lucida (no account needed)...")
 
-	fmt.Println("Fetching Lucida token...")
-	token, err := d.lucidaFetchToken(deezerURL)
+	fmt.Println("Fetching Lucida page data...")
+	pageData, err := d.lucidaFetchPageData(deezerURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to get Lucida token: %w", err)
+		return "", fmt.Errorf("failed to get Lucida page data: %w", err)
 	}
 
 	fmt.Println("Requesting download from Lucida...")
-	loadResp, err := d.lucidaRequestDownload(token, deezerURL)
+	loadResp, err := d.lucidaRequestDownload(pageData, deezerURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to request Lucida download: %w", err)
 	}
