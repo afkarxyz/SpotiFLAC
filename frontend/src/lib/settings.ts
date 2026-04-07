@@ -4,7 +4,7 @@ export type FolderPreset = "none" | "artist" | "album" | "year-album" | "year-ar
 export type FilenamePreset = "title" | "title-artist" | "artist-title" | "track-title" | "track-title-artist" | "track-artist-title" | "title-album-artist" | "track-title-album-artist" | "artist-album-title" | "track-dash-title" | "disc-track-title" | "disc-track-title-artist" | "custom";
 export interface Settings {
     downloadPath: string;
-    downloader: "auto" | "tidal" | "qobuz" | "amazon";
+    downloader: "auto" | "tidal" | "qobuz" | "amazon" | "deezer";
     linkResolver: "songstats" | "songlink";
     allowResolverFallback: boolean;
     theme: string;
@@ -25,6 +25,9 @@ export interface Settings {
     tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
     qobuzQuality: "6" | "7" | "27";
     amazonQuality: "original";
+    deezerMethod: "lucida" | "arl";
+    deezerQuality: "flac" | "320" | "128";
+    deezerARL: string;
     autoOrder: "tidal-qobuz-amazon" | "tidal-amazon-qobuz" | "qobuz-tidal-amazon" | "qobuz-amazon-tidal" | "amazon-tidal-qobuz" | "amazon-qobuz-tidal" | string;
     autoQuality: "16" | "24";
     allowFallback: boolean;
@@ -112,6 +115,9 @@ export const DEFAULT_SETTINGS: Settings = {
     tidalQuality: "LOSSLESS",
     qobuzQuality: "6",
     amazonQuality: "original",
+    deezerMethod: "lucida",
+    deezerQuality: "flac",
+    deezerARL: "",
     autoOrder: "tidal-qobuz-amazon",
     autoQuality: "16",
     allowFallback: true,
@@ -220,6 +226,15 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('amazonQuality' in parsed)) {
                 parsed.amazonQuality = "original";
             }
+            if (!('deezerMethod' in parsed)) {
+                parsed.deezerMethod = "lucida";
+            }
+            if (!('deezerQuality' in parsed)) {
+                parsed.deezerQuality = "flac";
+            }
+            if (!('deezerARL' in parsed)) {
+                parsed.deezerARL = "";
+            }
             if (!('autoOrder' in parsed)) {
                 parsed.autoOrder = "tidal-qobuz-amazon";
             }
@@ -304,6 +319,15 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('amazonQuality' in parsed)) {
                 parsed.amazonQuality = "original";
+            }
+            if (!('deezerMethod' in parsed)) {
+                parsed.deezerMethod = "lucida";
+            }
+            if (!('deezerQuality' in parsed)) {
+                parsed.deezerQuality = "flac";
+            }
+            if (!('deezerARL' in parsed)) {
+                parsed.deezerARL = "";
             }
             if (!('autoOrder' in parsed)) {
                 parsed.autoOrder = "tidal-qobuz-amazon";

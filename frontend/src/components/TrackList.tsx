@@ -5,7 +5,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/tooltip";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, } from "@/components/ui/pagination";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
-import { TidalAvailabilityIcon, QobuzAvailabilityIcon, AmazonAvailabilityIcon } from "./PlatformIcons";
+import { TidalAvailabilityIcon, QobuzAvailabilityIcon, AmazonAvailabilityIcon, DeezerAvailabilityIcon } from "./PlatformIcons";
 import { usePreview } from "@/hooks/usePreview";
 interface TrackListProps {
     tracks: TrackMetadata[];
@@ -331,6 +331,7 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                         <TidalAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`}/>
                         <QobuzAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`}/>
                         <AmazonAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`}/>
+                        <DeezerAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.deezer ? "text-green-500" : "text-red-500"}`}/>
                       </div>) : (<p>Check Availability</p>)}
                     </TooltipContent>
                   </Tooltip>)}

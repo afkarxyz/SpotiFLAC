@@ -26,6 +26,7 @@ type SongLinkClient struct {
 type SongLinkURLs struct {
 	TidalURL  string `json:"tidal_url"`
 	AmazonURL string `json:"amazon_url"`
+	DeezerURL string `json:"deezer_url"`
 	ISRC      string `json:"isrc"`
 }
 
@@ -65,10 +66,11 @@ func (s *SongLinkClient) GetAllURLsFromSpotify(spotifyTrackID string, region str
 	if links != nil {
 		urls.TidalURL = links.TidalURL
 		urls.AmazonURL = normalizeAmazonMusicURL(links.AmazonURL)
+		urls.DeezerURL = normalizeDeezerTrackURL(links.DeezerURL)
 		urls.ISRC = links.ISRC
 	}
 
-	if urls.TidalURL == "" && urls.AmazonURL == "" {
+	if urls.TidalURL == "" && urls.AmazonURL == "" && urls.DeezerURL == "" {
 		if err != nil {
 			return nil, err
 		}

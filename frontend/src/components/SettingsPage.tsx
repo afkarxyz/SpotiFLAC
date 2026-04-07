@@ -13,7 +13,7 @@ import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder, OpenConfigFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { ApiStatusTab } from "./ApiStatusTab";
-import { AmazonIcon, QobuzIcon, TidalIcon } from "./PlatformIcons";
+import { AmazonIcon, DeezerIcon, QobuzIcon, TidalIcon } from "./PlatformIcons";
 import songlinkIcon from "@/assets/icons/songlink.ico";
 import songstatsIcon from "@/assets/icons/songstats.png";
 interface SettingsPageProps {
@@ -300,6 +300,12 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                           Amazon Music
                         </span>
                       </SelectItem>
+                      <SelectItem value="deezer">
+                        <span className="flex items-center gap-2">
+                          <DeezerIcon />
+                          Deezer
+                        </span>
+                      </SelectItem>
 
                     </SelectContent>
                   </Select>
@@ -412,6 +418,82 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                               <QobuzIcon className="fill-current"/>
                             </span>
                           </SelectItem>
+
+
+                          <SelectItem value="tidal-qobuz-amazon-deezer">
+                            <span className="flex items-center gap-1.5">
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <QobuzIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <DeezerIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="deezer-tidal-qobuz-amazon">
+                            <span className="flex items-center gap-1.5">
+                              <DeezerIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <QobuzIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="tidal-deezer-qobuz-amazon">
+                            <span className="flex items-center gap-1.5">
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <DeezerIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <QobuzIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="qobuz-deezer-tidal-amazon">
+                            <span className="flex items-center gap-1.5">
+                              <QobuzIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <DeezerIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+
+
+                          <SelectItem value="deezer-tidal">
+                            <span className="flex items-center gap-1.5">
+                              <DeezerIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <TidalIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="deezer-qobuz">
+                            <span className="flex items-center gap-1.5">
+                              <DeezerIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <QobuzIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="tidal-deezer">
+                            <span className="flex items-center gap-1.5">
+                              <TidalIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <DeezerIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="deezer-amazon">
+                            <span className="flex items-center gap-1.5">
+                              <DeezerIcon className="fill-current"/>
+                              <ArrowRight className="h-3 w-3 text-muted-foreground"/>
+                              <AmazonIcon className="fill-current"/>
+                            </span>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
 
@@ -452,7 +534,64 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                       16-bit - 24-bit/44.1kHz - 192kHz
                     </div>)}
 
+                  {tempSettings.downloader === "deezer" && (<>
+                      <Select value={tempSettings.deezerMethod || "lucida"} onValueChange={(value: any) => setTempSettings((prev) => ({
+                    ...prev,
+                    deezerMethod: value,
+                }))}>
+                        <SelectTrigger className="h-9 w-fit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="lucida">Lucida (No account)</SelectItem>
+                          <SelectItem value="arl">ARL Token</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {tempSettings.deezerMethod === "arl" ? (
+                        <Select value={tempSettings.deezerQuality || "flac"} onValueChange={(value: any) => setTempSettings((prev) => ({
+                      ...prev,
+                      deezerQuality: value,
+                  }))}>
+                          <SelectTrigger className="h-9 w-fit">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="flac">FLAC 16-bit/44.1kHz</SelectItem>
+                            <SelectItem value="320">MP3 320kbps</SelectItem>
+                            <SelectItem value="128">MP3 128kbps</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="h-9 px-3 flex items-center text-sm font-medium border border-input rounded-md bg-muted/30 text-muted-foreground whitespace-nowrap cursor-default">
+                          FLAC 16-bit/44.1kHz
+                        </div>
+                      )}
+                    </>)}
+
                 </div>
+
+                {tempSettings.downloader === "deezer" && tempSettings.deezerMethod === "arl" && (
+                  <div className="space-y-2 pt-2">
+                    <Label htmlFor="deezer-arl" className="text-sm font-normal">
+                      Deezer ARL Token
+                    </Label>
+                    <input
+                      id="deezer-arl"
+                      type="password"
+                      placeholder="Paste your Deezer ARL cookie here..."
+                      value={tempSettings.deezerARL || ""}
+                      onChange={(e) => setTempSettings((prev) => ({
+                        ...prev,
+                        deezerARL: e.target.value,
+                      }))}
+                      className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Extract from browser DevTools: Application &gt; Cookies &gt; deezer.com &gt; arl. Free = MP3 128k, Premium = FLAC.
+                    </p>
+                  </div>
+                )}
 
                 {((tempSettings.downloader === "tidal" &&
                 tempSettings.tidalQuality === "HI_RES_LOSSLESS") ||

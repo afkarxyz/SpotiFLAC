@@ -533,6 +533,29 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 		filename, err = downloader.DownloadTrackWithISRC(isrc, req.OutputDir, quality, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
 
+	case "deezer":
+		deezerMethod := "lucida"
+		deezerARL := ""
+		if deezerSettings, settingsErr := a.LoadSettings(); settingsErr == nil && deezerSettings != nil {
+			if m, ok := deezerSettings["deezerMethod"].(string); ok && m != "" {
+				deezerMethod = m
+			}
+			if arl, ok := deezerSettings["deezerARL"].(string); ok {
+				deezerARL = arl
+			}
+		}
+
+		downloader := backend.NewDeezerDownloader(deezerMethod, deezerARL)
+		quality := req.AudioFormat
+		if quality == "" {
+			quality = "flac"
+		}
+		if req.ServiceURL != "" {
+			filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, quality, req.FilenameFormat, req.PlaylistName, req.PlaylistOwner, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
+		} else {
+			filename, err = downloader.DownloadBySpotifyID(req.SpotifyID, req.OutputDir, quality, req.FilenameFormat, req.PlaylistName, req.PlaylistOwner, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.CoverURL, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.EmbedMaxQualityCover, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, spotifyURL, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
+		}
+
 	default:
 		return DownloadResponse{
 			Success: false,
