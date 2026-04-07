@@ -39,6 +39,11 @@ type DeezerDownloader struct {
 	arl    string
 }
 
+type lucidaTokenData struct {
+	Token       string `json:"token"`
+	TokenExpiry int64  `json:"tokenExpiry"`
+}
+
 type lucidaLoadResponse struct {
 	Server  string `json:"server"`
 	Handoff string `json:"handoff"`
@@ -96,47 +101,109 @@ func NewDeezerDownloader(method, arl string) *DeezerDownloader {
 
 // ---- Lucida Method ----
 
-func (d *DeezerDownloader) lucidaFetchToken(deezerURL string) (string, error) {
+func (d *DeezerDownloader) lucidaFetchToken(deezerURL string) (*lucidaTokenData, error) {
 	reqURL := fmt.Sprintf("%s/?url=%s", lucidaBaseURL, url.QueryEscape(deezerURL))
 	req, err := http.NewRequest("GET", reqURL, nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", deezerUserAgent)
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch Lucida page: %w", err)
+		return nil, fmt.Errorf("failed to fetch Lucida page: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("Lucida returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("Lucida returned status %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read Lucida response: %w", err)
+		return nil, fmt.Errorf("failed to read Lucida response: %w", err)
 	}
 
 	bodyStr := string(body)
 
-	tokenRegex := regexp.MustCompile(`"token"\s*:\s*"([^"]+)"`)
-	matches := tokenRegex.FindStringSubmatch(bodyStr)
-	if len(matches) < 2 {
-		return "", fmt.Errorf("could not find CSRF token in Lucida page")
+	// Extract SvelteKit page data JSON embedded in the HTML
+	// Look for the data section containing token and tokenExpiry
+	dataMarker := `{"type":"data","data":`
+	dataIdx := strings.Index(bodyStr, dataMarker)
+	if dataIdx == -1 {
+		return nil, fmt.Errorf("could not find SvelteKit data marker in Lucida page")
 	}
 
-	return matches[1], nil
+	// Extract the data JSON object
+	dataStart := dataIdx + len(dataMarker)
+	// Find the matching closing brace by counting braces
+	braceCount := 0
+	dataEnd := dataStart
+	for i := dataStart; i < len(bodyStr); i++ {
+		if bodyStr[i] == '{' {
+			braceCount++
+		} else if bodyStr[i] == '}' {
+			braceCount--
+			if braceCount == 0 {
+				dataEnd = i + 1
+				break
+			}
+		}
+	}
+
+	if dataEnd <= dataStart {
+		return nil, fmt.Errorf("could not parse SvelteKit data from Lucida page")
+	}
+
+	dataJSON := bodyStr[dataStart:dataEnd]
+
+	// Parse token and tokenExpiry from the data
+	var pageData struct {
+		Token       string `json:"token"`
+		TokenExpiry int64  `json:"tokenExpiry"`
+	}
+	if err := json.Unmarshal([]byte(dataJSON), &pageData); err != nil {
+		// Fallback: try regex extraction
+		tokenRegex := regexp.MustCompile(`"token"\s*:\s*"([^"]+)"`)
+		matches := tokenRegex.FindStringSubmatch(dataJSON)
+		expiryRegex := regexp.MustCompile(`"tokenExpiry"\s*:\s*(\d+)`)
+		expiryMatches := expiryRegex.FindStringSubmatch(dataJSON)
+
+		if len(matches) < 2 {
+			return nil, fmt.Errorf("could not find CSRF token in Lucida page")
+		}
+
+		tokenData := &lucidaTokenData{Token: matches[1]}
+		if len(expiryMatches) >= 2 {
+			fmt.Sscanf(expiryMatches[1], "%d", &tokenData.TokenExpiry)
+		}
+		return tokenData, nil
+	}
+
+	return &lucidaTokenData{
+		Token:       pageData.Token,
+		TokenExpiry: pageData.TokenExpiry,
+	}, nil
 }
 
-func (d *DeezerDownloader) lucidaRequestDownload(token, deezerURL string) (*lucidaLoadResponse, error) {
+func (d *DeezerDownloader) lucidaRequestDownload(tokenData *lucidaTokenData, deezerURL string) (*lucidaLoadResponse, error) {
 	payload := map[string]interface{}{
-		"url":   deezerURL,
-		"token": token,
-		"metadata": map[string]bool{
-			"tags":     true,
-			"coverArt": true,
+		"url": deezerURL,
+		"token": map[string]interface{}{
+			"expiry":  tokenData.TokenExpiry,
+			"primary": tokenData.Token,
+		},
+		"account": map[string]string{
+			"id":   "auto",
+			"type": "country",
+		},
+		"compat":    false,
+		"downscale": "original",
+		"handoff":   true,
+		"metadata":  true,
+		"private":   false,
+		"upload": map[string]bool{
+			"enabled": false,
 		},
 	}
 
