@@ -108,24 +108,29 @@ func NewDeezerDownloader(method, arl string) *DeezerDownloader {
 
 // ---- Lucida Method ----
 
+// fixJSON5Keys converts unquoted JavaScript object keys to quoted JSON keys
+// e.g. {info:"value"} -> {"info":"value"}
+func fixJSON5Keys(input string) string {
+	// Match unquoted keys at the start of objects or after commas
+	re := regexp.MustCompile(`([{,])\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:`)
+	return re.ReplaceAllString(input, `$1"$2":`)
+}
+
 func (d *DeezerDownloader) lucidaFetchPageData(deezerURL string) (*lucidaPageData, error) {
-	reqURL := fmt.Sprintf("%s/?url=%s", lucidaBaseURL, url.QueryEscape(deezerURL))
-	req, err := http.NewRequest("GET", reqURL, nil)
+	// Try the SvelteKit __data.json endpoint first (returns proper JSON)
+	dataURL := fmt.Sprintf("%s/__data.json?url=%s", lucidaBaseURL, url.QueryEscape(deezerURL))
+	req, err := http.NewRequest("GET", dataURL, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", deezerUserAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := d.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch Lucida page: %w", err)
+		return nil, fmt.Errorf("failed to fetch Lucida data: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Lucida returned status %d", resp.StatusCode)
-	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -134,29 +139,93 @@ func (d *DeezerDownloader) lucidaFetchPageData(deezerURL string) (*lucidaPageDat
 
 	bodyStr := string(body)
 
+	// If __data.json returned proper JSON with the page data
+	if resp.StatusCode == 200 {
+		// SvelteKit __data.json returns a nodes array with data
+		// Try to extract token/tokenExpiry from the response
+		pageData, err := d.parseLucidaDataJSON(bodyStr)
+		if err == nil && pageData.Token != "" {
+			return pageData, nil
+		}
+		fmt.Printf("__data.json parse attempt: %v, falling back to HTML\n", err)
+	}
+
+	// Fallback: fetch the HTML page and parse SvelteKit embedded data
+	htmlURL := fmt.Sprintf("%s/?url=%s", lucidaBaseURL, url.QueryEscape(deezerURL))
+	req2, err := http.NewRequest("GET", htmlURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req2.Header.Set("User-Agent", deezerUserAgent)
+	req2.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+
+	resp2, err := d.client.Do(req2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch Lucida page: %w", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != 200 {
+		return nil, fmt.Errorf("Lucida returned status %d", resp2.StatusCode)
+	}
+
+	body2, err := io.ReadAll(resp2.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read Lucida response: %w", err)
+	}
+
+	bodyStr2 := string(body2)
+
 	// Extract SvelteKit page data embedded in the HTML
 	// The data is between: ,{"type":"data","data": ... ,"uses":{"url":1}}];
-	startMarker := `,{"type":"data","data":`
-	endMarker := `,"uses":{"url":1}}]`
+	startMarker := `,"data":`
+	endMarker := `,"uses":`
 
-	startIdx := strings.Index(bodyStr, startMarker)
+	// Find within a type:data block
+	typeDataMarker := `"type":"data"`
+	typeIdx := strings.Index(bodyStr2, typeDataMarker)
+	if typeIdx == -1 {
+		// Try unquoted variant
+		typeDataMarker = `type:"data"`
+		typeIdx = strings.Index(bodyStr2, typeDataMarker)
+	}
+	if typeIdx == -1 {
+		return nil, fmt.Errorf("could not find SvelteKit data block in Lucida page (first 500 chars: %s)", bodyStr2[:min(500, len(bodyStr2))])
+	}
+
+	searchFrom := bodyStr2[typeIdx:]
+	startIdx := strings.Index(searchFrom, startMarker)
 	if startIdx == -1 {
-		return nil, fmt.Errorf("could not find SvelteKit data marker in Lucida page")
+		// Try unquoted: ,data:
+		startMarker = `,data:`
+		startIdx = strings.Index(searchFrom, startMarker)
+	}
+	if startIdx == -1 {
+		return nil, fmt.Errorf("could not find data marker in Lucida page")
 	}
 
 	dataStart := startIdx + len(startMarker)
-	remaining := bodyStr[dataStart:]
+	remaining := searchFrom[dataStart:]
 
 	endIdx := strings.Index(remaining, endMarker)
 	if endIdx == -1 {
-		return nil, fmt.Errorf("could not find SvelteKit data end marker in Lucida page")
+		// Try unquoted: ,uses:
+		endMarker = `,uses:`
+		endIdx = strings.Index(remaining, endMarker)
+	}
+	if endIdx == -1 {
+		return nil, fmt.Errorf("could not find data end marker in Lucida page")
 	}
 
-	dataJSON := remaining[:endIdx]
+	dataStr := remaining[:endIdx]
 
+	// Try standard JSON first, then fix unquoted keys
 	var pageData lucidaPageData
-	if err := json.Unmarshal([]byte(dataJSON), &pageData); err != nil {
-		return nil, fmt.Errorf("failed to parse Lucida page data: %w (first 200 chars: %s)", err, dataJSON[:min(200, len(dataJSON))])
+	if err := json.Unmarshal([]byte(dataStr), &pageData); err != nil {
+		fixed := fixJSON5Keys(dataStr)
+		if err2 := json.Unmarshal([]byte(fixed), &pageData); err2 != nil {
+			return nil, fmt.Errorf("failed to parse Lucida page data: %w (first 300 chars: %s)", err2, dataStr[:min(300, len(dataStr))])
+		}
 	}
 
 	if pageData.Token == "" {
@@ -164,6 +233,36 @@ func (d *DeezerDownloader) lucidaFetchPageData(deezerURL string) (*lucidaPageDat
 	}
 
 	return &pageData, nil
+}
+
+// parseLucidaDataJSON parses the SvelteKit __data.json response format
+func (d *DeezerDownloader) parseLucidaDataJSON(body string) (*lucidaPageData, error) {
+	// SvelteKit __data.json can have different formats. Try direct parsing.
+	var wrapper struct {
+		Nodes []struct {
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		} `json:"nodes"`
+	}
+	if err := json.Unmarshal([]byte(body), &wrapper); err != nil {
+		// Try as raw page data
+		var pageData lucidaPageData
+		if err2 := json.Unmarshal([]byte(body), &pageData); err2 != nil {
+			return nil, fmt.Errorf("could not parse __data.json: %w", err2)
+		}
+		return &pageData, nil
+	}
+
+	for _, node := range wrapper.Nodes {
+		if node.Type == "data" && node.Data != nil {
+			var pageData lucidaPageData
+			if err := json.Unmarshal(node.Data, &pageData); err == nil && pageData.Token != "" {
+				return &pageData, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no valid page data found in __data.json nodes")
 }
 
 func (d *DeezerDownloader) lucidaRequestDownload(pageData *lucidaPageData, deezerURL string) (*lucidaLoadResponse, error) {
