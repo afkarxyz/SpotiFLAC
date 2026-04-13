@@ -53,6 +53,7 @@ interface AlbumInfoProps {
     downloadingCoverTrack?: string | null;
     isBulkDownloadingCovers?: boolean;
     isBulkDownloadingLyrics?: boolean;
+    isMetadataLoading?: boolean;
     onSearchChange: (value: string) => void;
     onSortChange: (value: string) => void;
     onToggleTrack: (id: string) => void;
@@ -76,10 +77,13 @@ interface AlbumInfoProps {
     onTrackClick?: (track: TrackMetadata) => void;
     onBack?: () => void;
 }
-export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onArtistClick, onTrackClick, onBack, }: AlbumInfoProps) {
+export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onArtistClick, onTrackClick, onBack, }: AlbumInfoProps) {
     const settings = getSettings();
     const albumArtistNames = splitArtistNames(albumInfo.artists);
     const artistSeparator = albumInfo.artists.includes(";") ? "; " : ", ";
+    const fetchedTrackCount = trackList.length;
+    const totalTrackCount = albumInfo.total_tracks;
+    const showStreamingProgress = isMetadataLoading && totalTrackCount > 0 && fetchedTrackCount < totalTrackCount;
     const clickableAlbumArtists = (() => {
         const artistsByName = new Map<string, {
             id: string;
@@ -220,7 +224,9 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                   <span>{albumInfo.release_date}</span>
                   <span>•</span>
                   <span>
-                    {albumInfo.total_tracks.toLocaleString()} {albumInfo.total_tracks === 1 ? "track" : "tracks"}
+                    {showStreamingProgress
+                        ? `${fetchedTrackCount.toLocaleString()} / ${totalTrackCount.toLocaleString()} tracks`
+                        : `${Math.max(totalTrackCount, fetchedTrackCount).toLocaleString()} ${Math.max(totalTrackCount, fetchedTrackCount) === 1 ? "track" : "tracks"}`}
                   </span>
                 </div>
               </div>
