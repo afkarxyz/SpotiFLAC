@@ -493,12 +493,16 @@ func (t *TidalDownloader) DownloadByURL(tidalURL, outputDir, quality, filenameFo
 			}
 			res.ISRC = isrc
 			if isrc != "" {
-				fmt.Println("Fetching MusicBrainz metadata...")
-				if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, trackTitle, artistName, albumTitle, useSingleGenre, embedGenre); err == nil {
-					res.Metadata = fetchedMeta
-					fmt.Println("✓ MusicBrainz metadata fetched")
+				if ShouldSkipMusicBrainzMetadataFetch() {
+					fmt.Println("Skipping MusicBrainz metadata fetch because status check is offline.")
 				} else {
-					fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+					fmt.Println("Fetching MusicBrainz metadata...")
+					if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, trackTitle, artistName, albumTitle, useSingleGenre, embedGenre); err == nil {
+						res.Metadata = fetchedMeta
+						fmt.Println("✓ MusicBrainz metadata fetched")
+					} else {
+						fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+					}
 				}
 			}
 			metaChan <- res
@@ -657,12 +661,16 @@ func (t *TidalDownloader) DownloadByURLWithFallback(tidalURL, outputDir, quality
 			}
 			res.ISRC = isrc
 			if isrc != "" {
-				fmt.Println("Fetching MusicBrainz metadata...")
-				if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, trackTitle, artistName, albumTitle, useSingleGenre, embedGenre); err == nil {
-					res.Metadata = fetchedMeta
-					fmt.Println("✓ MusicBrainz metadata fetched")
+				if ShouldSkipMusicBrainzMetadataFetch() {
+					fmt.Println("Skipping MusicBrainz metadata fetch because status check is offline.")
 				} else {
-					fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+					fmt.Println("Fetching MusicBrainz metadata...")
+					if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, trackTitle, artistName, albumTitle, useSingleGenre, embedGenre); err == nil {
+						res.Metadata = fetchedMeta
+						fmt.Println("✓ MusicBrainz metadata fetched")
+					} else {
+						fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+					}
 				}
 			}
 			metaChan <- res

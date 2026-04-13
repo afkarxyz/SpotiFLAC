@@ -408,13 +408,18 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(isrc, outputDir, quality, filena
 	metaChan := make(chan Metadata, 1)
 	if embedGenre && isrc != "" {
 		go func() {
-			fmt.Println("Fetching MusicBrainz metadata...")
-			if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useSingleGenre, embedGenre); err == nil {
-				fmt.Println("✓ MusicBrainz metadata fetched")
-				metaChan <- fetchedMeta
-			} else {
-				fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+			if ShouldSkipMusicBrainzMetadataFetch() {
+				fmt.Println("Skipping MusicBrainz metadata fetch because status check is offline.")
 				metaChan <- Metadata{}
+			} else {
+				fmt.Println("Fetching MusicBrainz metadata...")
+				if fetchedMeta, err := FetchMusicBrainzMetadata(isrc, spotifyTrackName, spotifyArtistName, spotifyAlbumName, useSingleGenre, embedGenre); err == nil {
+					fmt.Println("✓ MusicBrainz metadata fetched")
+					metaChan <- fetchedMeta
+				} else {
+					fmt.Printf("Warning: Failed to fetch MusicBrainz metadata: %v\n", err)
+					metaChan <- Metadata{}
+				}
 			}
 		}()
 	} else {

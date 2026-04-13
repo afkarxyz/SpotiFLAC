@@ -1041,8 +1041,15 @@ func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
 		return false, nil
 	})
 	if err != nil {
+		if apiType == "musicbrainz" {
+			backend.SetMusicBrainzStatusCheckResult(false)
+		}
 		fmt.Printf("CheckAPIStatus timeout/error for %s (%s): %v\n", apiType, apiURL, err)
 		return false
+	}
+
+	if apiType == "musicbrainz" {
+		backend.SetMusicBrainzStatusCheckResult(isOnline)
 	}
 
 	return isOnline

@@ -22,6 +22,7 @@ const (
 	musicBrainzRequestRetryWait      = 3 * time.Second
 	musicBrainzMinRequestInterval    = 1100 * time.Millisecond
 	musicBrainzThrottleCooldownOn503 = 5 * time.Second
+	musicBrainzStatusCheckSkipWindow = 5 * time.Minute
 )
 
 type musicBrainzStatusError struct {
@@ -46,7 +47,34 @@ var (
 	musicBrainzThrottleMu  sync.Mutex
 	musicBrainzNextRequest time.Time
 	musicBrainzBlockedTill time.Time
+
+	musicBrainzStatusMu          sync.RWMutex
+	musicBrainzLastCheckedAt     time.Time
+	musicBrainzLastCheckedOnline bool
 )
+
+func SetMusicBrainzStatusCheckResult(online bool) {
+	musicBrainzStatusMu.Lock()
+	defer musicBrainzStatusMu.Unlock()
+
+	musicBrainzLastCheckedAt = time.Now()
+	musicBrainzLastCheckedOnline = online
+}
+
+func ShouldSkipMusicBrainzMetadataFetch() bool {
+	musicBrainzStatusMu.RLock()
+	defer musicBrainzStatusMu.RUnlock()
+
+	if musicBrainzLastCheckedAt.IsZero() {
+		return false
+	}
+
+	if musicBrainzLastCheckedOnline {
+		return false
+	}
+
+	return time.Since(musicBrainzLastCheckedAt) <= musicBrainzStatusCheckSkipWindow
+}
 
 type MusicBrainzRecordingResponse struct {
 	Recordings []struct {
@@ -214,6 +242,11 @@ func FetchMusicBrainzMetadata(isrc, title, artist, album string, useSingleGenre 
 	cacheKey := musicBrainzCacheKey(isrc, useSingleGenre)
 	if cached, ok := musicBrainzCache.Load(cacheKey); ok {
 		return cached.(Metadata), nil
+	}
+
+	if ShouldSkipMusicBrainzMetadataFetch() {
+		resultErr = fmt.Errorf("skipping MusicBrainz lookup because the latest status check reported offline")
+		return meta, resultErr
 	}
 
 	musicBrainzInflightMu.Lock()
