@@ -105,11 +105,6 @@ export function TitleBar() {
                     <SlidersHorizontal className="w-3.5 h-3.5"/>
                 </MenubarTrigger>
                 <MenubarContent align="end" className="min-w-[280px]">
-                    <MenubarItem onClick={() => openExternal("https://afkarxyz.qzz.io")} className="gap-2">
-                        <Globe className="w-4 h-4 opacity-70"/>
-                        <span>Website</span>
-                    </MenubarItem>
-                    <MenubarSeparator />
                     <div className="flex items-center gap-1.5 px-2 py-1.5">
                         <MenubarLabel className="p-0">Network</MenubarLabel>
                         {isSpotifyBlockedCountry && (<span className="text-xs font-medium text-destructive">
@@ -138,6 +133,11 @@ export function TitleBar() {
                             IP detection unavailable
                         </div>)}
                     </div>
+                    <MenubarSeparator />
+                    <MenubarItem onClick={() => openExternal("https://afkarxyz.qzz.io")} className="gap-2">
+                        <Globe className="w-4 h-4 opacity-70"/>
+                        <span>Website</span>
+                    </MenubarItem>
                 </MenubarContent>
             </MenubarMenu>
         </Menubar>
