@@ -121,7 +121,7 @@ export const DEFAULT_SETTINGS: Settings = {
     createM3u8File: false,
     useFirstArtistOnly: false,
     useSingleGenre: false,
-    embedGenre: true,
+    embedGenre: false,
     redownloadWithSuffix: false,
     separator: "semicolon"
 };
@@ -343,7 +343,7 @@ export async function loadSettings(): Promise<Settings> {
                 parsed.useSingleGenre = false;
             }
             if (!('embedGenre' in parsed)) {
-                parsed.embedGenre = true;
+                parsed.embedGenre = false;
             }
             if (!('separator' in parsed)) {
                 parsed.separator = "semicolon";
