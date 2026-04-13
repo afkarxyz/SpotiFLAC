@@ -36,6 +36,7 @@ type Metadata struct {
 	Lyrics      string
 	Description string
 	ISRC        string
+	UPC         string
 	Genre       string
 }
 
@@ -166,6 +167,9 @@ func EmbedMetadata(filepath string, metadata Metadata, coverPath string) error {
 
 	if metadata.ISRC != "" {
 		_ = cmt.Add("ISRC", metadata.ISRC)
+	}
+	if metadata.UPC != "" {
+		_ = cmt.Add(preferredUPCTagKey, metadata.UPC)
 	}
 
 	if genreValues := SplitMetadataValues(metadata.Genre, separator); len(genreValues) > 0 {
@@ -980,6 +984,8 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 			metadata.Genre = value
 		case "url":
 			metadata.URL = value
+		case "isrc", "tsrc":
+			metadata.ISRC = value
 		case "comment", "comments":
 			if metadata.Comment == "" {
 				metadata.Comment = value
@@ -990,6 +996,8 @@ func ExtractFullMetadataFromFile(filePath string) (Metadata, error) {
 			}
 		}
 	}
+
+	metadata.UPC = firstPreferredFFprobeUPCValue(allTags)
 
 	return metadata, nil
 }
@@ -1081,6 +1089,13 @@ func embedMetadataToMP3(filePath string, metadata Metadata, coverPath string) er
 
 	if metadata.ISRC != "" {
 		addMP3TextFrame(tag, "TSRC", metadata.ISRC)
+	}
+	if metadata.UPC != "" {
+		tag.AddUserDefinedTextFrame(id3v2.UserDefinedTextFrame{
+			Encoding:    id3v2.EncodingUTF8,
+			Description: "UPC",
+			Value:       metadata.UPC,
+		})
 	}
 
 	if comment := resolveMetadataComment(metadata); comment != "" {
@@ -1200,6 +1215,9 @@ func embedMetadataToM4A(filePath string, metadata Metadata, coverPath string) er
 	}
 	if metadata.ISRC != "" {
 		args = append(args, "-metadata", "isrc="+metadata.ISRC)
+	}
+	if metadata.UPC != "" {
+		args = append(args, "-metadata", "upc="+metadata.UPC)
 	}
 	genreText := joinMultiValueText(SplitMetadataValues(metadata.Genre, separator), separator, false)
 	if genreText == "" {

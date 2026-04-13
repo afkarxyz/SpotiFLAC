@@ -24,6 +24,7 @@ export interface TrackMetadata {
     artist_url?: string;
     artists_data?: ArtistSimple[];
     isrc?: string;
+    upc?: string;
     copyright?: string;
     publisher?: string;
     plays?: string;
@@ -39,6 +40,7 @@ export interface AlbumInfo {
     release_date: string;
     artists: string;
     images: string;
+    upc?: string;
     batch?: string;
 }
 export interface AlbumResponse {
@@ -281,5 +283,6 @@ export interface AudioMetadata {
     track_number: number;
     disc_number: number;
     year: string;
+    upc?: string;
     isrc?: string;
 }

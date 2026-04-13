@@ -513,6 +513,14 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(isrc, outputDir, quality, filena
 		trackNumberToEmbed = 1
 	}
 
+	upc := ""
+	if identifiers, err := GetSpotifyTrackIdentifiersDirect(spotifyURL); err == nil || identifiers.ISRC != "" || identifiers.UPC != "" {
+		if strings.TrimSpace(isrc) == "" && strings.TrimSpace(identifiers.ISRC) != "" {
+			isrc = strings.TrimSpace(identifiers.ISRC)
+		}
+		upc = strings.TrimSpace(identifiers.UPC)
+	}
+
 	metadata := Metadata{
 		Title:       trackTitle,
 		Artist:      artists,
@@ -531,6 +539,7 @@ func (q *QobuzDownloader) DownloadTrackWithISRC(isrc, outputDir, quality, filena
 		Separator:   metadataSeparator,
 		Description: "https://github.com/afkarxyz/SpotiFLAC",
 		ISRC:        isrc,
+		UPC:         upc,
 		Genre:       mbMeta.Genre,
 	}
 

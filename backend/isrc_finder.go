@@ -49,13 +49,28 @@ type spotifySecretsCache struct {
 }
 
 type spotifyTrackRawData struct {
+	Album struct {
+		GID string `json:"gid"`
+	} `json:"album"`
 	ExternalID []struct {
 		Type string `json:"type"`
 		ID   string `json:"id"`
 	} `json:"external_id"`
 }
 
-type spotFetchISRCResponse struct {
+type spotifyAlbumRawData struct {
+	ExternalID []struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	} `json:"external_id"`
+}
+
+type SpotifyTrackIdentifiers struct {
+	ISRC string `json:"isrc,omitempty"`
+	UPC  string `json:"upc,omitempty"`
+}
+
+type spotFetchIdentifierResponse struct {
 	Input        string   `json:"input"`
 	TrackID      string   `json:"track_id"`
 	GID          string   `json:"gid"`
@@ -66,64 +81,102 @@ type spotFetchISRCResponse struct {
 	ReleaseDate  string   `json:"release_date"`
 	Label        string   `json:"label"`
 	ISRC         string   `json:"isrc"`
+	UPC          string   `json:"upc"`
 }
 
-func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error) {
+func GetSpotifyTrackIdentifiersDirect(spotifyTrackID string) (SpotifyTrackIdentifiers, error) {
 	normalizedTrackID, err := extractSpotifyTrackID(spotifyTrackID)
 	if err != nil {
-		return "", err
+		return SpotifyTrackIdentifiers{}, err
 	}
+
+	identifiers := SpotifyTrackIdentifiers{}
 
 	cachedISRC, err := GetCachedISRC(normalizedTrackID)
 	if err != nil {
 		fmt.Printf("Warning: failed to read ISRC cache: %v\n", err)
 	} else if cachedISRC != "" {
 		fmt.Printf("Found ISRC in cache: %s\n", cachedISRC)
-		return cachedISRC, nil
+		identifiers.ISRC = cachedISRC
 	}
 
 	useSpotFetchAPI, spotFetchAPIURL := GetSpotFetchAPISettings()
 	if useSpotFetchAPI {
-		isrc, resolvedTrackID, err := s.lookupSpotifyISRCViaSpotFetchAPI(normalizedTrackID, spotFetchAPIURL)
-		if err == nil && isrc != "" {
-			fmt.Printf("Found ISRC via SpotFetch API: %s\n", isrc)
-			cacheResolvedSpotifyTrackISRC(normalizedTrackID, resolvedTrackID, isrc)
-			return isrc, nil
-		}
-		if err != nil {
-			fmt.Printf("Warning: SpotFetch ISRC lookup failed, falling back to Spotify metadata: %v\n", err)
+		apiIdentifiers, resolvedTrackID, err := lookupSpotifyTrackIdentifiersViaSpotFetchAPI(normalizedTrackID, spotFetchAPIURL)
+		if err == nil {
+			mergeSpotifyTrackIdentifiers(&identifiers, apiIdentifiers)
+			if identifiers.ISRC != "" {
+				fmt.Printf("Found identifiers via SpotFetch API: isrc=%s upc=%s\n", identifiers.ISRC, identifiers.UPC)
+				cacheResolvedSpotifyTrackISRC(normalizedTrackID, resolvedTrackID, identifiers.ISRC)
+			}
+			if identifiers.ISRC != "" && identifiers.UPC != "" {
+				return identifiers, nil
+			}
+		} else {
+			fmt.Printf("Warning: SpotFetch identifier lookup failed, falling back to Spotify metadata: %v\n", err)
 		}
 	}
 
-	payload, metadataErr := fetchSpotifyTrackRawData(s.client, normalizedTrackID)
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+
+	payload, metadataErr := fetchSpotifyTrackRawData(httpClient, normalizedTrackID)
 	if metadataErr == nil {
-		isrc, extractErr := extractSpotifyTrackISRC(payload)
+		metadataIdentifiers, extractErr := extractSpotifyTrackIdentifiers(httpClient, payload)
 		if extractErr == nil {
-			fmt.Printf("Found ISRC via Spotify metadata: %s\n", isrc)
-			cacheResolvedSpotifyTrackISRC(normalizedTrackID, "", isrc)
-			return isrc, nil
+			mergeSpotifyTrackIdentifiers(&identifiers, metadataIdentifiers)
+			if identifiers.ISRC != "" {
+				fmt.Printf("Found identifiers via Spotify metadata: isrc=%s upc=%s\n", identifiers.ISRC, identifiers.UPC)
+				cacheResolvedSpotifyTrackISRC(normalizedTrackID, "", identifiers.ISRC)
+			}
+			if identifiers.ISRC != "" && identifiers.UPC != "" {
+				return identifiers, nil
+			}
 		}
 		metadataErr = extractErr
 	}
 
 	if metadataErr != nil {
-		fmt.Printf("Warning: Spotify metadata ISRC lookup failed, falling back to Soundplate: %v\n", metadataErr)
+		fmt.Printf("Warning: Spotify metadata identifier lookup failed, falling back to Soundplate: %v\n", metadataErr)
 	}
 
-	isrc, resolvedTrackID, soundplateErr := s.lookupSpotifyISRCViaSoundplate(normalizedTrackID)
-	if soundplateErr == nil && isrc != "" {
-		fmt.Printf("Found ISRC via Soundplate: %s\n", isrc)
-		cacheResolvedSpotifyTrackISRC(normalizedTrackID, resolvedTrackID, isrc)
-		return isrc, nil
+	if identifiers.ISRC == "" {
+		client := NewSongLinkClient()
+		isrc, resolvedTrackID, soundplateErr := client.lookupSpotifyISRCViaSoundplate(normalizedTrackID)
+		if soundplateErr == nil && isrc != "" {
+			identifiers.ISRC = isrc
+			fmt.Printf("Found ISRC via Soundplate: %s\n", isrc)
+			cacheResolvedSpotifyTrackISRC(normalizedTrackID, resolvedTrackID, isrc)
+			return identifiers, nil
+		}
+
+		if metadataErr != nil && soundplateErr != nil {
+			return identifiers, fmt.Errorf("spotify metadata lookup failed: %v | soundplate lookup failed: %w", metadataErr, soundplateErr)
+		}
+		if soundplateErr != nil && identifiers.UPC == "" {
+			return identifiers, soundplateErr
+		}
 	}
 
-	if metadataErr != nil && soundplateErr != nil {
-		return "", fmt.Errorf("spotify metadata lookup failed: %v | soundplate lookup failed: %w", metadataErr, soundplateErr)
+	if identifiers.ISRC != "" || identifiers.UPC != "" {
+		return identifiers, nil
 	}
-	if soundplateErr != nil {
-		return "", soundplateErr
+	if metadataErr != nil {
+		return identifiers, metadataErr
 	}
-	return "", metadataErr
+
+	return identifiers, fmt.Errorf("no Spotify identifiers found for track %s", normalizedTrackID)
+}
+
+func (s *SongLinkClient) lookupSpotifyISRC(spotifyTrackID string) (string, error) {
+	identifiers, err := GetSpotifyTrackIdentifiersDirect(spotifyTrackID)
+	if err != nil {
+		return "", err
+	}
+	if identifiers.ISRC == "" {
+		return "", fmt.Errorf("no Spotify ISRC found for track %s", strings.TrimSpace(spotifyTrackID))
+	}
+
+	return identifiers.ISRC, nil
 }
 
 func cacheResolvedSpotifyTrackISRC(trackID string, resolvedTrackID string, isrc string) {
@@ -138,19 +191,40 @@ func cacheResolvedSpotifyTrackISRC(trackID string, resolvedTrackID string, isrc 
 }
 
 func (s *SongLinkClient) lookupSpotifyISRCViaSpotFetchAPI(spotifyTrackID string, apiBaseURL string) (string, string, error) {
+	identifiers, resolvedTrackID, err := lookupSpotifyTrackIdentifiersViaSpotFetchAPI(spotifyTrackID, apiBaseURL)
+	if err != nil {
+		return "", "", err
+	}
+	if identifiers.ISRC == "" {
+		return "", "", fmt.Errorf("ISRC missing in SpotFetch identifier response")
+	}
+
+	return identifiers.ISRC, resolvedTrackID, nil
+}
+
+func mergeSpotifyTrackIdentifiers(target *SpotifyTrackIdentifiers, incoming SpotifyTrackIdentifiers) {
+	if incoming.ISRC != "" {
+		target.ISRC = strings.TrimSpace(incoming.ISRC)
+	}
+	if incoming.UPC != "" {
+		target.UPC = strings.TrimSpace(incoming.UPC)
+	}
+}
+
+func lookupSpotifyTrackIdentifiersViaSpotFetchAPI(spotifyTrackID string, apiBaseURL string) (SpotifyTrackIdentifiers, string, error) {
 	normalizedTrackID := strings.TrimSpace(spotifyTrackID)
 	baseURL := strings.TrimRight(strings.TrimSpace(apiBaseURL), "/")
 	if normalizedTrackID == "" {
-		return "", "", fmt.Errorf("spotify track ID is required")
+		return SpotifyTrackIdentifiers{}, "", fmt.Errorf("spotify track ID is required")
 	}
 	if baseURL == "" {
-		return "", "", fmt.Errorf("spotfetch api url is required")
+		return SpotifyTrackIdentifiers{}, "", fmt.Errorf("spotfetch api url is required")
 	}
 
-	requestURL := fmt.Sprintf("%s/isrc/%s", baseURL, url.PathEscape(normalizedTrackID))
+	requestURL := fmt.Sprintf("%s/identifier/%s", baseURL, url.PathEscape(normalizedTrackID))
 	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create SpotFetch ISRC request: %w", err)
+		return SpotifyTrackIdentifiers{}, "", fmt.Errorf("failed to create SpotFetch identifier request: %w", err)
 	}
 	req.Header.Set("User-Agent", songLinkUserAgent)
 	req.Header.Set("Accept", "application/json")
@@ -158,26 +232,44 @@ func (s *SongLinkClient) lookupSpotifyISRCViaSpotFetchAPI(spotifyTrackID string,
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", fmt.Errorf("SpotFetch ISRC request failed: %w", err)
+		return SpotifyTrackIdentifiers{}, "", fmt.Errorf("SpotFetch identifier request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		bodyPreview, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
-		return "", "", fmt.Errorf("SpotFetch ISRC returned status %d (%s)", resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
+		return SpotifyTrackIdentifiers{}, "", fmt.Errorf("SpotFetch identifier returned status %d (%s)", resp.StatusCode, strings.TrimSpace(string(bodyPreview)))
 	}
 
-	var payload spotFetchISRCResponse
+	var payload spotFetchIdentifierResponse
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", "", fmt.Errorf("failed to decode SpotFetch ISRC response: %w", err)
+		return SpotifyTrackIdentifiers{}, "", fmt.Errorf("failed to decode SpotFetch identifier response: %w", err)
 	}
 
-	isrc := firstISRCMatch(payload.ISRC)
-	if isrc == "" {
-		return "", "", fmt.Errorf("ISRC missing in SpotFetch response")
+	identifiers := SpotifyTrackIdentifiers{
+		ISRC: firstISRCMatch(payload.ISRC),
+		UPC:  strings.TrimSpace(payload.UPC),
+	}
+	if identifiers.ISRC == "" && identifiers.UPC == "" {
+		return SpotifyTrackIdentifiers{}, "", fmt.Errorf("identifiers missing in SpotFetch response")
 	}
 
-	return isrc, strings.TrimSpace(payload.TrackID), nil
+	return identifiers, strings.TrimSpace(payload.TrackID), nil
+}
+
+func lookupSpotifyAlbumUPC(albumID string) (string, error) {
+	normalizedAlbumID := strings.TrimSpace(albumID)
+	if normalizedAlbumID == "" {
+		return "", fmt.Errorf("spotify album ID is required")
+	}
+
+	httpClient := &http.Client{Timeout: 30 * time.Second}
+	payload, err := fetchSpotifyAlbumRawData(httpClient, normalizedAlbumID)
+	if err != nil {
+		return "", err
+	}
+
+	return extractSpotifyAlbumUPC(payload)
 }
 
 func requestSpotifyBytes(client *http.Client, targetURL string, headers map[string]string) ([]byte, error) {
@@ -504,14 +596,18 @@ func extractSpotifyTrackID(value string) (string, error) {
 }
 
 func spotifyTrackIDToGID(trackID string) (string, error) {
-	if trackID == "" {
-		return "", errors.New("track ID is empty")
+	return spotifyEntityIDToGID(trackID)
+}
+
+func spotifyEntityIDToGID(entityID string) (string, error) {
+	if entityID == "" {
+		return "", errors.New("entity ID is empty")
 	}
 
 	value := big.NewInt(0)
 	base := big.NewInt(62)
 
-	for _, char := range trackID {
+	for _, char := range entityID {
 		index := strings.IndexRune(spotifyBase62Alphabet, char)
 		if index < 0 {
 			return "", fmt.Errorf("invalid base62 character: %q", string(char))
@@ -530,43 +626,99 @@ func spotifyTrackIDToGID(trackID string) (string, error) {
 }
 
 func fetchSpotifyTrackRawData(client *http.Client, trackID string) ([]byte, error) {
-	accessToken, err := requestSpotifyAnonymousAccessToken(client)
+	gid, err := spotifyTrackIDToGID(trackID)
 	if err != nil {
 		return nil, err
 	}
 
-	gid, err := spotifyTrackIDToGID(trackID)
+	return fetchSpotifyRawMetadataByGID(client, "track", gid)
+}
+
+func fetchSpotifyAlbumRawData(client *http.Client, albumID string) ([]byte, error) {
+	gid, err := spotifyEntityIDToGID(albumID)
+	if err != nil {
+		return nil, err
+	}
+
+	return fetchSpotifyRawMetadataByGID(client, "album", gid)
+}
+
+func fetchSpotifyRawMetadataByGID(client *http.Client, entityType string, gid string) ([]byte, error) {
+	accessToken, err := requestSpotifyAnonymousAccessToken(client)
 	if err != nil {
 		return nil, err
 	}
 
 	return requestSpotifyBytes(
 		client,
-		fmt.Sprintf(spotifyGIDMetadataURL, "track", gid),
+		fmt.Sprintf(spotifyGIDMetadataURL, entityType, gid),
 		map[string]string{
 			"authorization": "Bearer " + accessToken,
 			"accept":        "application/json",
+			"user-agent":    songLinkUserAgent,
 		},
 	)
 }
 
-func extractSpotifyTrackISRC(payload []byte) (string, error) {
+func extractSpotifyTrackIdentifiers(client *http.Client, payload []byte) (SpotifyTrackIdentifiers, error) {
 	var track spotifyTrackRawData
 	if err := json.Unmarshal(payload, &track); err != nil {
-		return "", fmt.Errorf("failed to decode Spotify track metadata: %w", err)
+		return SpotifyTrackIdentifiers{}, fmt.Errorf("failed to decode Spotify track metadata: %w", err)
 	}
 
+	identifiers := SpotifyTrackIdentifiers{}
 	for _, externalID := range track.ExternalID {
 		if strings.EqualFold(strings.TrimSpace(externalID.Type), "isrc") {
 			if isrc := firstISRCMatch(externalID.ID); isrc != "" {
-				return isrc, nil
+				identifiers.ISRC = isrc
+				break
 			}
 		}
 	}
 
-	if fallbackISRC := firstISRCMatch(string(payload)); fallbackISRC != "" {
-		return fallbackISRC, nil
+	if identifiers.ISRC == "" {
+		identifiers.ISRC = firstISRCMatch(string(payload))
+	}
+
+	albumGID := strings.TrimSpace(track.Album.GID)
+	if client != nil && albumGID != "" {
+		albumPayload, err := fetchSpotifyRawMetadataByGID(client, "album", albumGID)
+		if err == nil {
+			if upc, upcErr := extractSpotifyAlbumUPC(albumPayload); upcErr == nil {
+				identifiers.UPC = upc
+			}
+		}
+	}
+
+	return identifiers, nil
+}
+
+func extractSpotifyTrackISRC(payload []byte) (string, error) {
+	identifiers, err := extractSpotifyTrackIdentifiers(nil, payload)
+	if err != nil {
+		return "", err
+	}
+	if identifiers.ISRC != "" {
+		return identifiers.ISRC, nil
 	}
 
 	return "", fmt.Errorf("ISRC not found in Spotify track metadata")
+}
+
+func extractSpotifyAlbumUPC(payload []byte) (string, error) {
+	var album spotifyAlbumRawData
+	if err := json.Unmarshal(payload, &album); err != nil {
+		return "", fmt.Errorf("failed to decode Spotify album metadata: %w", err)
+	}
+
+	for _, externalID := range album.ExternalID {
+		if strings.EqualFold(strings.TrimSpace(externalID.Type), "upc") {
+			upc := strings.TrimSpace(externalID.ID)
+			if upc != "" {
+				return upc, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("UPC not found in Spotify album metadata")
 }

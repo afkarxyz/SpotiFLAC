@@ -36,6 +36,7 @@ interface FileMetadata {
     track_number: number;
     disc_number: number;
     year: string;
+    upc?: string;
     isrc?: string;
 }
 type TabType = "track" | "lyric" | "cover";
@@ -661,6 +662,7 @@ export function FileManagerPage() {
           <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Track</span><span>{metadataInfo.track_number || "-"}</span></div>
           <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Disc</span><span>{metadataInfo.disc_number || "-"}</span></div>
           <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">Year</span><span>{metadataInfo.year ? metadataInfo.year.substring(0, 4) : "-"}</span></div>
+          <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">UPC</span><span>{metadataInfo.upc || "-"}</span></div>
           <div className="grid grid-cols-[100px_1fr] gap-2 text-sm"><span className="text-muted-foreground">ISRC</span><span>{metadataInfo.isrc || "-"}</span></div>
         </div>) : (<div className="text-center py-4 text-muted-foreground">No metadata available</div>)}
         <DialogFooter><Button onClick={() => setShowMetadata(false)}>Close</Button></DialogFooter>

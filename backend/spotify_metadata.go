@@ -51,6 +51,7 @@ type TrackMetadata struct {
 	ArtistID    string         `json:"artist_id,omitempty"`
 	ArtistURL   string         `json:"artist_url,omitempty"`
 	ArtistsData []ArtistSimple `json:"artists_data,omitempty"`
+	UPC         string         `json:"upc,omitempty"`
 	Copyright   string         `json:"copyright,omitempty"`
 	Publisher   string         `json:"publisher,omitempty"`
 	Composer    string         `json:"composer,omitempty"`
@@ -85,6 +86,7 @@ type AlbumTrackMetadata struct {
 	ArtistID    string         `json:"artist_id,omitempty"`
 	ArtistURL   string         `json:"artist_url,omitempty"`
 	ArtistsData []ArtistSimple `json:"artists_data,omitempty"`
+	UPC         string         `json:"upc,omitempty"`
 	Plays       string         `json:"plays,omitempty"`
 	Status      string         `json:"status,omitempty"`
 	PreviewURL  string         `json:"preview_url,omitempty"`
@@ -101,6 +103,7 @@ type AlbumInfoMetadata struct {
 	ReleaseDate string `json:"release_date"`
 	Artists     string `json:"artists"`
 	Images      string `json:"images"`
+	UPC         string `json:"upc,omitempty"`
 	Batch       string `json:"batch,omitempty"`
 	ArtistID    string `json:"artist_id,omitempty"`
 	ArtistURL   string `json:"artist_url,omitempty"`
@@ -189,6 +192,7 @@ type apiTrackResponse struct {
 	Name      string   `json:"name"`
 	Artists   string   `json:"artists"`
 	ArtistIds []string `json:"artistIds,omitempty"`
+	UPC       string   `json:"upc,omitempty"`
 	Duration  string   `json:"duration"`
 	Track     int      `json:"track"`
 	Disc      int      `json:"disc"`
@@ -219,6 +223,7 @@ type apiAlbumResponse struct {
 	Artists     string `json:"artists"`
 	Cover       string `json:"cover"`
 	ReleaseDate string `json:"releaseDate"`
+	UPC         string `json:"upc,omitempty"`
 	Count       int    `json:"count"`
 	Label       string `json:"label"`
 	Discs       struct {
@@ -231,6 +236,7 @@ type apiAlbumResponse struct {
 		ArtistIds  []string `json:"artistIds"`
 		Duration   string   `json:"duration"`
 		Plays      string   `json:"plays"`
+		UPC        string   `json:"upc,omitempty"`
 		IsExplicit bool     `json:"is_explicit"`
 		DiscNumber int      `json:"disc_number"`
 	} `json:"tracks"`
@@ -258,6 +264,7 @@ type apiPlaylistResponse struct {
 		Album       string   `json:"album"`
 		AlbumArtist string   `json:"albumArtist"`
 		AlbumID     string   `json:"albumId"`
+		UPC         string   `json:"upc,omitempty"`
 		Duration    string   `json:"duration"`
 		IsExplicit  bool     `json:"is_explicit"`
 		DiscNumber  int      `json:"disc_number"`
@@ -513,6 +520,14 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 		return nil, fmt.Errorf("failed to unmarshal to apiTrackResponse: %w", err)
 	}
 
+	if result.ID != "" {
+		if identifiers, err := GetSpotifyTrackIdentifiersDirect(result.ID); err == nil || identifiers.UPC != "" {
+			if identifiers.UPC != "" {
+				result.UPC = identifiers.UPC
+			}
+		}
+	}
+
 	return &result, nil
 }
 
@@ -700,6 +715,17 @@ func (c *SpotifyMetadataClient) fetchAlbumWithClient(ctx context.Context, client
 	var result apiAlbumResponse
 	if err := json.Unmarshal(jsonData, &result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal to apiAlbumResponse: %w", err)
+	}
+
+	if result.ID != "" {
+		if upc, err := lookupSpotifyAlbumUPC(result.ID); err == nil && strings.TrimSpace(upc) != "" {
+			result.UPC = upc
+			for i := range result.Tracks {
+				if strings.TrimSpace(result.Tracks[i].UPC) == "" {
+					result.Tracks[i].UPC = upc
+				}
+			}
+		}
 	}
 
 	return &result, nil
@@ -1050,6 +1076,7 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 		ArtistID:    artistID,
 		ArtistURL:   artistURL,
 		ArtistsData: artistsData,
+		UPC:         raw.UPC,
 		Copyright:   raw.Copyright,
 		Publisher:   raw.Album.Label,
 		Composer:    raw.Composer,
@@ -1083,6 +1110,7 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse, callback 
 		ReleaseDate: raw.ReleaseDate,
 		Artists:     raw.Artists,
 		Images:      raw.Cover,
+		UPC:         raw.UPC,
 		ArtistID:    artistID,
 		ArtistURL:   artistURL,
 	}
@@ -1098,6 +1126,10 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse, callback 
 	for idx, item := range raw.Tracks {
 		durationMS := parseDuration(item.Duration)
 		trackNumber := idx + 1
+		trackUPC := strings.TrimSpace(item.UPC)
+		if trackUPC == "" {
+			trackUPC = strings.TrimSpace(raw.UPC)
+		}
 
 		var artistID, artistURL string
 		if len(item.ArtistIds) > 0 {
@@ -1133,6 +1165,7 @@ func (c *SpotifyMetadataClient) formatAlbumData(raw *apiAlbumResponse, callback 
 			ArtistID:    artistID,
 			ArtistURL:   artistURL,
 			ArtistsData: artistsData,
+			UPC:         trackUPC,
 			Plays:       item.Plays,
 			IsExplicit:  item.IsExplicit,
 		})
@@ -1203,6 +1236,7 @@ func (c *SpotifyMetadataClient) formatPlaylistData(raw *apiPlaylistResponse, cal
 			ArtistID:    artistID,
 			ArtistURL:   artistURL,
 			ArtistsData: artistsData,
+			UPC:         item.UPC,
 			Plays:       item.Plays,
 			Status:      item.Status,
 			IsExplicit:  item.IsExplicit,
@@ -1329,6 +1363,7 @@ func (c *SpotifyMetadataClient) formatArtistDiscographyData(ctx context.Context,
 					TrackNumber: trackNumber,
 					TotalTracks: albumData.Count,
 					DiscNumber:  tr.DiscNumber,
+					UPC:         tr.UPC,
 					ExternalURL: fmt.Sprintf("https://open.spotify.com/track/%s", tr.ID),
 					AlbumID:     albumID,
 					AlbumURL:    fmt.Sprintf("https://open.spotify.com/album/%s", albumID),

@@ -87,6 +87,17 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 		if err := json.Unmarshal(bodyBytes, &trackResp); err != nil {
 			return nil, fmt.Errorf("failed to decode track response: %w", err)
 		}
+		trackID := strings.TrimSpace(trackResp.Track.SpotifyID)
+		if trackID == "" {
+			trackID = strings.TrimSpace(id)
+		}
+		if trackID != "" {
+			if identifiers, _, err := lookupSpotifyTrackIdentifiersViaSpotFetchAPI(trackID, apiBaseURL); err == nil {
+				if identifiers.UPC != "" {
+					trackResp.Track.UPC = identifiers.UPC
+				}
+			}
+		}
 		data = trackResp
 	case "album":
 		var albumResp AlbumResponsePayload
@@ -156,6 +167,7 @@ func GetSpotifyDataWithAPI(ctx context.Context, spotifyURL string, useAPI bool, 
 				DiscNumber:  t.DiscNumber,
 				TotalDiscs:  t.TotalDiscs,
 				ExternalURL: t.ExternalURL,
+				UPC:         t.UPC,
 				Plays:       t.Plays,
 				PreviewURL:  t.PreviewURL,
 				IsExplicit:  t.IsExplicit,
