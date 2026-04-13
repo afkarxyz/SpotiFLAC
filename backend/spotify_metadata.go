@@ -53,6 +53,7 @@ type TrackMetadata struct {
 	ArtistsData []ArtistSimple `json:"artists_data,omitempty"`
 	Copyright   string         `json:"copyright,omitempty"`
 	Publisher   string         `json:"publisher,omitempty"`
+	Composer    string         `json:"composer,omitempty"`
 	Plays       string         `json:"plays,omitempty"`
 	PreviewURL  string         `json:"preview_url,omitempty"`
 	IsExplicit  bool           `json:"is_explicit,omitempty"`
@@ -193,6 +194,7 @@ type apiTrackResponse struct {
 	Disc      int      `json:"disc"`
 	Discs     int      `json:"discs"`
 	Copyright string   `json:"copyright"`
+	Composer  string   `json:"composer,omitempty"`
 	Plays     string   `json:"plays"`
 	Album     struct {
 		ID       string `json:"id"`
@@ -496,6 +498,10 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 	}
 
 	filteredData := FilterTrack(data, c.Separator, albumFetchData)
+	composer, composerErr := c.fetchTrackComposerWithClient(ctx, client, trackID)
+	if composerErr == nil && composer != "" {
+		filteredData["composer"] = composer
+	}
 
 	jsonData, err := json.Marshal(filteredData)
 	if err != nil {
@@ -508,6 +514,89 @@ func (c *SpotifyMetadataClient) fetchTrack(ctx context.Context, trackID string) 
 	}
 
 	return &result, nil
+}
+
+func collectTrackCreditNamesByRole(items []interface{}, role string) []string {
+	role = strings.TrimSpace(role)
+	if role == "" || len(items) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(items))
+	names := make([]string, 0, len(items))
+	for _, item := range items {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if !strings.EqualFold(strings.TrimSpace(getString(itemMap, "role")), role) {
+			continue
+		}
+
+		name := strings.TrimSpace(getString(itemMap, "name"))
+		if name == "" {
+			continue
+		}
+		if _, exists := seen[name]; exists {
+			continue
+		}
+
+		seen[name] = struct{}{}
+		names = append(names, name)
+	}
+
+	return names
+}
+
+func (c *SpotifyMetadataClient) fetchTrackComposerWithClient(ctx context.Context, client *SpotifyClient, trackID string) (string, error) {
+	_ = ctx
+
+	payload := map[string]interface{}{
+		"variables": map[string]interface{}{
+			"trackUri":           fmt.Sprintf("spotify:track:%s", trackID),
+			"contributorsLimit":  100,
+			"contributorsOffset": 0,
+		},
+		"operationName": "queryTrackCreditsModal",
+		"extensions": map[string]interface{}{
+			"persistedQuery": map[string]interface{}{
+				"version":    1,
+				"sha256Hash": "e2ca40d46cf1fde36562261ccec754f23fb31b561877252e9fe0d6834aabb84b",
+			},
+		},
+	}
+
+	data, err := client.Query(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to query track credits: %w", err)
+	}
+
+	creditItems := getSlice(
+		getMap(
+			getMap(
+				getMap(
+					getMap(data, "data"),
+					"trackUnion",
+				),
+				"creditsTrait",
+			),
+			"contributors",
+		),
+		"items",
+	)
+
+	composerNames := collectTrackCreditNamesByRole(creditItems, "Composer")
+	if len(composerNames) == 0 {
+		return "", nil
+	}
+
+	separator := strings.TrimSpace(c.Separator)
+	if separator == "" {
+		separator = ", "
+	}
+
+	return strings.Join(composerNames, separator), nil
 }
 
 func (c *SpotifyMetadataClient) fetchAlbum(ctx context.Context, albumID string, callback MetadataCallback) (*apiAlbumResponse, error) {
@@ -963,6 +1052,7 @@ func (c *SpotifyMetadataClient) formatTrackData(raw *apiTrackResponse) TrackResp
 		ArtistsData: artistsData,
 		Copyright:   raw.Copyright,
 		Publisher:   raw.Album.Label,
+		Composer:    raw.Composer,
 		Plays:       raw.Plays,
 		IsExplicit:  raw.IsExplicit,
 	}
