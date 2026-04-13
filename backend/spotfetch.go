@@ -15,9 +15,6 @@ import (
 	"time"
 
 	"sort"
-
-	"github.com/pquerna/otp"
-	"github.com/pquerna/otp/totp"
 )
 
 var SpotifyError = errors.New("spotify error")
@@ -40,21 +37,7 @@ func NewSpotifyClient() *SpotifyClient {
 }
 
 func (c *SpotifyClient) generateTOTP() (string, int, error) {
-
-	secret := "GM3TMMJTGYZTQNZVGM4DINJZHA4TGOBYGMZTCMRTGEYDSMJRHE4TEOBUG4YTCMRUGQ4DQOJUGQYTAMRRGA2TCMJSHE3TCMBY"
-	version := 61
-
-	key, err := otp.NewKeyFromURL(fmt.Sprintf("otpauth://totp/secret?secret=%s", secret))
-	if err != nil {
-		return "", 0, err
-	}
-
-	totpCode, err := totp.GenerateCode(key.Secret(), time.Now())
-	if err != nil {
-		return "", 0, err
-	}
-
-	return totpCode, version, nil
+	return generateSpotifyTOTP(time.Now())
 }
 
 func (c *SpotifyClient) getAccessToken() error {
