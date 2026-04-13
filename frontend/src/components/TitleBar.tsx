@@ -1,8 +1,85 @@
 import { X, Minus, Maximize, SlidersHorizontal, Globe } from "lucide-react";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
-import { Menubar, MenubarContent, MenubarMenu, MenubarItem, MenubarTrigger } from "@/components/ui/menubar";
+import { Menubar, MenubarContent, MenubarMenu, MenubarItem, MenubarTrigger, MenubarLabel, MenubarSeparator } from "@/components/ui/menubar";
+import { fetchCurrentIPInfo } from "@/lib/api";
+import type { CurrentIPInfo } from "@/types/api";
 import { openExternal } from "@/lib/utils";
+import { useEffect, useRef, useState } from "react";
+
+const IP_INFO_REFRESH_INTERVAL_MS = 30000;
+const SPOTIFY_BLOCKED_COUNTRY_CODES = new Set([
+    "AF",
+    "IO",
+    "CF",
+    "CN",
+    "CU",
+    "ER",
+    "IR",
+    "MM",
+    "KP",
+    "RU",
+    "SO",
+    "SS",
+    "SD",
+    "SY",
+    "TM",
+    "YE",
+]);
+
 export function TitleBar() {
+    const [currentIPInfo, setCurrentIPInfo] = useState<CurrentIPInfo | null>(null);
+    const [isLoadingCurrentIPInfo, setIsLoadingCurrentIPInfo] = useState(false);
+    const [currentIPInfoError, setCurrentIPInfoError] = useState("");
+    const currentIPInfoRef = useRef<CurrentIPInfo | null>(null);
+    useEffect(() => {
+        currentIPInfoRef.current = currentIPInfo;
+    }, [currentIPInfo]);
+    const loadCurrentIPInfo = async (options?: {
+        silent?: boolean;
+    }) => {
+        const silent = options?.silent ?? false;
+        if (!silent) {
+            setIsLoadingCurrentIPInfo(true);
+            setCurrentIPInfoError("");
+        }
+        try {
+            const info = await fetchCurrentIPInfo();
+            setCurrentIPInfo(info);
+            setCurrentIPInfoError("");
+        }
+        catch (error) {
+            if (!silent || !currentIPInfoRef.current) {
+                setCurrentIPInfo(null);
+                setCurrentIPInfoError(error instanceof Error ? error.message : "Unable to detect IP");
+            }
+        }
+        finally {
+            if (!silent) {
+                setIsLoadingCurrentIPInfo(false);
+            }
+        }
+    };
+    useEffect(() => {
+        void loadCurrentIPInfo();
+    }, []);
+    useEffect(() => {
+        const intervalId = window.setInterval(() => {
+            void loadCurrentIPInfo({ silent: true });
+        }, IP_INFO_REFRESH_INTERVAL_MS);
+        const handleFocus = () => {
+            if (document.visibilityState === "hidden") {
+                return;
+            }
+            void loadCurrentIPInfo({ silent: true });
+        };
+        window.addEventListener("focus", handleFocus);
+        document.addEventListener("visibilitychange", handleFocus);
+        return () => {
+            window.clearInterval(intervalId);
+            window.removeEventListener("focus", handleFocus);
+            document.removeEventListener("visibilitychange", handleFocus);
+        };
+    }, []);
     const handleMinimize = () => {
         WindowMinimise();
     };
@@ -12,6 +89,9 @@ export function TitleBar() {
     const handleClose = () => {
         Quit();
     };
+    const detectedCountryCode = currentIPInfo?.country_code?.toUpperCase() || "";
+    const detectedFlagPath = detectedCountryCode ? `/assets/flags/${detectedCountryCode.toLowerCase()}.svg` : "";
+    const isSpotifyBlockedCountry = detectedCountryCode !== "" && SPOTIFY_BLOCKED_COUNTRY_CODES.has(detectedCountryCode);
     return (<>
 
       <div className="fixed top-0 left-14 right-0 h-10 z-40 bg-background/80 backdrop-blur-sm" style={{ "--wails-draggable": "drag" } as React.CSSProperties} onDoubleClick={handleMaximize}/>
@@ -23,11 +103,33 @@ export function TitleBar() {
                 <MenubarTrigger className="cursor-pointer w-8 h-7 p-0 flex items-center justify-center hover:bg-muted transition-colors rounded data-[state=open]:bg-muted">
                     <SlidersHorizontal className="w-3.5 h-3.5"/>
                 </MenubarTrigger>
-                <MenubarContent align="end" className="min-w-[200px]">
+                <MenubarContent align="end" className="min-w-[280px]">
                     <MenubarItem onClick={() => openExternal("https://afkarxyz.qzz.io")} className="gap-2">
                         <Globe className="w-4 h-4 opacity-70"/>
                         <span>Website</span>
                     </MenubarItem>
+                    <MenubarSeparator />
+                    <div className="flex items-center gap-1.5 px-2 py-1.5">
+                        <MenubarLabel className="p-0">Network</MenubarLabel>
+                    </div>
+                    <div className="px-2 py-1.5 space-y-1">
+                        <div className="flex items-center gap-2">
+                                {detectedFlagPath ? (<img src={detectedFlagPath} alt={detectedCountryCode} className="h-3.5 w-[18px] rounded-[2px] border object-cover bg-muted"/>) : (<Globe className="w-4 h-4 opacity-70"/>)}
+                                <span className="font-mono text-xs">
+                                    {isLoadingCurrentIPInfo
+                                        ? "Detecting..."
+                                        : currentIPInfo
+                                            ? `${currentIPInfo.ip} - ${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
+                                            : "Unavailable"}
+                                </span>
+                        </div>
+                        {isSpotifyBlockedCountry && (<div className="text-xs font-medium text-destructive">
+                            Your Country Blocked by Spotify
+                        </div>)}
+                        {!isLoadingCurrentIPInfo && !currentIPInfo && currentIPInfoError && (<div className="text-xs text-muted-foreground">
+                            IP detection unavailable
+                        </div>)}
+                    </div>
                 </MenubarContent>
             </MenubarMenu>
         </Menubar>

@@ -25,6 +25,13 @@ type App struct {
 	ctx context.Context
 }
 
+type CurrentIPInfo struct {
+	IP          string `json:"ip"`
+	Country     string `json:"country"`
+	CountryCode string `json:"country_code,omitempty"`
+	Source      string `json:"source,omitempty"`
+}
+
 const checkOperationTimeout = 10 * time.Second
 
 func NewApp() *App {
@@ -90,6 +97,121 @@ func isStreamingURL(raw string) bool {
 	}
 
 	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+}
+
+func previewResponseBody(body []byte, maxLen int) string {
+	preview := strings.TrimSpace(string(body))
+	if maxLen > 0 && len(preview) > maxLen {
+		return preview[:maxLen] + "..."
+	}
+	return preview
+}
+
+func fetchCurrentIPInfo() (CurrentIPInfo, error) {
+	type ipwhoisResponse struct {
+		Success     bool   `json:"success"`
+		IP          string `json:"ip"`
+		Country     string `json:"country"`
+		CountryCode string `json:"country_code"`
+		Message     string `json:"message"`
+	}
+	type ipapiResponse struct {
+		IP          string `json:"ip"`
+		Country     string `json:"country_name"`
+		CountryCode string `json:"country_code"`
+		Error       bool   `json:"error"`
+		Reason      string `json:"reason"`
+	}
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	tryFetch := func(source, reqURL string, parse func(body []byte) (CurrentIPInfo, error)) (CurrentIPInfo, error) {
+		req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return CurrentIPInfo{}, fmt.Errorf("%s returned status %d: %s", source, resp.StatusCode, previewResponseBody(body, 200))
+		}
+
+		info, err := parse(body)
+		if err != nil {
+			return CurrentIPInfo{}, err
+		}
+		info.Source = source
+		return info, nil
+	}
+
+	info, err := tryFetch("ipwho.is", "https://ipwho.is/", func(body []byte) (CurrentIPInfo, error) {
+		var payload ipwhoisResponse
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return CurrentIPInfo{}, err
+		}
+		if !payload.Success {
+			return CurrentIPInfo{}, fmt.Errorf("ipwho.is lookup failed: %s", strings.TrimSpace(payload.Message))
+		}
+		if strings.TrimSpace(payload.IP) == "" || strings.TrimSpace(payload.Country) == "" {
+			return CurrentIPInfo{}, fmt.Errorf("ipwho.is returned incomplete IP data")
+		}
+		return CurrentIPInfo{
+			IP:          strings.TrimSpace(payload.IP),
+			Country:     strings.TrimSpace(payload.Country),
+			CountryCode: strings.TrimSpace(payload.CountryCode),
+		}, nil
+	})
+	if err == nil {
+		return info, nil
+	}
+	firstErr := err
+
+	info, err = tryFetch("ipapi.co", "https://ipapi.co/json/", func(body []byte) (CurrentIPInfo, error) {
+		var payload ipapiResponse
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return CurrentIPInfo{}, err
+		}
+		if payload.Error {
+			return CurrentIPInfo{}, fmt.Errorf("ipapi.co lookup failed: %s", strings.TrimSpace(payload.Reason))
+		}
+		if strings.TrimSpace(payload.IP) == "" || strings.TrimSpace(payload.Country) == "" {
+			return CurrentIPInfo{}, fmt.Errorf("ipapi.co returned incomplete IP data")
+		}
+		return CurrentIPInfo{
+			IP:          strings.TrimSpace(payload.IP),
+			Country:     strings.TrimSpace(payload.Country),
+			CountryCode: strings.TrimSpace(payload.CountryCode),
+		}, nil
+	})
+	if err == nil {
+		return info, nil
+	}
+
+	return CurrentIPInfo{}, fmt.Errorf("failed to detect public IP: %v; fallback failed: %v", firstErr, err)
+}
+
+func (a *App) GetCurrentIPInfo() (string, error) {
+	info, err := fetchCurrentIPInfo()
+	if err != nil {
+		return "", err
+	}
+
+	payload, err := json.Marshal(info)
+	if err != nil {
+		return "", err
+	}
+
+	return string(payload), nil
 }
 
 func (a *App) getFirstArtist(artistString string) string {
