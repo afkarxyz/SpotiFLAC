@@ -69,6 +69,16 @@ func GetSpotFetchAPISettings() (bool, string) {
 	return true, apiURL
 }
 
+func GetRedownloadWithSuffixSetting() bool {
+	settings, err := LoadConfigSettings()
+	if err != nil || settings == nil {
+		return false
+	}
+
+	enabled, _ := settings["redownloadWithSuffix"].(bool)
+	return enabled
+}
+
 func GetLinkResolverSetting() string {
 	settings, err := LoadConfigSettings()
 	if err != nil || settings == nil {

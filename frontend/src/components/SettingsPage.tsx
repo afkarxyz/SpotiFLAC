@@ -568,7 +568,8 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     .replace(/\{track\}/g, "01")
                     .replace(/\{disc\}/g, "1")
                     .replace(/\{year\}/g, "2018")
-                    .replace(/\{date\}/g, "2018-02-09")}
+                    .replace(/\{date\}/g, "2018-02-09")
+                    .replace(/\{isrc\}/g, "USUM71801234")}
                       /
                     </span>
                   </p>)}
@@ -611,6 +612,16 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
             }))}/>
                 <Label htmlFor="use-first-artist-only" className="text-sm cursor-pointer font-normal">
                   Use First Artist Only
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Switch id="redownload-with-suffix" checked={tempSettings.redownloadWithSuffix} onCheckedChange={(checked) => setTempSettings((prev) => ({
+                ...prev,
+                redownloadWithSuffix: checked,
+            }))}/>
+                <Label htmlFor="redownload-with-suffix" className="text-sm cursor-pointer font-normal">
+                  Redownload With Suffix
                 </Label>
               </div>
 
@@ -686,7 +697,8 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     .replace(/\{track\}/g, "01")
                     .replace(/\{disc\}/g, "1")
                     .replace(/\{year\}/g, "2018")
-                    .replace(/\{date\}/g, "2018-02-09")}
+                    .replace(/\{date\}/g, "2018-02-09")
+                    .replace(/\{isrc\}/g, "USUM71801234")}
                     .flac
                   </span>
                 </p>)}

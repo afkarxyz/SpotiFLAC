@@ -23,6 +23,7 @@ export interface TrackMetadata {
     artist_id?: string;
     artist_url?: string;
     artists_data?: ArtistSimple[];
+    isrc?: string;
     copyright?: string;
     publisher?: string;
     plays?: string;
@@ -134,6 +135,7 @@ export interface DownloadRequest {
     spotify_disc_number?: number;
     spotify_total_tracks?: number;
     spotify_total_discs?: number;
+    isrc?: string;
     copyright?: string;
     publisher?: string;
     spotify_url?: string;
@@ -190,6 +192,7 @@ export interface LyricsDownloadRequest {
     album_name?: string;
     album_artist?: string;
     release_date?: string;
+    isrc?: string;
     output_dir?: string;
     filename_format?: string;
     track_number?: boolean;
@@ -278,4 +281,5 @@ export interface AudioMetadata {
     track_number: number;
     disc_number: number;
     year: string;
+    isrc?: string;
 }

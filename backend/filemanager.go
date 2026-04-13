@@ -30,6 +30,7 @@ type AudioMetadata struct {
 	TrackNumber int    `json:"track_number"`
 	DiscNumber  int    `json:"disc_number"`
 	Year        string `json:"year"`
+	ISRC        string `json:"isrc"`
 }
 
 type RenamePreview struct {
@@ -175,6 +176,8 @@ func readFlacMetadata(filePath string) (*AudioMetadata, error) {
 					}
 				case "DATE", "YEAR":
 					metadata.Year = value
+				case "ISRC", "TSRC":
+					metadata.ISRC = value
 				}
 			}
 		}
@@ -218,6 +221,12 @@ func readMp3Metadata(filePath string) (*AudioMetadata, error) {
 			if num, err := strconv.Atoi(discStr); err == nil {
 				metadata.DiscNumber = num
 			}
+		}
+	}
+
+	if frames := tag.GetFrames("TSRC"); len(frames) > 0 {
+		if textFrame, ok := frames[0].(id3v2.TextFrame); ok {
+			metadata.ISRC = textFrame.Text
 		}
 	}
 
@@ -301,6 +310,8 @@ func readMetadataWithFFprobe(filePath string) (*AudioMetadata, error) {
 			if metadata.Year == "" || len(value) > len(metadata.Year) {
 				metadata.Year = value
 			}
+		case "isrc", "tsrc":
+			metadata.ISRC = value
 		}
 	}
 
@@ -333,6 +344,7 @@ func GenerateFilename(metadata *AudioMetadata, format string, ext string) string
 	result = strings.ReplaceAll(result, "{album_artist}", sanitizeFilenameForRename(metadata.AlbumArtist))
 	result = strings.ReplaceAll(result, "{year}", sanitizeFilenameForRename(year))
 	result = strings.ReplaceAll(result, "{date}", sanitizeFilenameForRename(metadata.Year))
+	result = strings.ReplaceAll(result, "{isrc}", sanitizeFilenameForRename(metadata.ISRC))
 
 	if metadata.TrackNumber > 0 {
 		result = strings.ReplaceAll(result, "{track}", fmt.Sprintf("%02d", metadata.TrackNumber))
