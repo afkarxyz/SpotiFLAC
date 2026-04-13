@@ -1,4 +1,4 @@
-import { X, Minus, Maximize, SlidersHorizontal, Globe } from "lucide-react";
+import { X, Minus, Maximize, SlidersHorizontal, Globe, Eye, EyeOff } from "lucide-react";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
 import { Menubar, MenubarContent, MenubarMenu, MenubarItem, MenubarTrigger, MenubarLabel, MenubarSeparator } from "@/components/ui/menubar";
 import { fetchCurrentIPInfo } from "@/lib/api";
@@ -30,6 +30,7 @@ export function TitleBar() {
     const [currentIPInfo, setCurrentIPInfo] = useState<CurrentIPInfo | null>(null);
     const [isLoadingCurrentIPInfo, setIsLoadingCurrentIPInfo] = useState(false);
     const [currentIPInfoError, setCurrentIPInfoError] = useState("");
+    const [showIPAddress, setShowIPAddress] = useState(false);
     const currentIPInfoRef = useRef<CurrentIPInfo | null>(null);
     useEffect(() => {
         currentIPInfoRef.current = currentIPInfo;
@@ -111,21 +112,28 @@ export function TitleBar() {
                     <MenubarSeparator />
                     <div className="flex items-center gap-1.5 px-2 py-1.5">
                         <MenubarLabel className="p-0">Network</MenubarLabel>
+                        {isSpotifyBlockedCountry && (<span className="text-xs font-medium text-destructive">
+                            (Blocked by Spotify)
+                        </span>)}
                     </div>
                     <div className="px-2 py-1.5 space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
                                 {detectedFlagPath ? (<img src={detectedFlagPath} alt={detectedCountryCode} className="h-3.5 w-[18px] rounded-[2px] border object-cover bg-muted"/>) : (<Globe className="w-4 h-4 opacity-70"/>)}
-                                <span className="font-mono text-xs">
+                                <span className="font-mono text-xs truncate">
                                     {isLoadingCurrentIPInfo
                                         ? "Detecting..."
                                         : currentIPInfo
-                                            ? `${currentIPInfo.ip} - ${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
+                                            ? showIPAddress
+                                                ? `${currentIPInfo.ip} - ${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
+                                                : `${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
                                             : "Unavailable"}
                                 </span>
+                            </div>
+                            {currentIPInfo && !isLoadingCurrentIPInfo && (<button type="button" onClick={() => setShowIPAddress((prev) => !prev)} className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" aria-label={showIPAddress ? "Hide IP" : "Show IP"}>
+                                {showIPAddress ? <EyeOff className="h-3.5 w-3.5"/> : <Eye className="h-3.5 w-3.5"/>}
+                            </button>)}
                         </div>
-                        {isSpotifyBlockedCountry && (<div className="text-xs font-medium text-destructive">
-                            Your Country Blocked by Spotify
-                        </div>)}
                         {!isLoadingCurrentIPInfo && !currentIPInfo && currentIPInfoError && (<div className="text-xs text-muted-foreground">
                             IP detection unavailable
                         </div>)}
