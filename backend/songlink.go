@@ -129,31 +129,16 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string) (*TrackAv
 }
 
 func checkQobuzAvailability(isrc string) bool {
-	client := &http.Client{Timeout: 10 * time.Second}
-	appID := "798273057"
-
-	searchURL := fmt.Sprintf(
-		"https://www.qobuz.com/api.json/0.2/track/search?query=%s&limit=1&app_id=%s",
-		url.QueryEscape(strings.TrimSpace(isrc)),
-		appID,
-	)
-
-	resp, err := client.Get(searchURL)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-
 	var searchResp struct {
 		Tracks struct {
 			Total int `json:"total"`
 		} `json:"tracks"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
+
+	if err := doQobuzSignedJSONRequest("track/search", url.Values{
+		"query": {strings.TrimSpace(isrc)},
+		"limit": {"1"},
+	}, &searchResp); err != nil {
 		return false
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -72,21 +73,41 @@ func NewQobuzDownloader() *QobuzDownloader {
 		client: &http.Client{
 			Timeout: 60 * time.Second,
 		},
-		appID: "798273057",
+		appID: qobuzDefaultAPIAppID,
 	}
 }
 
 func (q *QobuzDownloader) searchByISRC(isrc string) (*QobuzTrack, error) {
-	apiBase := "https://www.qobuz.com/api.json/0.2/track/search?query="
-	url := fmt.Sprintf("%s%s&limit=1&app_id=%s", apiBase, isrc, q.appID)
+	if strings.HasPrefix(isrc, "qobuz_") {
+		trackID := strings.TrimPrefix(isrc, "qobuz_")
+		resp, err := doQobuzSignedRequest(http.MethodGet, "track/get", url.Values{"track_id": {trackID}}, q.client)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch track: %w", err)
+		}
+		defer resp.Body.Close()
 
-	resp, err := q.client.Get(url)
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
+		}
+
+		var trackResp QobuzTrack
+		if err := json.NewDecoder(resp.Body).Decode(&trackResp); err != nil {
+			return nil, fmt.Errorf("failed to decode response: %w", err)
+		}
+
+		return &trackResp, nil
+	}
+
+	resp, err := doQobuzSignedRequest(http.MethodGet, "track/search", url.Values{
+		"query": {isrc},
+		"limit": {"1"},
+	}, q.client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search track: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
