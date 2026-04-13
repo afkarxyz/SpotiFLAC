@@ -4,8 +4,8 @@ import { Download, FolderOpen, CheckCircle, XCircle, FileText, FileCheck, Globe,
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/tooltip";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
-import { TidalAvailabilityIcon, QobuzAvailabilityIcon, AmazonAvailabilityIcon } from "./PlatformIcons";
 import { usePreview } from "@/hooks/usePreview";
+import { AvailabilityLinks, hasAvailabilityLinks } from "./AvailabilityLinks";
 interface TrackInfoProps {
     track: TrackMetadata & {
         album_name: string;
@@ -135,15 +135,11 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
             {track.spotify_id && onCheckAvailability && (<Tooltip>
               <TooltipTrigger asChild>
                 <Button onClick={() => onCheckAvailability(track.spotify_id!)} variant="outline" size="icon" disabled={checkingAvailability}>
-                  {checkingAvailability ? (<Spinner />) : availability ? (<CheckCircle className="h-4 w-4 text-green-500"/>) : (<Globe className="h-4 w-4"/>)}
+                  {checkingAvailability ? (<Spinner />) : availability ? (hasAvailabilityLinks(availability) ? (<CheckCircle className="h-4 w-4 text-green-500"/>) : (<XCircle className="h-4 w-4 text-red-500"/>)) : (<Globe className="h-4 w-4"/>)}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>
-                  {availability ? (<div className="flex items-center gap-2">
-                  <TidalAvailabilityIcon className={`w-4 h-4 ${availability.tidal ? "text-green-500" : "text-red-500"}`}/>
-                  <QobuzAvailabilityIcon className={`w-4 h-4 ${availability.qobuz ? "text-green-500" : "text-red-500"}`}/>
-                  <AmazonAvailabilityIcon className={`w-4 h-4 ${availability.amazon ? "text-green-500" : "text-red-500"}`}/>
-                </div>) : (<p>Check Availability</p>)}
+              <TooltipContent className="pointer-events-auto">
+                <AvailabilityLinks availability={availability}/>
               </TooltipContent>
             </Tooltip>)}
             {isDownloaded && (<Tooltip>

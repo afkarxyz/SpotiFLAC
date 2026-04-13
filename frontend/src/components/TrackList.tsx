@@ -5,8 +5,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger, } from "@/components/ui/tooltip";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, } from "@/components/ui/pagination";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
-import { TidalAvailabilityIcon, QobuzAvailabilityIcon, AmazonAvailabilityIcon } from "./PlatformIcons";
 import { usePreview } from "@/hooks/usePreview";
+import { AvailabilityLinks, hasAvailabilityLinks } from "./AvailabilityLinks";
 interface TrackListProps {
     tracks: TrackMetadata[];
     searchQuery: string;
@@ -172,6 +172,22 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
             return plays;
         return num.toLocaleString();
     };
+    const getAvailabilityButtonIcon = (spotifyId?: string) => {
+        if (!spotifyId) {
+            return <Globe className="h-4 w-4"/>;
+        }
+        if (checkingAvailabilityTrack === spotifyId) {
+            return <Spinner />;
+        }
+        const availability = availabilityMap?.get(spotifyId);
+        if (!availability) {
+            return <Globe className="h-4 w-4"/>;
+        }
+        if (hasAvailabilityLinks(availability)) {
+            return <CheckCircle className="h-4 w-4 text-green-500"/>;
+        }
+        return <XCircle className="h-4 w-4 text-red-500"/>;
+    };
     return (<div className="space-y-4">
     <div className="rounded-md border">
       <div className="overflow-x-auto">
@@ -323,15 +339,11 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                   {track.spotify_id && onCheckAvailability && (<Tooltip>
                     <TooltipTrigger asChild>
                       <Button onClick={() => onCheckAvailability(track.spotify_id!)} size="icon" variant="outline" disabled={checkingAvailabilityTrack === track.spotify_id}>
-                        {checkingAvailabilityTrack === track.spotify_id ? (<Spinner />) : availabilityMap?.has(track.spotify_id) ? (<CheckCircle className="h-4 w-4 text-green-500"/>) : (<Globe className="h-4 w-4"/>)}
+                        {getAvailabilityButtonIcon(track.spotify_id)}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>
-                      {availabilityMap?.has(track.spotify_id) ? (<div className="flex items-center gap-2">
-                        <TidalAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.tidal ? "text-green-500" : "text-red-500"}`}/>
-                        <QobuzAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.qobuz ? "text-green-500" : "text-red-500"}`}/>
-                        <AmazonAvailabilityIcon className={`w-4 h-4 ${availabilityMap.get(track.spotify_id)?.amazon ? "text-green-500" : "text-red-500"}`}/>
-                      </div>) : (<p>Check Availability</p>)}
+                    <TooltipContent className="pointer-events-auto">
+                      <AvailabilityLinks availability={track.spotify_id ? availabilityMap?.get(track.spotify_id) : undefined}/>
                     </TooltipContent>
                   </Tooltip>)}
                 </div>
