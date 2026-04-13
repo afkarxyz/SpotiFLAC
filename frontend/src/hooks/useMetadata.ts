@@ -8,6 +8,8 @@ import type { SpotifyMetadataResponse } from "@/types/api";
 export function useMetadata() {
     const [loading, setLoading] = useState(false);
     const [metadata, setMetadata] = useState<SpotifyMetadataResponse | null>(null);
+    const [showVpnAdviceDialog, setShowVpnAdviceDialog] = useState(false);
+    const [fetchFailureReason, setFetchFailureReason] = useState("");
     const loadingToastId = useRef<string | number | null>(null);
     const fetchedCount = useRef(0);
     const currentName = useRef("");
@@ -18,6 +20,10 @@ export function useMetadata() {
         external_urls: string;
     } | null>(null);
     const [pendingArtistName, setPendingArtistName] = useState<string | null>(null);
+    const showFetchFailureAdvice = (errorMsg: string) => {
+        setFetchFailureReason(errorMsg);
+        setShowVpnAdviceDialog(true);
+    };
     const resolveArtistUrlBySearch = async (artistName: string): Promise<string | null> => {
         const query = artistName.trim();
         if (!query) {
@@ -214,6 +220,7 @@ export function useMetadata() {
             const errorMsg = err instanceof Error ? err.message : "Failed to fetch metadata";
             logger.error(`fetch failed: ${errorMsg}`);
             toast.error(errorMsg);
+            showFetchFailureAdvice(errorMsg);
         }
         finally {
             setLoading(false);
@@ -316,6 +323,7 @@ export function useMetadata() {
             const errorMsg = err instanceof Error ? err.message : "Failed to fetch album metadata";
             logger.error(`fetch failed: ${errorMsg}`);
             toast.error(errorMsg);
+            showFetchFailureAdvice(errorMsg);
         }
         finally {
             setLoading(false);
@@ -325,6 +333,9 @@ export function useMetadata() {
     return {
         loading,
         metadata,
+        showVpnAdviceDialog,
+        setShowVpnAdviceDialog,
+        fetchFailureReason,
         showAlbumDialog,
         setShowAlbumDialog,
         selectedAlbum,

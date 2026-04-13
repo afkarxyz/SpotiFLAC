@@ -629,7 +629,34 @@ function App() {
                 </DialogContent>
             </Dialog>
 
-            
+            <Dialog open={metadata.showVpnAdviceDialog} onOpenChange={metadata.setShowVpnAdviceDialog}>
+                <DialogContent className="max-w-md [&>button]:hidden">
+                    <DialogHeader>
+                        <DialogTitle>Fetch Failed</DialogTitle>
+                        <DialogDescription className="space-y-3">
+                            <span className="block">
+                                Metadata fetch failed. Try using a high-quality VPN such as
+                                Surfshark, ExpressVPN, Proton VPN, or a similar service.
+                            </span>
+                            <span className="block">
+                                Choose a location that is not blocked by Spotify or the
+                                related service, such as the USA, UK, Germany, Netherlands,
+                                or Singapore.
+                            </span>
+                            <span className="block">
+                                If you are already using a VPN, try switching to another
+                                server and fetch again.
+                            </span>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button onClick={() => metadata.setShowVpnAdviceDialog(false)}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={isFFmpegInstalled === false} onOpenChange={() => { }}>
                 <DialogContent className="max-w-[450px] [&>button]:hidden p-6 gap-5">
                     <DialogHeader className="space-y-2">
