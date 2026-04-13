@@ -5,7 +5,7 @@ import { Search, X, ArrowUp } from "lucide-react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { getSettings, getSettingsWithDefaults, loadSettings, saveSettings, applyThemeMode, applyFont, updateSettings } from "@/lib/settings";
 import { applyTheme } from "@/lib/themes";
-import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg, GetBrewPath, InstallFFmpegWithBrew } from "../wailsjs/go/main/App";
+import { OpenFolder, CheckFFmpegInstalled, DownloadFFmpeg, GetBrewPath, GetRecentFetches, InstallFFmpegWithBrew, SaveRecentFetches } from "../wailsjs/go/main/App";
 import { EventsOn, EventsOff, Quit } from "../wailsjs/runtime/runtime";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { TitleBar } from "@/components/TitleBar";
@@ -104,6 +104,25 @@ function dedupeHistoryItems(items: HistoryItem[]): HistoryItem[] {
     }
     return deduped;
 }
+function sortHistoryItems(items: HistoryItem[]): HistoryItem[] {
+    return [...items].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+}
+function normalizeHistoryItems(items: HistoryItem[]): HistoryItem[] {
+    return dedupeHistoryItems(sortHistoryItems(items)).slice(0, MAX_HISTORY);
+}
+function parseStoredHistory(value: string | null): HistoryItem[] {
+    if (!value) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    }
+    catch (err) {
+        console.error("Failed to parse stored history:", err);
+        return [];
+    }
+}
 function App() {
     const [currentPage, setCurrentPage] = useState<PageType>("main");
     const [spotifyUrl, setSpotifyUrl] = useState("");
@@ -182,7 +201,7 @@ function App() {
         mediaQuery.addEventListener("change", handleChange);
         checkForUpdates();
         ensureApiStatusCheckStarted();
-        loadHistory();
+        void loadHistory();
         const handleScroll = () => {
             setShowScrollTop(window.scrollY > 300);
         };
@@ -232,19 +251,29 @@ function App() {
             console.error("Failed to check for updates:", err);
         }
     };
-    const loadHistory = () => {
+    const persistRecentHistory = useCallback(async (history: HistoryItem[]) => {
         try {
-            const saved = localStorage.getItem(HISTORY_KEY);
-            if (saved) {
-                const deduped = dedupeHistoryItems(JSON.parse(saved));
-                setFetchHistory(deduped);
-                localStorage.setItem(HISTORY_KEY, JSON.stringify(deduped));
-            }
+            await SaveRecentFetches(JSON.stringify(history));
+        }
+        catch (err) {
+            console.error("Failed to save recent fetches:", err);
+        }
+    }, []);
+    const loadHistory = useCallback(async () => {
+        try {
+            const saved = parseStoredHistory(localStorage.getItem(HISTORY_KEY));
+            const persisted = parseStoredHistory(await GetRecentFetches());
+            const normalized = normalizeHistoryItems([...persisted, ...saved]);
+            setFetchHistory(normalized);
+            await persistRecentHistory(normalized);
         }
         catch (err) {
             console.error("Failed to load history:", err);
         }
-    };
+        finally {
+            localStorage.removeItem(HISTORY_KEY);
+        }
+    }, [persistRecentHistory]);
     const handleInstallFFmpeg = async (useBrew: boolean = false) => {
         setIsInstallingFFmpeg(true);
         setFfmpegInstallProgress(0);
@@ -283,14 +312,6 @@ function App() {
             setFfmpegInstallStatus("");
         }
     };
-    const saveHistory = (history: HistoryItem[]) => {
-        try {
-            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-        }
-        catch (err) {
-            console.error("Failed to save history:", err);
-        }
-    };
     const addToHistory = (item: Omit<HistoryItem, "id" | "timestamp">) => {
         setFetchHistory((prev) => {
             const normalizedUrl = normalizeHistoryURL(item.url);
@@ -302,15 +323,17 @@ function App() {
                 id: crypto.randomUUID(),
                 timestamp: Date.now(),
             };
-            const updated = [newItem, ...filtered].slice(0, MAX_HISTORY);
-            saveHistory(updated);
+            const updated = normalizeHistoryItems([newItem, ...filtered]);
+            void persistRecentHistory(updated);
             return updated;
         });
     };
     const removeFromHistory = (id: string) => {
         setFetchHistory((prev) => {
+            if (!prev.some((h) => h.id === id))
+                return prev;
             const updated = prev.filter((h) => h.id !== id);
-            saveHistory(updated);
+            void persistRecentHistory(updated);
             return updated;
         });
     };

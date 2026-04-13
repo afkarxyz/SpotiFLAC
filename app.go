@@ -935,6 +935,34 @@ func (a *App) ClearFetchHistoryByType(itemType string) error {
 	return backend.ClearFetchHistoryByType(itemType, "SpotiFLAC")
 }
 
+func (a *App) GetRecentFetches() (string, error) {
+	items, err := backend.LoadRecentFetches()
+	if err != nil {
+		return "", err
+	}
+
+	data, err := json.Marshal(items)
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func (a *App) SaveRecentFetches(payload string) error {
+	payload = strings.TrimSpace(payload)
+	if payload == "" {
+		payload = "[]"
+	}
+
+	var items []backend.RecentFetchItem
+	if err := json.Unmarshal([]byte(payload), &items); err != nil {
+		return err
+	}
+
+	return backend.SaveRecentFetches(items)
+}
+
 func (a *App) SaveSpectrumImage(audioFilePath string, base64Data string) (string, error) {
 	if audioFilePath == "" || base64Data == "" {
 		return "", fmt.Errorf("file path and image data are required")
