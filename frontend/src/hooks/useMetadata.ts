@@ -3,7 +3,7 @@ import { getSettings } from "@/lib/settings";
 import { fetchSpotifyMetadata } from "@/lib/api";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { logger } from "@/lib/logger";
-import { AddFetchHistory } from "../../wailsjs/go/main/App";
+import { AddFetchHistory, SearchSpotifyByType } from "../../wailsjs/go/main/App";
 import { EventsOff, EventsOn } from "../../wailsjs/runtime/runtime";
 import type { SpotifyMetadataResponse } from "@/types/api";
 export function useMetadata() {
@@ -20,6 +20,19 @@ export function useMetadata() {
         external_urls: string;
     } | null>(null);
     const [pendingArtistName, setPendingArtistName] = useState<string | null>(null);
+    const resolveArtistUrlBySearch = async (artistName: string): Promise<string | null> => {
+        const query = artistName.trim();
+        if (!query) {
+            return null;
+        }
+        const results = await SearchSpotifyByType({
+            query,
+            search_type: "artist",
+            limit: 1,
+            offset: 0,
+        });
+        return results[0]?.external_urls || null;
+    };
     useEffect(() => {
         if (loading) {
             fetchedCount.current = 0;
@@ -262,10 +275,17 @@ export function useMetadata() {
         external_urls: string;
     }) => {
         logger.debug(`artist clicked: ${artist.name}`);
-        const artistUrl = artist.external_urls.replace(/\/$/, "") + "/discography/all";
+        const resolvedArtistUrl = artist.external_urls.trim() || (await resolveArtistUrlBySearch(artist.name)) || "";
+        if (!resolvedArtistUrl) {
+            toast.error(`Artist not found: ${artist.name}`);
+            return "";
+        }
+        const artistUrl = resolvedArtistUrl.includes("/discography")
+            ? resolvedArtistUrl
+            : resolvedArtistUrl.replace(/\/$/, "") + "/discography/all";
         setPendingArtistName(artist.name);
         await fetchMetadataDirectly(artistUrl);
-        return artistUrl;
+        return resolvedArtistUrl;
     };
     const handleConfirmAlbumFetch = async () => {
         if (!selectedAlbum)

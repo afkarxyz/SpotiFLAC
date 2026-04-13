@@ -7,6 +7,7 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
 import { usePreview } from "@/hooks/usePreview";
 import { AvailabilityLinks, hasAvailabilityLinks } from "./AvailabilityLinks";
+import { buildClickableArtists } from "@/lib/artist-links";
 interface TrackListProps {
     tracks: TrackMetadata[];
     searchQuery: string;
@@ -249,29 +250,22 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                       {track.spotify_id && skippedTracks.has(track.spotify_id) ? (<FileCheck className="h-4 w-4 text-yellow-500 shrink-0"/>) : track.spotify_id && downloadedTracks.has(track.spotify_id) ? (<CheckCircle className="h-4 w-4 text-green-500 shrink-0"/>) : track.spotify_id && failedTracks.has(track.spotify_id) ? (<XCircle className="h-4 w-4 text-red-500 shrink-0"/>) : null}
                     </div>
                     <span className="text-sm text-muted-foreground">
-                      {track.artists_data && track.artists_data.length > 0 ? ((() => {
-                const artistNames = track.artists.split(", ").map(name => name.trim());
-                return artistNames.map((name, i) => {
-                    const artistData = track.artists_data![i];
-                    const hasArtistData = artistData && artistData.id && artistData.external_urls;
-                    return (<span key={artistData?.id || i}>
-                            {onArtistClick && hasArtistData ? (<span className="cursor-pointer hover:underline" onClick={() => onArtistClick({
-                                id: artistData.id,
-                                name: name,
-                                external_urls: artistData.external_urls,
+                      {(() => {
+                const clickableArtists = buildClickableArtists(track.artists, track.artists_data, track.artist_id, track.artist_url);
+                if (clickableArtists.length === 0) {
+                    return track.artists;
+                }
+                return clickableArtists.map((artist, i) => (<span key={`${artist.id || artist.name}-${i}`}>
+                            {onArtistClick ? (<span className="cursor-pointer hover:underline" onClick={() => onArtistClick({
+                                id: artist.id,
+                                name: artist.name,
+                                external_urls: artist.external_urls,
                             })}>
-                              {name}
-                            </span>) : (name)}
-                            {i < artistNames.length - 1 && ", "}
-                          </span>);
-                });
-            })()) : onArtistClick && track.artist_id && track.artist_url ? (<span className="cursor-pointer hover:underline" onClick={() => onArtistClick({
-                    id: track.artist_id!,
-                    name: track.artists,
-                    external_urls: track.artist_url!,
-                })}>
-                        {track.artists}
-                      </span>) : (track.artists)}
+                                {artist.name}
+                              </span>) : (artist.name)}
+                            {i < clickableArtists.length - 1 && ", "}
+                          </span>));
+            })()}
                     </span>
                   </div>
                 </div>
