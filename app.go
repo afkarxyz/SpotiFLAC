@@ -142,7 +142,7 @@ type DownloadRequest struct {
 	AlbumArtist          string `json:"album_artist,omitempty"`
 	ReleaseDate          string `json:"release_date,omitempty"`
 	CoverURL             string `json:"cover_url,omitempty"`
-	ApiURL               string `json:"api_url,omitempty"`
+	TidalAPIURL          string `json:"tidal_api_url,omitempty"`
 	OutputDir            string `json:"output_dir,omitempty"`
 	AudioFormat          string `json:"audio_format,omitempty"`
 	FilenameFormat       string `json:"filename_format,omitempty"`
@@ -243,27 +243,6 @@ func (a *App) GetSpotifyMetadata(req SpotifyMetadataRequest) (string, error) {
 				} else if sep == "comma" {
 					separator = ", "
 				}
-			}
-		}
-	}
-
-	if err == nil && settings != nil {
-		if useAPI, ok := settings["useSpotFetchAPI"].(bool); ok && useAPI {
-			if apiURL, ok := settings["spotFetchAPIUrl"].(string); ok && apiURL != "" {
-
-				data, err := backend.GetSpotifyDataWithAPI(ctx, req.URL, true, apiURL, req.Batch, time.Duration(req.Delay*float64(time.Second)), separator, func(tracks interface{}) {
-					runtime.EventsEmit(a.ctx, "metadata-stream", tracks)
-				})
-				if err != nil {
-					return "", fmt.Errorf("failed to fetch metadata from API: %v", err)
-				}
-
-				jsonData, err := json.MarshalIndent(data, "", "  ")
-				if err != nil {
-					return "", fmt.Errorf("failed to encode response: %v", err)
-				}
-
-				return string(jsonData), nil
 			}
 		}
 	}
@@ -518,7 +497,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 	case "tidal":
-		if req.ApiURL == "" || req.ApiURL == "auto" {
+		if req.TidalAPIURL == "" || req.TidalAPIURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
 			if req.ServiceURL != "" {
 				filename, err = downloader.DownloadByURLWithFallback(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, req.Composer, metadataSeparator, req.ISRC, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
@@ -526,7 +505,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				filename, err = downloader.Download(req.SpotifyID, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, req.Composer, metadataSeparator, req.ISRC, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
 			}
 		} else {
-			downloader := backend.NewTidalDownloader(req.ApiURL)
+			downloader := backend.NewTidalDownloader(req.TidalAPIURL)
 			if req.ServiceURL != "" {
 				filename, err = downloader.DownloadByURL(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, req.Composer, metadataSeparator, req.ISRC, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
 			} else {

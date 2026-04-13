@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { getSettings } from "@/lib/settings";
 import { fetchSpotifyMetadata } from "@/lib/api";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { logger } from "@/lib/logger";
@@ -12,7 +11,6 @@ export function useMetadata() {
     const loadingToastId = useRef<string | number | null>(null);
     const fetchedCount = useRef(0);
     const currentName = useRef("");
-    const [showApiModal, setShowApiModal] = useState(false);
     const [showAlbumDialog, setShowAlbumDialog] = useState(false);
     const [selectedAlbum, setSelectedAlbum] = useState<{
         id: string;
@@ -215,13 +213,7 @@ export function useMetadata() {
         catch (err) {
             const errorMsg = err instanceof Error ? err.message : "Failed to fetch metadata";
             logger.error(`fetch failed: ${errorMsg}`);
-            const settings = getSettings();
-            if (!settings.useSpotFetchAPI) {
-                setShowApiModal(true);
-            }
-            else {
-                toast.error(errorMsg);
-            }
+            toast.error(errorMsg);
         }
         finally {
             setLoading(false);
@@ -323,13 +315,7 @@ export function useMetadata() {
         catch (err) {
             const errorMsg = err instanceof Error ? err.message : "Failed to fetch album metadata";
             logger.error(`fetch failed: ${errorMsg}`);
-            const settings = getSettings();
-            if (!settings.useSpotFetchAPI) {
-                setShowApiModal(true);
-            }
-            else {
-                toast.error(errorMsg);
-            }
+            toast.error(errorMsg);
         }
         finally {
             setLoading(false);
@@ -348,8 +334,6 @@ export function useMetadata() {
         handleConfirmAlbumFetch,
         handleArtistClick,
         loadFromCache,
-        showApiModal,
-        setShowApiModal,
         resetMetadata: () => setMetadata(null),
     };
 }

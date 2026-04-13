@@ -119,7 +119,7 @@ export interface DownloadRequest {
     album_artist?: string;
     release_date?: string;
     cover_url?: string;
-    api_url?: string;
+    tidal_api_url?: string;
     output_dir?: string;
     audio_format?: string;
     folder_name?: string;

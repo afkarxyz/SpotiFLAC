@@ -28,8 +28,6 @@ export interface Settings {
     autoOrder: "tidal-qobuz-amazon" | "tidal-amazon-qobuz" | "qobuz-tidal-amazon" | "qobuz-amazon-tidal" | "amazon-tidal-qobuz" | "amazon-qobuz-tidal" | string;
     autoQuality: "16" | "24";
     allowFallback: boolean;
-    useSpotFetchAPI: boolean;
-    spotFetchAPIUrl: string;
     createPlaylistFolder: boolean;
     playlistOwnerFolderName: boolean;
     createM3u8File: boolean;
@@ -118,8 +116,6 @@ export const DEFAULT_SETTINGS: Settings = {
     autoOrder: "tidal-qobuz-amazon",
     autoQuality: "16",
     allowFallback: true,
-    useSpotFetchAPI: false,
-    spotFetchAPIUrl: "https://sp.afkarxyz.qzz.io/api",
     createPlaylistFolder: true,
     playlistOwnerFolderName: false,
     createM3u8File: false,
