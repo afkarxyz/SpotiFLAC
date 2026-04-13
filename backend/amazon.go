@@ -400,7 +400,7 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, quality, filename
 		Publisher:   spotifyPublisher,
 		Composer:    spotifyComposer,
 		Separator:   metadataSeparator,
-		Description: "https://github.com/afkarxyz/SpotiFLAC",
+		Description: "https://github.com/spotbye/SpotiFLAC",
 		ISRC:        isrc,
 		Genre:       mbMeta.Genre,
 	}

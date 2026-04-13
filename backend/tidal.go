@@ -559,7 +559,7 @@ func (t *TidalDownloader) DownloadByURL(tidalURL, outputDir, quality, filenameFo
 		Publisher:   spotifyPublisher,
 		Composer:    spotifyComposer,
 		Separator:   metadataSeparator,
-		Description: "https://github.com/afkarxyz/SpotiFLAC",
+		Description: "https://github.com/spotbye/SpotiFLAC",
 		ISRC:        isrc,
 		Genre:       mbMeta.Genre,
 	}
@@ -724,7 +724,7 @@ func (t *TidalDownloader) DownloadByURLWithFallback(tidalURL, outputDir, quality
 		Publisher:   spotifyPublisher,
 		Composer:    spotifyComposer,
 		Separator:   metadataSeparator,
-		Description: "https://github.com/afkarxyz/SpotiFLAC",
+		Description: "https://github.com/spotbye/SpotiFLAC",
 		ISRC:        isrc,
 		Genre:       mbMeta.Genre,
 	}
