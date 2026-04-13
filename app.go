@@ -85,6 +85,42 @@ func containsStreamingURL(body []byte) bool {
 	return isStreamingURL(trimmedBody)
 }
 
+func containsLRCLIBResults(body []byte) bool {
+	trimmedBody := strings.TrimSpace(string(body))
+	if trimmedBody == "" {
+		return false
+	}
+
+	var searchResults []map[string]interface{}
+	if err := json.Unmarshal(body, &searchResults); err == nil {
+		return len(searchResults) > 0
+	}
+
+	var exactResult map[string]interface{}
+	if err := json.Unmarshal(body, &exactResult); err == nil {
+		return len(exactResult) > 0
+	}
+
+	return false
+}
+
+func containsMusicBrainzResults(body []byte) bool {
+	trimmedBody := strings.TrimSpace(string(body))
+	if trimmedBody == "" {
+		return false
+	}
+
+	var payload struct {
+		Count      int               `json:"count"`
+		Recordings []json.RawMessage `json:"recordings"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false
+	}
+
+	return payload.Count > 0 || len(payload.Recordings) > 0
+}
+
 func isStreamingURL(raw string) bool {
 	candidate := strings.TrimSpace(raw)
 	if candidate == "" {
@@ -948,6 +984,10 @@ func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
 			checkURL = fmt.Sprintf("%s/api/track/360735657?quality=27", apiURL)
 		} else if apiType == "amazon" {
 			checkURL = fmt.Sprintf("%s/status", apiURL)
+		} else if apiType == "lrclib" {
+			checkURL = fmt.Sprintf("%s/api/search?artist_name=Adele&track_name=Hello", strings.TrimRight(apiURL, "/"))
+		} else if apiType == "musicbrainz" {
+			checkURL = fmt.Sprintf("%s/ws/2/recording?query=%s&fmt=json&limit=1", strings.TrimRight(apiURL, "/"), url.QueryEscape(`recording:"Hello" AND artist:"Adele"`))
 		} else {
 			checkURL = apiURL
 		}
@@ -958,6 +998,7 @@ func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
 			return false, err
 		}
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "application/json")
 
 		maxRetries := 3
 		for i := 0; i < maxRetries; i++ {
@@ -981,7 +1022,15 @@ func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
 					return true, nil
 				}
 
-				if apiType != "amazon" && apiType != "qobuz" && apiType != "qbz" && statusCode == 200 {
+				if apiType == "lrclib" && statusCode == 200 && containsLRCLIBResults(body) {
+					return true, nil
+				}
+
+				if apiType == "musicbrainz" && statusCode == 200 && containsMusicBrainzResults(body) {
+					return true, nil
+				}
+
+				if apiType != "amazon" && apiType != "qobuz" && apiType != "qbz" && apiType != "lrclib" && apiType != "musicbrainz" && statusCode == 200 {
 					return true, nil
 				}
 			}

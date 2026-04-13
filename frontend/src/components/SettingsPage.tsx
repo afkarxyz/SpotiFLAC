@@ -13,9 +13,7 @@ import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder, OpenConfigFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { ApiStatusTab } from "./ApiStatusTab";
-import { AmazonIcon, QobuzIcon, TidalIcon } from "./PlatformIcons";
-import songlinkIcon from "@/assets/icons/songlink.ico";
-import songstatsIcon from "@/assets/icons/songstats.png";
+import { AmazonIcon, QobuzIcon, SonglinkIcon, SongstatsIcon, TidalIcon } from "./PlatformIcons";
 interface SettingsPageProps {
     onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
     onResetRequest?: (resetFn: () => void) => void;
@@ -245,13 +243,13 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     <SelectContent>
                       <SelectItem value="songlink">
                         <span className="flex items-center gap-2">
-                          <img src={songlinkIcon} alt="Songlink" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy"/>
+                          <SonglinkIcon className="h-4 w-4 shrink-0"/>
                           Songlink
                         </span>
                       </SelectItem>
                       <SelectItem value="songstats">
                         <span className="flex items-center gap-2">
-                          <img src={songstatsIcon} alt="Songstats" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy"/>
+                          <SongstatsIcon className="h-4 w-4 shrink-0"/>
                           Songstats
                         </span>
                       </SelectItem>

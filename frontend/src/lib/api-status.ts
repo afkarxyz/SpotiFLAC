@@ -19,6 +19,8 @@ export const API_SOURCES: ApiSource[] = [
     { id: "qobuz2", type: "qobuz", name: "Qobuz B", url: "https://dabmusic.xyz" },
     { id: "qobuz3", type: "qbz", name: "Qobuz C", url: "https://qbz.afkarxyz.qzz.io" },
     { id: "amazon1", type: "amazon", name: "Amazon Music", url: "https://amzn.afkarxyz.qzz.io" },
+    { id: "lrclib", type: "lrclib", name: "LRCLIB", url: "https://lrclib.net" },
+    { id: "musicbrainz", type: "musicbrainz", name: "MusicBrainz", url: "https://musicbrainz.org" },
 ];
 type ApiStatusState = {
     isCheckingAll: boolean;
