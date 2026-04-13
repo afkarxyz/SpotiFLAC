@@ -31,6 +31,7 @@ export interface Settings {
     useSpotFetchAPI: boolean;
     spotFetchAPIUrl: string;
     createPlaylistFolder: boolean;
+    playlistOwnerFolderName: boolean;
     createM3u8File: boolean;
     useFirstArtistOnly: boolean;
     useSingleGenre: boolean;
@@ -118,6 +119,7 @@ export const DEFAULT_SETTINGS: Settings = {
     useSpotFetchAPI: false,
     spotFetchAPIUrl: "https://sp.afkarxyz.qzz.io/api",
     createPlaylistFolder: true,
+    playlistOwnerFolderName: false,
     createM3u8File: false,
     useFirstArtistOnly: false,
     useSingleGenre: false,
@@ -235,6 +237,9 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('allowResolverFallback' in parsed)) {
                 parsed.allowResolverFallback = true;
             }
+            if (!('playlistOwnerFolderName' in parsed)) {
+                parsed.playlistOwnerFolderName = false;
+            }
             if (!('separator' in parsed)) {
                 parsed.separator = "semicolon";
             }
@@ -322,6 +327,9 @@ export async function loadSettings(): Promise<Settings> {
             }
             if (!('createPlaylistFolder' in parsed)) {
                 parsed.createPlaylistFolder = true;
+            }
+            if (!('playlistOwnerFolderName' in parsed)) {
+                parsed.playlistOwnerFolderName = false;
             }
             if (!('createM3u8File' in parsed)) {
                 parsed.createM3u8File = false;

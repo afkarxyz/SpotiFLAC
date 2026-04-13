@@ -585,6 +585,16 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
               </div>
 
               <div className="flex items-center gap-3">
+                <Switch id="playlist-owner-folder-name" checked={tempSettings.playlistOwnerFolderName} onCheckedChange={(checked) => setTempSettings((prev) => ({
+                ...prev,
+                playlistOwnerFolderName: checked,
+            }))}/>
+                <Label htmlFor="playlist-owner-folder-name" className="text-sm cursor-pointer font-normal">
+                  Playlist Owner Folder Name
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-3">
                 <Switch id="create-m3u8-file" checked={tempSettings.createM3u8File} onCheckedChange={(checked) => setTempSettings((prev) => ({
                 ...prev,
                 createM3u8File: checked,
