@@ -211,10 +211,10 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                   <span className="font-medium">
                     {clickableAlbumArtists.length > 0 ? clickableAlbumArtists.map((artist, index) => (<span key={`${artist.id || artist.name}-${index}`}>
                           {onArtistClick && artist.external_urls ? (<span className="cursor-pointer hover:underline" onClick={() => onArtistClick({
-                id: artist.id,
-                name: artist.name,
-                external_urls: artist.external_urls,
-            })}>
+                    id: artist.id,
+                    name: artist.name,
+                    external_urls: artist.external_urls,
+                })}>
                               {artist.name}
                             </span>) : (artist.name)}
                           {index < clickableAlbumArtists.length - 1 && artistSeparator}
@@ -225,8 +225,8 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                   <span>•</span>
                   <span>
                     {showStreamingProgress
-                        ? `${fetchedTrackCount.toLocaleString()} / ${totalTrackCount.toLocaleString()} tracks`
-                        : `${Math.max(totalTrackCount, fetchedTrackCount).toLocaleString()} ${Math.max(totalTrackCount, fetchedTrackCount) === 1 ? "track" : "tracks"}`}
+            ? `${fetchedTrackCount.toLocaleString()} / ${totalTrackCount.toLocaleString()} tracks`
+            : `${Math.max(totalTrackCount, fetchedTrackCount).toLocaleString()} ${Math.max(totalTrackCount, fetchedTrackCount) === 1 ? "track" : "tracks"}`}
                   </span>
                 </div>
               </div>

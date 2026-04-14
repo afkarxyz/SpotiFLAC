@@ -257,10 +257,10 @@ export function TrackList({ tracks, searchQuery, sortBy, selectedTracks, downloa
                 }
                 return clickableArtists.map((artist, i) => (<span key={`${artist.id || artist.name}-${i}`}>
                             {onArtistClick ? (<span className="cursor-pointer hover:underline" onClick={() => onArtistClick({
-                                id: artist.id,
-                                name: artist.name,
-                                external_urls: artist.external_urls,
-                            })}>
+                            id: artist.id,
+                            name: artist.name,
+                            external_urls: artist.external_urls,
+                        })}>
                                 {artist.name}
                               </span>) : (artist.name)}
                             {i < clickableArtists.length - 1 && ", "}

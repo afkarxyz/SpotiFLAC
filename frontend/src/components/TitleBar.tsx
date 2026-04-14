@@ -5,7 +5,6 @@ import { fetchCurrentIPInfo } from "@/lib/api";
 import type { CurrentIPInfo } from "@/types/api";
 import { openExternal } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
-
 const IP_INFO_REFRESH_INTERVAL_MS = 30000;
 const SPOTIFY_BLOCKED_COUNTRY_CODES = new Set([
     "AF",
@@ -25,7 +24,6 @@ const SPOTIFY_BLOCKED_COUNTRY_CODES = new Set([
     "TM",
     "YE",
 ]);
-
 export function TitleBar() {
     const [currentIPInfo, setCurrentIPInfo] = useState<CurrentIPInfo | null>(null);
     const [isLoadingCurrentIPInfo, setIsLoadingCurrentIPInfo] = useState(false);
@@ -117,12 +115,12 @@ export function TitleBar() {
                                 {detectedFlagPath ? (<img src={detectedFlagPath} alt={detectedCountryCode} className="h-3.5 w-[18px] rounded-[2px] border object-cover bg-muted"/>) : (<Globe className="w-4 h-4 opacity-70"/>)}
                                 <span className="font-mono text-xs truncate">
                                     {isLoadingCurrentIPInfo
-                                        ? "Detecting..."
-                                        : currentIPInfo
-                                            ? showIPAddress
-                                                ? `${currentIPInfo.ip} - ${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
-                                                : `${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
-                                            : "Unavailable"}
+            ? "Detecting..."
+            : currentIPInfo
+                ? showIPAddress
+                    ? `${currentIPInfo.ip} - ${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
+                    : `${currentIPInfo.country}${detectedCountryCode ? ` (${detectedCountryCode})` : ""}`
+                : "Unavailable"}
                                 </span>
                             </div>
                             {currentIPInfo && !isLoadingCurrentIPInfo && (<button type="button" onClick={() => setShowIPAddress((prev) => !prev)} className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" aria-label={showIPAddress ? "Hide IP" : "Show IP"}>

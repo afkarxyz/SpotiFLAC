@@ -1,11 +1,9 @@
 import type { ArtistSimple } from "@/types/api";
-
 export interface ClickableArtist {
     id: string;
     name: string;
     external_urls: string;
 }
-
 export function splitArtistNames(value: string): string[] {
     const trimmed = value.trim();
     if (!trimmed) {
@@ -14,7 +12,6 @@ export function splitArtistNames(value: string): string[] {
     const parts = trimmed.split(/\s*[;,]\s*/).map((part) => part.trim()).filter(Boolean);
     return parts.length > 0 ? parts : [trimmed];
 }
-
 export function buildClickableArtists(artists: string, artistsData?: ArtistSimple[], fallbackArtistId?: string, fallbackArtistUrl?: string): ClickableArtist[] {
     const names = splitArtistNames(artists);
     if (names.length === 0) {

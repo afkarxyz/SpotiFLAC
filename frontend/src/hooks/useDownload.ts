@@ -33,8 +33,10 @@ const CheckFilesExistence = (outputDir: string, rootDir: string, tracks: CheckFi
 const SkipDownloadItem = (itemID: string, filePath: string): Promise<void> => (window as any)["go"]["main"]["App"]["SkipDownloadItem"](itemID, filePath);
 const CreateM3U8File = (playlistName: string, outputDir: string, filePaths: string[]): Promise<void> => (window as any)["go"]["main"]["App"]["CreateM3U8File"](playlistName, outputDir, filePaths);
 const GetTrackISRC = (spotifyId: string): Promise<string> => (window as any)["go"]["main"]["App"]["GetTrackISRC"](spotifyId);
-
-async function resolveTemplateISRC(settings: { folderTemplate?: string; filenameTemplate?: string }, spotifyId?: string): Promise<string> {
+async function resolveTemplateISRC(settings: {
+    folderTemplate?: string;
+    filenameTemplate?: string;
+}, spotifyId?: string): Promise<string> {
     if (!spotifyId) {
         return "";
     }

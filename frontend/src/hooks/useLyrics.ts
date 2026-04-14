@@ -6,8 +6,10 @@ import { joinPath, sanitizePath, getFirstArtist } from "@/lib/utils";
 import { logger } from "@/lib/logger";
 import type { TrackMetadata } from "@/types/api";
 const GetTrackISRC = (spotifyId: string): Promise<string> => (window as any)["go"]["main"]["App"]["GetTrackISRC"](spotifyId);
-
-async function resolveTemplateISRC(settings: { folderTemplate?: string; filenameTemplate?: string }, spotifyId?: string): Promise<string> {
+async function resolveTemplateISRC(settings: {
+    folderTemplate?: string;
+    filenameTemplate?: string;
+}, spotifyId?: string): Promise<string> {
     if (!spotifyId) {
         return "";
     }

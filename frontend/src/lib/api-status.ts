@@ -32,7 +32,6 @@ let apiStatusState: ApiStatusState = {
 };
 let activeCheckAll: Promise<void> | null = null;
 const listeners = new Set<() => void>();
-
 type SpotiFLACUnifiedStatusResponse = {
     tidal?: string;
     qobuz_a?: string;

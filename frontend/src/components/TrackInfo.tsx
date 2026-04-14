@@ -85,10 +85,10 @@ export function TrackInfo({ track, isDownloading, downloadingTrack, isDownloaded
             <p className="text-lg text-muted-foreground">
               {clickableArtists.length > 0 ? clickableArtists.map((artist, index) => (<span key={`${artist.id || artist.name}-${index}`}>
                     {onArtistClick ? (<span className="cursor-pointer hover:underline" onClick={() => onArtistClick({
-                id: artist.id,
-                name: artist.name,
-                external_urls: artist.external_urls,
-            })}>
+                    id: artist.id,
+                    name: artist.name,
+                    external_urls: artist.external_urls,
+                })}>
                         {artist.name}
                       </span>) : (artist.name)}
                     {index < clickableArtists.length - 1 && ", "}
