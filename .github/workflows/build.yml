@@ -81,13 +81,13 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p dist
-          Compress-Archive -Path "build\bin\SpotiFLAC.exe" -DestinationPath "dist\SpotiFLAC-windows.zip" -Force
+          Compress-Archive -Path "build\bin\SpotiFLAC.exe" -DestinationPath "dist\spotiflac-windows.zip" -Force
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-bundle
-          path: dist/SpotiFLAC-windows.zip
+          path: dist/spotiflac-windows.zip
           retention-days: 7
 
   build-macos:
@@ -150,13 +150,13 @@ jobs:
       - name: Create macOS bundle
         run: |
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "build/bin/SpotiFLAC.app" "dist/SpotiFLAC-macos-bundle.zip"
+          ditto -c -k --sequesterRsrc --keepParent "build/bin/SpotiFLAC.app" "dist/spotiflac-macos-bundle.zip"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-bundle
-          path: dist/SpotiFLAC-macos-bundle.zip
+          path: dist/spotiflac-macos-bundle.zip
           retention-days: 7
 
   build-linux:
@@ -312,13 +312,18 @@ jobs:
 
           # Create AppImage
           mkdir -p dist
-          ARCH=${{ matrix.appimage_arch }} ./appimagetool --no-appstream AppDir dist/SpotiFLAC-linux-${{ matrix.arch }}.AppImage
+          if [ "${{ matrix.goarch }}" = "arm64" ]; then
+            RELEASE_ARCH="arm64v8"
+          else
+            RELEASE_ARCH="amd64"
+          fi
+          ARCH=${{ matrix.appimage_arch }} ./appimagetool --no-appstream AppDir "dist/SpotiFLAC-${RELEASE_ARCH}.AppImage"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-appimage-${{ matrix.arch }}
-          path: dist/SpotiFLAC-linux-${{ matrix.arch }}.AppImage
+          path: dist/*.AppImage
           retention-days: 7
 
   create-release:
@@ -351,7 +356,7 @@ jobs:
           mkdir -p release/SpotiFLAC-linux-bundle
           cp artifacts/linux-appimage-amd64/*.AppImage release/SpotiFLAC-linux-bundle/
           cp artifacts/linux-appimage-arm64/*.AppImage release/SpotiFLAC-linux-bundle/
-          tar -czf release/SpotiFLAC-linux-bundle.tar.gz -C release SpotiFLAC-linux-bundle
+          tar -czf release/spotiflac-linux-bundle.tar.gz -C release SpotiFLAC-linux-bundle
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -364,9 +369,9 @@ jobs:
 
             ## Downloads
 
-            - `SpotiFLAC-windows.zip` - amd64
-            - `SpotiFLAC-macos-bundle.zip` - amd64 + arm64
-            - `SpotiFLAC-linux-bundle.tar.gz` - amd64 + arm64v8
+            - `spotiflac-windows.zip` - amd64
+            - `spotiflac-macos-bundle.zip` - amd64 + arm64
+            - `spotiflac-linux-bundle.tar.gz` - amd64 + arm64v8
 
             <details>
             <summary><b>Linux Requirements</b></summary>
@@ -375,8 +380,8 @@ jobs:
 
             Choose the correct AppImage after extracting the bundle:
 
-            - `SpotiFLAC-linux-amd64.AppImage` - amd64
-            - `SpotiFLAC-linux-arm64.AppImage` - arm64v8
+            - `SpotiFLAC-amd64.AppImage` - amd64
+            - `SpotiFLAC-arm64v8.AppImage` - arm64v8
 
             **Ubuntu/Debian:**
             ```bash
@@ -395,14 +400,14 @@ jobs:
 
             After installing the dependency, make the AppImage executable:
             ```bash
-            tar -xzf SpotiFLAC-linux-bundle.tar.gz
-            chmod +x SpotiFLAC-linux-*.AppImage
+            tar -xzf spotiflac-linux-bundle.tar.gz
+            chmod +x SpotiFLAC-*.AppImage
             ```
 
             </details>
           files: |
             artifacts/windows-bundle/*.zip
             artifacts/macos-bundle/*.zip
-            release/SpotiFLAC-linux-bundle.tar.gz
+            release/spotiflac-linux-bundle.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
