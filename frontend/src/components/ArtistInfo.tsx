@@ -66,6 +66,7 @@ interface ArtistInfoProps {
     downloadingCoverTrack?: string | null;
     isBulkDownloadingCovers?: boolean;
     isBulkDownloadingLyrics?: boolean;
+    isMetadataLoading?: boolean;
     onSearchChange: (value: string) => void;
     onSortChange: (value: string) => void;
     onToggleTrack: (id: string) => void;
@@ -94,7 +95,7 @@ interface ArtistInfoProps {
     onTrackClick?: (track: TrackMetadata) => void;
     onBack?: () => void;
 }
-export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, onBack, }: ArtistInfoProps) {
+export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onAlbumClick, onArtistClick, onPageChange, onTrackClick, onBack, }: ArtistInfoProps) {
     const [downloadingHeader, setDownloadingHeader] = useState(false);
     const [downloadingAvatar, setDownloadingAvatar] = useState(false);
     const [downloadingGalleryIndex, setDownloadingGalleryIndex] = useState<number | null>(null);
@@ -102,6 +103,17 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
     const [activeTab, setActiveTab] = useState<"albums" | "tracks" | "gallery">("albums");
     const [activeAlbumFilter, setActiveAlbumFilter] = useState<string>("all");
     const displayedAlbumCount = artistInfo.total_albums || albumList.length;
+    const fetchedAlbumCount = albumList.length;
+    const totalAlbumCount = artistInfo.total_albums || fetchedAlbumCount;
+    const totalTrackCount = albumList.reduce((sum, album) => sum + (album.total_tracks || 0), 0);
+    const fetchedTrackCount = trackList.length;
+    const albumCountLabel = isMetadataLoading && totalAlbumCount > 0 && fetchedAlbumCount < totalAlbumCount
+        ? `${fetchedAlbumCount.toLocaleString()} / ${totalAlbumCount.toLocaleString()} albums`
+        : `${displayedAlbumCount.toLocaleString()} ${displayedAlbumCount === 1 ? "album" : "albums"}`;
+    const resolvedTrackCount = totalTrackCount > 0 ? totalTrackCount : fetchedTrackCount;
+    const trackCountLabel = isMetadataLoading && totalTrackCount > 0 && fetchedTrackCount < totalTrackCount
+        ? `${fetchedTrackCount.toLocaleString()} / ${totalTrackCount.toLocaleString()} tracks`
+        : `${resolvedTrackCount.toLocaleString()} ${resolvedTrackCount === 1 ? "track" : "tracks"}`;
     const albumFilterCounts = useMemo(() => {
         const counts = new Map<string, number>();
         counts.set("all", (albumList || []).length);
@@ -367,9 +379,9 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                         </>)}
                     </div>
                     <div className="flex items-center gap-2 text-sm flex-wrap text-white/90">
-                      <span>{displayedAlbumCount.toLocaleString()} {displayedAlbumCount === 1 ? "album" : "albums"}</span>
+                      <span>{albumCountLabel}</span>
                       <span>•</span>
-                      <span>{trackList.length.toLocaleString()} {trackList.length === 1 ? "track" : "tracks"}</span>
+                      <span>{trackCountLabel}</span>
                       {artistInfo.genres.length > 0 && (<>
                           <span>•</span>
                           <span>{artistInfo.genres.join(", ")}</span>
@@ -420,9 +432,9 @@ export function ArtistInfo({ artistInfo, albumList, trackList, searchQuery, sort
                     </>)}
                 </div>
                 <div className="flex items-center gap-2 text-sm flex-wrap">
-                  <span>{displayedAlbumCount.toLocaleString()} {displayedAlbumCount === 1 ? "album" : "albums"}</span>
+                  <span>{albumCountLabel}</span>
                   <span>•</span>
-                  <span>{trackList.length.toLocaleString()} {trackList.length === 1 ? "track" : "tracks"}</span>
+                  <span>{trackCountLabel}</span>
                   {artistInfo.genres.length > 0 && (<>
                       <span>•</span>
                       <span>{artistInfo.genres.join(", ")}</span>

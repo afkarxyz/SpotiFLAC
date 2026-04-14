@@ -197,7 +197,7 @@ export function AboutPage() {
 
         {activeTab === "projects" && (<div className="p-1 pr-2">
             <div className="grid gap-2 grid-cols-4">
-              <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotiverse/SpotiFLAC-Next")}>
+              <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotbye/SpotiFLAC-Next")}>
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
@@ -251,7 +251,7 @@ export function AboutPage() {
                     </div>
                   </CardContent>)}
               </Card>
-              <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/SpotiDownloader")}>
+              <Card className={projectCardClass} onClick={() => openExternal("https://github.com/spotbye/SpotiDownloader")}>
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiDownloaderIcon} className="h-6 w-6 shrink-0" alt="SpotiDownloader"/>
@@ -382,11 +382,10 @@ export function AboutPage() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/>{" "}
-                      SpotubeDL
+                      SpotubeDL.com
                     </CardTitle>
                     <CardDescription>
-                      Download Spotify Tracks, Albums, Playlists as MP3/OGG/Opus
-                      with High Quality.
+                      Download Spotify Tracks, Albums, Playlists & Discography as MP3/OGG/Opus.
                     </CardDescription>
                   </CardHeader>
                 </Card>

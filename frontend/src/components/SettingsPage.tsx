@@ -13,9 +13,7 @@ import { themes, applyTheme } from "@/lib/themes";
 import { SelectFolder, OpenConfigFolder } from "../../wailsjs/go/main/App";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { ApiStatusTab } from "./ApiStatusTab";
-import { AmazonIcon, QobuzIcon, TidalIcon } from "./PlatformIcons";
-import songlinkIcon from "@/assets/icons/songlink.ico";
-import songstatsIcon from "@/assets/icons/songstats.png";
+import { AmazonIcon, QobuzIcon, SonglinkIcon, SongstatsIcon, TidalIcon } from "./PlatformIcons";
 interface SettingsPageProps {
     onUnsavedChangesChange?: (hasUnsavedChanges: boolean) => void;
     onResetRequest?: (resetFn: () => void) => void;
@@ -245,13 +243,13 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     <SelectContent>
                       <SelectItem value="songlink">
                         <span className="flex items-center gap-2">
-                          <img src={songlinkIcon} alt="Songlink" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy"/>
+                          <SonglinkIcon className="h-4 w-4 shrink-0"/>
                           Songlink
                         </span>
                       </SelectItem>
                       <SelectItem value="songstats">
                         <span className="flex items-center gap-2">
-                          <img src={songstatsIcon} alt="Songstats" className="h-4 w-4 shrink-0 rounded-[3px] object-contain" loading="lazy"/>
+                          <SongstatsIcon className="h-4 w-4 shrink-0"/>
                           Songstats
                         </span>
                       </SelectItem>
@@ -568,7 +566,8 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     .replace(/\{track\}/g, "01")
                     .replace(/\{disc\}/g, "1")
                     .replace(/\{year\}/g, "2018")
-                    .replace(/\{date\}/g, "2018-02-09")}
+                    .replace(/\{date\}/g, "2018-02-09")
+                    .replace(/\{isrc\}/g, "USUM71801234")}
                       /
                     </span>
                   </p>)}
@@ -581,6 +580,16 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
             }))}/>
                 <Label htmlFor="create-playlist-folder" className="text-sm cursor-pointer font-normal">
                   Playlist Folder
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Switch id="playlist-owner-folder-name" checked={tempSettings.playlistOwnerFolderName} onCheckedChange={(checked) => setTempSettings((prev) => ({
+                ...prev,
+                playlistOwnerFolderName: checked,
+            }))}/>
+                <Label htmlFor="playlist-owner-folder-name" className="text-sm cursor-pointer font-normal">
+                  Playlist Owner Folder Name
                 </Label>
               </div>
 
@@ -601,6 +610,16 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
             }))}/>
                 <Label htmlFor="use-first-artist-only" className="text-sm cursor-pointer font-normal">
                   Use First Artist Only
+                </Label>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Switch id="redownload-with-suffix" checked={tempSettings.redownloadWithSuffix} onCheckedChange={(checked) => setTempSettings((prev) => ({
+                ...prev,
+                redownloadWithSuffix: checked,
+            }))}/>
+                <Label htmlFor="redownload-with-suffix" className="text-sm cursor-pointer font-normal">
+                  Redownload With Suffix
                 </Label>
               </div>
 
@@ -676,7 +695,8 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                     .replace(/\{track\}/g, "01")
                     .replace(/\{disc\}/g, "1")
                     .replace(/\{year\}/g, "2018")
-                    .replace(/\{date\}/g, "2018-02-09")}
+                    .replace(/\{date\}/g, "2018-02-09")
+                    .replace(/\{isrc\}/g, "USUM71801234")}
                     .flac
                   </span>
                 </p>)}

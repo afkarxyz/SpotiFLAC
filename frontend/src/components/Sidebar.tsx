@@ -40,7 +40,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
         }
     };
     const handleOpenIssues = () => {
-        openExternal("https://github.com/afkarxyz/SpotiFLAC/issues");
+        openExternal("https://github.com/spotbye/SpotiFLAC/issues");
         handleIssuesDialogChange(false);
     };
     const getAnimatedItemHandlers = <T extends AnimatedIconHandle>(iconRef: RefObject<T | null>) => ({

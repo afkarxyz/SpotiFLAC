@@ -47,6 +47,16 @@ type songLinkAPIResponse struct {
 	} `json:"linksByPlatform"`
 }
 
+type qobuzAvailabilityTrack struct {
+	ID    int64 `json:"id"`
+	Album struct {
+		ID          string `json:"id"`
+		Title       string `json:"title"`
+		URL         string `json:"url"`
+		RelativeURL string `json:"relative_url"`
+	} `json:"album"`
+}
+
 func NewSongLinkClient() *SongLinkClient {
 	return &SongLinkClient{
 		client: &http.Client{
@@ -114,7 +124,7 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string) (*TrackAv
 	}
 
 	if isrc != "" {
-		availability.Qobuz = checkQobuzAvailability(isrc)
+		availability.Qobuz, availability.QobuzURL = checkQobuzAvailability(isrc)
 	}
 
 	if availability.Tidal || availability.Amazon || availability.Deezer || availability.Qobuz {
@@ -128,36 +138,90 @@ func (s *SongLinkClient) CheckTrackAvailability(spotifyTrackID string) (*TrackAv
 	return availability, fmt.Errorf("no platforms found")
 }
 
-func checkQobuzAvailability(isrc string) bool {
-	client := &http.Client{Timeout: 10 * time.Second}
-	appID := "798273057"
-
-	searchURL := fmt.Sprintf(
-		"https://www.qobuz.com/api.json/0.2/track/search?query=%s&limit=1&app_id=%s",
-		url.QueryEscape(strings.TrimSpace(isrc)),
-		appID,
-	)
-
-	resp, err := client.Get(searchURL)
-	if err != nil {
-		return false
+func qobuzNormalizeRelativeURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return ""
 	}
-	defer resp.Body.Close()
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+		return rawURL
+	}
+	if strings.HasPrefix(rawURL, "/") {
+		return "https://www.qobuz.com" + rawURL
+	}
+	return "https://www.qobuz.com/" + rawURL
+}
 
-	if resp.StatusCode != http.StatusOK {
-		return false
+func qobuzSlugifySegment(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
 	}
 
+	var builder strings.Builder
+	lastDash := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			builder.WriteRune(r)
+			lastDash = false
+		default:
+			if !lastDash {
+				builder.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+
+	return strings.Trim(builder.String(), "-")
+}
+
+func qobuzAlbumSlugURL(albumTitle string, albumID string) string {
+	albumID = strings.TrimSpace(albumID)
+	if albumID == "" {
+		return ""
+	}
+
+	slug := qobuzSlugifySegment(albumTitle)
+	if slug == "" {
+		return fmt.Sprintf("https://www.qobuz.com/album/%s", albumID)
+	}
+
+	return fmt.Sprintf("https://www.qobuz.com/album/%s/%s", slug, albumID)
+}
+
+func checkQobuzAvailability(isrc string) (bool, string) {
 	var searchResp struct {
 		Tracks struct {
-			Total int `json:"total"`
+			Total int                      `json:"total"`
+			Items []qobuzAvailabilityTrack `json:"items"`
 		} `json:"tracks"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&searchResp); err != nil {
-		return false
+
+	if err := doQobuzSignedJSONRequest("track/search", url.Values{
+		"query": {strings.TrimSpace(isrc)},
+		"limit": {"1"},
+	}, &searchResp); err != nil {
+		return false, ""
 	}
 
-	return searchResp.Tracks.Total > 0
+	if searchResp.Tracks.Total == 0 || len(searchResp.Tracks.Items) == 0 {
+		return false, ""
+	}
+
+	item := searchResp.Tracks.Items[0]
+	qobuzURL := strings.TrimSpace(item.Album.URL)
+	if qobuzURL == "" {
+		qobuzURL = qobuzNormalizeRelativeURL(item.Album.RelativeURL)
+	}
+	if qobuzURL == "" {
+		qobuzURL = qobuzAlbumSlugURL(item.Album.Title, item.Album.ID)
+	}
+	if qobuzURL == "" && item.ID > 0 {
+		qobuzURL = fmt.Sprintf("https://www.qobuz.com/us-en/track/%d", item.ID)
+	}
+
+	return true, qobuzURL
 }
 
 func (s *SongLinkClient) GetDeezerURLFromSpotify(spotifyTrackID string) (string, error) {

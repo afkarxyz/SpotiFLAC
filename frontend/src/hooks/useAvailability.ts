@@ -13,9 +13,6 @@ export function useAvailability() {
             setError("No Spotify ID provided");
             return null;
         }
-        if (availabilityMap.has(spotifyId)) {
-            return availabilityMap.get(spotifyId)!;
-        }
         setChecking(true);
         setCheckingTrackId(spotifyId);
         setError(null);
@@ -41,7 +38,7 @@ export function useAvailability() {
             setChecking(false);
             setCheckingTrackId(null);
         }
-    }, [availabilityMap]);
+    }, []);
     const getAvailability = useCallback((spotifyId: string) => {
         return availabilityMap.get(spotifyId);
     }, [availabilityMap]);

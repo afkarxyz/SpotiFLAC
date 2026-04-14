@@ -1,4 +1,4 @@
-import { CheckAPIStatus } from "../../wailsjs/go/main/App";
+import { CheckAPIStatus, FetchUnifiedAPIStatus } from "../../wailsjs/go/main/App";
 import { CHECK_TIMEOUT_MS, withTimeout } from "@/lib/async-timeout";
 export type ApiCheckStatus = "checking" | "online" | "offline" | "idle";
 export interface ApiSource {
@@ -19,6 +19,8 @@ export const API_SOURCES: ApiSource[] = [
     { id: "qobuz2", type: "qobuz", name: "Qobuz B", url: "https://dabmusic.xyz" },
     { id: "qobuz3", type: "qbz", name: "Qobuz C", url: "https://qbz.afkarxyz.qzz.io" },
     { id: "amazon1", type: "amazon", name: "Amazon Music", url: "https://amzn.afkarxyz.qzz.io" },
+    { id: "lrclib", type: "lrclib", name: "LRCLIB", url: "https://lrclib.net" },
+    { id: "musicbrainz", type: "musicbrainz", name: "MusicBrainz", url: "https://musicbrainz.org" },
 ];
 type ApiStatusState = {
     isCheckingAll: boolean;
@@ -30,6 +32,14 @@ let apiStatusState: ApiStatusState = {
 };
 let activeCheckAll: Promise<void> | null = null;
 const listeners = new Set<() => void>();
+type SpotiFLACUnifiedStatusResponse = {
+    tidal?: string;
+    qobuz_a?: string;
+    qobuz_b?: string;
+    qobuz_c?: string;
+    amazon?: string;
+    lrclib?: string;
+};
 function emitApiStatusChange() {
     for (const listener of listeners) {
         listener();
@@ -39,32 +49,37 @@ function setApiStatusState(updater: (current: ApiStatusState) => ApiStatusState)
     apiStatusState = updater(apiStatusState);
     emitApiStatusChange();
 }
-async function checkSingleApiStatus(source: ApiSource): Promise<void> {
-    setApiStatusState((current) => ({
-        ...current,
+function statusFromUnifiedValue(value: string | undefined): ApiCheckStatus {
+    return value === "up" ? "online" : "offline";
+}
+async function fetchUnifiedStatuses(forceRefresh: boolean): Promise<Pick<ApiStatusState, "statuses">> {
+    const response = await FetchUnifiedAPIStatus(forceRefresh);
+    const payload = JSON.parse(response) as SpotiFLACUnifiedStatusResponse;
+    const tidalStatus = statusFromUnifiedValue(payload.tidal);
+    return {
         statuses: {
-            ...current.statuses,
-            [source.id]: "checking",
+            tidal1: tidalStatus,
+            tidal2: tidalStatus,
+            tidal3: tidalStatus,
+            tidal4: tidalStatus,
+            tidal5: tidalStatus,
+            tidal6: tidalStatus,
+            tidal7: tidalStatus,
+            qobuz1: statusFromUnifiedValue(payload.qobuz_a),
+            qobuz2: statusFromUnifiedValue(payload.qobuz_b),
+            qobuz3: statusFromUnifiedValue(payload.qobuz_c),
+            amazon1: statusFromUnifiedValue(payload.amazon),
+            lrclib: statusFromUnifiedValue(payload.lrclib),
         },
-    }));
+    };
+}
+async function checkMusicBrainzStatus(): Promise<ApiCheckStatus> {
     try {
-        const isOnline = await withTimeout(CheckAPIStatus(source.type, source.url), CHECK_TIMEOUT_MS, `API status check timed out after 10 seconds for ${source.url}`);
-        setApiStatusState((current) => ({
-            ...current,
-            statuses: {
-                ...current.statuses,
-                [source.id]: isOnline ? "online" : "offline",
-            },
-        }));
+        const isOnline = await withTimeout(CheckAPIStatus("musicbrainz", "https://musicbrainz.org"), CHECK_TIMEOUT_MS, "API status check timed out after 10 seconds for MusicBrainz");
+        return isOnline ? "online" : "offline";
     }
     catch {
-        setApiStatusState((current) => ({
-            ...current,
-            statuses: {
-                ...current.statuses,
-                [source.id]: "offline",
-            },
-        }));
+        return "offline";
     }
 }
 export function getApiStatusState(): ApiStatusState {
@@ -84,20 +99,54 @@ export function hasApiStatusResults(): boolean {
 }
 export function ensureApiStatusCheckStarted(): void {
     if (!activeCheckAll && !hasApiStatusResults()) {
-        void checkAllApiStatuses();
+        void checkAllApiStatuses(false);
     }
 }
-export async function checkAllApiStatuses(): Promise<void> {
+export async function checkAllApiStatuses(forceRefresh: boolean = false): Promise<void> {
     if (activeCheckAll) {
         return activeCheckAll;
     }
     activeCheckAll = (async () => {
+        const checkingStatuses = Object.fromEntries(API_SOURCES.map((source) => [source.id, "checking" as ApiCheckStatus]));
         setApiStatusState((current) => ({
             ...current,
             isCheckingAll: true,
+            statuses: {
+                ...current.statuses,
+                ...checkingStatuses,
+            },
         }));
         try {
-            await Promise.allSettled(API_SOURCES.map((source) => checkSingleApiStatus(source)));
+            const [unifiedResult, musicBrainzStatus] = await Promise.allSettled([
+                withTimeout(fetchUnifiedStatuses(forceRefresh), CHECK_TIMEOUT_MS, "Unified SpotiFLAC status check timed out after 10 seconds"),
+                checkMusicBrainzStatus(),
+            ]);
+            setApiStatusState((current) => {
+                const nextStatuses = { ...current.statuses };
+                if (unifiedResult.status === "fulfilled") {
+                    Object.assign(nextStatuses, unifiedResult.value.statuses);
+                }
+                else {
+                    nextStatuses.tidal1 = "offline";
+                    nextStatuses.tidal2 = "offline";
+                    nextStatuses.tidal3 = "offline";
+                    nextStatuses.tidal4 = "offline";
+                    nextStatuses.tidal5 = "offline";
+                    nextStatuses.tidal6 = "offline";
+                    nextStatuses.tidal7 = "offline";
+                    nextStatuses.qobuz1 = "offline";
+                    nextStatuses.qobuz2 = "offline";
+                    nextStatuses.qobuz3 = "offline";
+                    nextStatuses.amazon1 = "offline";
+                    nextStatuses.lrclib = "offline";
+                }
+                nextStatuses.musicbrainz =
+                    musicBrainzStatus.status === "fulfilled" ? musicBrainzStatus.value : "offline";
+                return {
+                    ...current,
+                    statuses: nextStatuses,
+                };
+            });
         }
         finally {
             setApiStatusState((current) => ({

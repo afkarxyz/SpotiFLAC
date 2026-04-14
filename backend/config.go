@@ -50,23 +50,14 @@ func LoadConfigSettings() (map[string]interface{}, error) {
 	return settings, nil
 }
 
-func GetSpotFetchAPISettings() (bool, string) {
+func GetRedownloadWithSuffixSetting() bool {
 	settings, err := LoadConfigSettings()
 	if err != nil || settings == nil {
-		return false, ""
+		return false
 	}
 
-	useAPI, _ := settings["useSpotFetchAPI"].(bool)
-	if !useAPI {
-		return false, ""
-	}
-
-	apiURL, _ := settings["spotFetchAPIUrl"].(string)
-	if apiURL == "" {
-		apiURL = "https://sp.afkarxyz.qzz.io/api"
-	}
-
-	return true, apiURL
+	enabled, _ := settings["redownloadWithSuffix"].(bool)
+	return enabled
 }
 
 func GetLinkResolverSetting() string {

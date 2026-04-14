@@ -1,5 +1,5 @@
-import type { SpotifyMetadataResponse, DownloadRequest, DownloadResponse, HealthResponse, LyricsDownloadRequest, LyricsDownloadResponse, CoverDownloadRequest, CoverDownloadResponse, HeaderDownloadRequest, HeaderDownloadResponse, GalleryImageDownloadRequest, GalleryImageDownloadResponse, AvatarDownloadRequest, AvatarDownloadResponse, } from "@/types/api";
-import { GetSpotifyMetadata, DownloadTrack, DownloadLyrics, DownloadCover, DownloadHeader, DownloadGalleryImage, DownloadAvatar } from "../../wailsjs/go/main/App";
+import type { SpotifyMetadataResponse, DownloadRequest, DownloadResponse, HealthResponse, CurrentIPInfo, LyricsDownloadRequest, LyricsDownloadResponse, CoverDownloadRequest, CoverDownloadResponse, HeaderDownloadRequest, HeaderDownloadResponse, GalleryImageDownloadRequest, GalleryImageDownloadResponse, AvatarDownloadRequest, AvatarDownloadResponse, } from "@/types/api";
+import { GetSpotifyMetadata, GetCurrentIPInfo, DownloadTrack, DownloadLyrics, DownloadCover, DownloadHeader, DownloadGalleryImage, DownloadAvatar } from "../../wailsjs/go/main/App";
 import { main } from "../../wailsjs/go/models";
 export async function fetchSpotifyMetadata(url: string, batch: boolean = true, delay: number = 1.0, timeout: number = 300.0): Promise<SpotifyMetadataResponse> {
     const req = new main.SpotifyMetadataRequest({
@@ -23,6 +23,10 @@ export async function checkHealth(): Promise<HealthResponse> {
         status: "ok",
         time: new Date().toISOString(),
     };
+}
+export async function fetchCurrentIPInfo(): Promise<CurrentIPInfo> {
+    const jsonString = await GetCurrentIPInfo();
+    return JSON.parse(jsonString);
 }
 export async function downloadLyrics(request: LyricsDownloadRequest): Promise<LyricsDownloadResponse> {
     const req = new main.LyricsDownloadRequest(request);

@@ -12,6 +12,7 @@ import { useState } from "react";
 import { toastWithSound as toast } from "@/lib/toast-with-sound";
 import { joinPath, sanitizePath } from "@/lib/utils";
 import { parseTemplate, type TemplateData } from "@/lib/settings";
+import { buildClickableArtists, splitArtistNames } from "@/lib/artist-links";
 import type { TrackMetadata, TrackAvailability } from "@/types/api";
 interface AlbumInfoProps {
     albumInfo: {
@@ -52,6 +53,7 @@ interface AlbumInfoProps {
     downloadingCoverTrack?: string | null;
     isBulkDownloadingCovers?: boolean;
     isBulkDownloadingLyrics?: boolean;
+    isMetadataLoading?: boolean;
     onSearchChange: (value: string) => void;
     onSortChange: (value: string) => void;
     onToggleTrack: (id: string) => void;
@@ -75,8 +77,52 @@ interface AlbumInfoProps {
     onTrackClick?: (track: TrackMetadata) => void;
     onBack?: () => void;
 }
-export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onArtistClick, onTrackClick, onBack, }: AlbumInfoProps) {
+export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedTracks, downloadedTracks, failedTracks, skippedTracks, downloadingTrack, isDownloading, bulkDownloadType, downloadProgress, currentDownloadInfo, currentPage, itemsPerPage, downloadedLyrics, failedLyrics, skippedLyrics, downloadingLyricsTrack, checkingAvailabilityTrack, availabilityMap, downloadedCovers, failedCovers, skippedCovers, downloadingCoverTrack, isBulkDownloadingCovers, isBulkDownloadingLyrics, isMetadataLoading = false, onSearchChange, onSortChange, onToggleTrack, onToggleSelectAll, onDownloadTrack, onDownloadLyrics, onDownloadCover, onCheckAvailability, onDownloadAllLyrics, onDownloadAllCovers, onDownloadAll, onDownloadSelected, onStopDownload, onOpenFolder, onPageChange, onArtistClick, onTrackClick, onBack, }: AlbumInfoProps) {
     const settings = getSettings();
+    const albumArtistNames = splitArtistNames(albumInfo.artists);
+    const artistSeparator = albumInfo.artists.includes(";") ? "; " : ", ";
+    const fetchedTrackCount = trackList.length;
+    const totalTrackCount = albumInfo.total_tracks;
+    const showStreamingProgress = isMetadataLoading && totalTrackCount > 0 && fetchedTrackCount < totalTrackCount;
+    const clickableAlbumArtists = (() => {
+        const artistsByName = new Map<string, {
+            id: string;
+            name: string;
+            external_urls: string;
+        }>();
+        for (const track of trackList) {
+            const clickableTrackArtists = buildClickableArtists(track.artists, track.artists_data, track.artist_id, track.artist_url);
+            for (const artist of clickableTrackArtists) {
+                const normalizedName = artist.name.trim().toLowerCase();
+                if (!normalizedName || !artist.external_urls || artistsByName.has(normalizedName)) {
+                    continue;
+                }
+                artistsByName.set(normalizedName, artist);
+            }
+        }
+        return albumArtistNames.map((name) => {
+            const normalizedName = name.trim().toLowerCase();
+            const matchedArtist = artistsByName.get(normalizedName);
+            if (matchedArtist) {
+                return {
+                    ...matchedArtist,
+                    name,
+                };
+            }
+            if (albumArtistNames.length === 1 && albumInfo.artist_id && albumInfo.artist_url) {
+                return {
+                    id: albumInfo.artist_id,
+                    name,
+                    external_urls: albumInfo.artist_url,
+                };
+            }
+            return {
+                id: "",
+                name,
+                external_urls: "",
+            };
+        });
+    })();
     const [downloadingAlbumCover, setDownloadingAlbumCover] = useState(false);
     const handleDownloadAlbumCover = async () => {
         if (!albumInfo.images)
@@ -162,18 +208,25 @@ export function AlbumInfo({ albumInfo, trackList, searchQuery, sortBy, selectedT
                 <p className="text-sm font-medium">Album</p>
                 <h2 className="text-4xl font-bold">{albumInfo.name}</h2>
                 <div className="flex items-center gap-2 text-sm">
-                  {onArtistClick && albumInfo.artist_id && albumInfo.artist_url ? (<span className="font-medium cursor-pointer hover:underline" onClick={() => onArtistClick({
-                id: albumInfo.artist_id!,
-                name: albumInfo.artists,
-                external_urls: albumInfo.artist_url!,
-            })}>
-                      {albumInfo.artists}
-                    </span>) : (<span className="font-medium">{albumInfo.artists}</span>)}
+                  <span className="font-medium">
+                    {clickableAlbumArtists.length > 0 ? clickableAlbumArtists.map((artist, index) => (<span key={`${artist.id || artist.name}-${index}`}>
+                          {onArtistClick && artist.external_urls ? (<span className="cursor-pointer hover:underline" onClick={() => onArtistClick({
+                    id: artist.id,
+                    name: artist.name,
+                    external_urls: artist.external_urls,
+                })}>
+                              {artist.name}
+                            </span>) : (artist.name)}
+                          {index < clickableAlbumArtists.length - 1 && artistSeparator}
+                        </span>)) : albumInfo.artists}
+                  </span>
                   <span>•</span>
                   <span>{albumInfo.release_date}</span>
                   <span>•</span>
                   <span>
-                    {albumInfo.total_tracks.toLocaleString()} {albumInfo.total_tracks === 1 ? "track" : "tracks"}
+                    {showStreamingProgress
+            ? `${fetchedTrackCount.toLocaleString()} / ${totalTrackCount.toLocaleString()} tracks`
+            : `${Math.max(totalTrackCount, fetchedTrackCount).toLocaleString()} ${Math.max(totalTrackCount, fetchedTrackCount) === 1 ? "track" : "tracks"}`}
                   </span>
                 </div>
               </div>

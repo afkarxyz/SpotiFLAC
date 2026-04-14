@@ -12,6 +12,7 @@ interface CheckFileExistenceRequest {
     album_name?: string;
     album_artist?: string;
     release_date?: string;
+    isrc?: string;
     track_number?: number;
     disc_number?: number;
     position?: number;
@@ -31,6 +32,26 @@ interface FileExistenceResult {
 const CheckFilesExistence = (outputDir: string, rootDir: string, tracks: CheckFileExistenceRequest[]): Promise<FileExistenceResult[]> => (window as any)["go"]["main"]["App"]["CheckFilesExistence"](outputDir, rootDir, tracks);
 const SkipDownloadItem = (itemID: string, filePath: string): Promise<void> => (window as any)["go"]["main"]["App"]["SkipDownloadItem"](itemID, filePath);
 const CreateM3U8File = (playlistName: string, outputDir: string, filePaths: string[]): Promise<void> => (window as any)["go"]["main"]["App"]["CreateM3U8File"](playlistName, outputDir, filePaths);
+const GetTrackISRC = (spotifyId: string): Promise<string> => (window as any)["go"]["main"]["App"]["GetTrackISRC"](spotifyId);
+async function resolveTemplateISRC(settings: {
+    folderTemplate?: string;
+    filenameTemplate?: string;
+}, spotifyId?: string): Promise<string> {
+    if (!spotifyId) {
+        return "";
+    }
+    const folderTemplate = settings.folderTemplate || "";
+    const filenameTemplate = settings.filenameTemplate || "";
+    if (!folderTemplate.includes("{isrc}") && !filenameTemplate.includes("{isrc}")) {
+        return "";
+    }
+    try {
+        return await GetTrackISRC(spotifyId);
+    }
+    catch {
+        return "";
+    }
+}
 export function useDownload(region: string) {
     const [downloadProgress, setDownloadProgress] = useState<number>(0);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -81,11 +102,13 @@ export function useDownload(region: string) {
         const displayAlbumArtist = settings.useFirstArtistOnly && albumArtist
             ? getFirstArtist(albumArtist)
             : albumArtist;
+        const resolvedTemplateISRC = await resolveTemplateISRC(settings, spotifyId || id);
         const templateData: TemplateData = {
             artist: displayArtist?.replace(/\//g, placeholder),
             album: albumName?.replace(/\//g, placeholder),
             album_artist: displayAlbumArtist?.replace(/\//g, placeholder) || displayArtist?.replace(/\//g, placeholder),
             title: trackName?.replace(/\//g, placeholder),
+            isrc: resolvedTemplateISRC?.replace(/\//g, placeholder),
             track: trackNumberForTemplate,
             year: yearValue,
             date: releaseDate,
@@ -117,6 +140,7 @@ export function useDownload(region: string) {
                     album_name: albumName,
                     album_artist: displayAlbumArtist,
                     release_date: finalReleaseDate || releaseDate,
+                    isrc: resolvedTemplateISRC || undefined,
                     track_number: finalTrackNumber || spotifyTrackNumber || 0,
                     disc_number: spotifyDiscNumber || 0,
                     position: trackNumberForTemplate,
@@ -193,6 +217,7 @@ export function useDownload(region: string) {
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
                             spotify_total_discs: spotifyTotalDiscs,
+                            isrc: resolvedTemplateISRC || undefined,
                             copyright: copyright,
                             publisher: publisher,
                             use_first_artist_only: settings.useFirstArtistOnly,
@@ -240,6 +265,7 @@ export function useDownload(region: string) {
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
                             spotify_total_discs: spotifyTotalDiscs,
+                            isrc: resolvedTemplateISRC || undefined,
                             copyright: copyright,
                             publisher: publisher,
                             use_single_genre: settings.useSingleGenre,
@@ -286,6 +312,7 @@ export function useDownload(region: string) {
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
                             spotify_total_discs: spotifyTotalDiscs,
+                            isrc: resolvedTemplateISRC || undefined,
                             copyright: copyright,
                             publisher: publisher,
                             use_single_genre: settings.useSingleGenre,
@@ -350,6 +377,7 @@ export function useDownload(region: string) {
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
             spotify_total_discs: spotifyTotalDiscs,
+            isrc: resolvedTemplateISRC || undefined,
             copyright: copyright,
             publisher: publisher,
             use_single_genre: settings.useSingleGenre,
@@ -395,11 +423,13 @@ export function useDownload(region: string) {
         const displayAlbumArtist = settings.useFirstArtistOnly && albumArtist
             ? getFirstArtist(albumArtist)
             : albumArtist;
+        const resolvedTemplateISRC = await resolveTemplateISRC(settings, spotifyId);
         const templateData: TemplateData = {
             artist: displayArtist?.replace(/\//g, placeholder),
             album: albumName?.replace(/\//g, placeholder),
             album_artist: displayAlbumArtist?.replace(/\//g, placeholder) || displayArtist?.replace(/\//g, placeholder),
             title: trackName?.replace(/\//g, placeholder),
+            isrc: resolvedTemplateISRC?.replace(/\//g, placeholder),
             track: trackNumberForTemplate,
             year: yearValue,
             date: releaseDate,
@@ -468,6 +498,7 @@ export function useDownload(region: string) {
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
                             spotify_total_discs: spotifyTotalDiscs,
+                            isrc: resolvedTemplateISRC || undefined,
                             copyright: copyright,
                             publisher: publisher,
                             use_first_artist_only: settings.useFirstArtistOnly,
@@ -515,6 +546,7 @@ export function useDownload(region: string) {
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
                             spotify_total_discs: spotifyTotalDiscs,
+                            isrc: resolvedTemplateISRC || undefined,
                             copyright: copyright,
                             publisher: publisher,
                             use_first_artist_only: settings.useFirstArtistOnly,
@@ -563,6 +595,7 @@ export function useDownload(region: string) {
                             spotify_disc_number: spotifyDiscNumber,
                             spotify_total_tracks: spotifyTotalTracks,
                             spotify_total_discs: spotifyTotalDiscs,
+                            isrc: resolvedTemplateISRC || undefined,
                             copyright: copyright,
                             publisher: publisher,
                             use_first_artist_only: settings.useFirstArtistOnly,
@@ -624,6 +657,7 @@ export function useDownload(region: string) {
             spotify_disc_number: spotifyDiscNumber,
             spotify_total_tracks: spotifyTotalTracks,
             spotify_total_discs: spotifyTotalDiscs,
+            isrc: resolvedTemplateISRC || undefined,
             copyright: copyright,
             publisher: publisher,
             use_first_artist_only: settings.useFirstArtistOnly,
