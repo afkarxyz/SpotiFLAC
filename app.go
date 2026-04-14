@@ -14,6 +14,7 @@ import (
 
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/afkarxyz/SpotiFLAC/backend"
@@ -33,6 +34,14 @@ type CurrentIPInfo struct {
 }
 
 const checkOperationTimeout = 10 * time.Second
+const unifiedStatusAPIURL = "https://api-status.afkarxyz.qzz.io/api/status/spotiflac/"
+const unifiedStatusCacheTTL = 5 * time.Second
+
+var (
+	unifiedStatusCacheMu     sync.Mutex
+	unifiedStatusCacheBody   string
+	unifiedStatusCacheExpiry time.Time
+)
 
 func NewApp() *App {
 	return &App{}
@@ -143,6 +152,60 @@ func previewResponseBody(body []byte, maxLen int) string {
 	return preview
 }
 
+func fetchUnifiedStatusPayload(forceRefresh bool, endpoint string) (string, error) {
+	unifiedStatusCacheMu.Lock()
+	defer unifiedStatusCacheMu.Unlock()
+
+	if !forceRefresh && unifiedStatusCacheBody != "" && time.Now().Before(unifiedStatusCacheExpiry) {
+		return unifiedStatusCacheBody, nil
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	maxRetries := 3
+	var lastErr error
+
+	for i := 0; i < maxRetries; i++ {
+		req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create unified status request: %w", err)
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := client.Do(req)
+		if err == nil {
+			body, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if readErr != nil {
+				lastErr = fmt.Errorf("attempt %d: failed reading response: %w", i+1, readErr)
+			} else if resp.StatusCode != http.StatusOK {
+				lastErr = fmt.Errorf("attempt %d: returned status %d (%s)", i+1, resp.StatusCode, previewResponseBody(body, 200))
+			} else {
+				payload := strings.TrimSpace(string(body))
+				if payload == "" {
+					lastErr = fmt.Errorf("attempt %d: empty response body", i+1)
+				} else {
+					unifiedStatusCacheBody = payload
+					unifiedStatusCacheExpiry = time.Now().Add(unifiedStatusCacheTTL)
+					return payload, nil
+				}
+			}
+		} else {
+			lastErr = fmt.Errorf("attempt %d: connection failed: %w", i+1, err)
+		}
+
+		if i < maxRetries-1 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("unknown error")
+	}
+
+	return "", fmt.Errorf("unified status API failed after %d retries: %w", maxRetries, lastErr)
+}
+
 func fetchCurrentIPInfo() (CurrentIPInfo, error) {
 	type ipwhoisResponse struct {
 		Success     bool   `json:"success"`
@@ -248,6 +311,10 @@ func (a *App) GetCurrentIPInfo() (string, error) {
 	}
 
 	return string(payload), nil
+}
+
+func (a *App) FetchUnifiedAPIStatus(forceRefresh bool) (string, error) {
+	return fetchUnifiedStatusPayload(forceRefresh, unifiedStatusAPIURL)
 }
 
 func (a *App) getFirstArtist(artistString string) string {

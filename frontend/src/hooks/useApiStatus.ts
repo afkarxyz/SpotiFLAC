@@ -11,6 +11,6 @@ export function useApiStatus() {
     return {
         ...state,
         sources: API_SOURCES,
-        refreshAll: checkAllApiStatuses,
+        refreshAll: () => checkAllApiStatuses(true),
     };
 }
