@@ -77,6 +77,9 @@ func NewTidalDownloader(apiURL string) *TidalDownloader {
 
 func (t *TidalDownloader) GetAvailableAPIs() ([]string, error) {
 	apis := []string{
+		"https://wolf.qqdl.site",
+	
+		"https://triton.squid.wtf",
 		"https://hifi-one.spotisaver.net",
 		"https://hifi-two.spotisaver.net",
 		"https://eu-central.monochrome.tf",
@@ -939,7 +942,11 @@ func getDownloadURLRotated(apis []string, trackID int64, quality string) (string
 		}
 
 		url := fmt.Sprintf("%s/track/?id=%d&quality=%s", apiURL, trackID, quality)
-		resp, err := client.Get(url)
+		req, err := http.NewRequest("GET", url, nil)
+	 
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36")
+		 
+		resp, err := client.Do(req)
 		if err != nil {
 			lastError = err
 			recordProviderFailure("tidal", apiURL)
