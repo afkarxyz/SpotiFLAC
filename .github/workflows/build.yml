@@ -175,8 +175,28 @@ jobs:
           retention-days: 7
 
   build-linux:
-    name: Build Linux
-    runs-on: ubuntu-24.04
+    name: Build Linux (${{ matrix.display_name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - display_name: amd64
+            runner: ubuntu-24.04
+            wails_platform: linux/amd64
+            artifact_name: linux-portable
+            output_name: SpotiFLAC.AppImage
+            appimage_arch: x86_64
+            appimagetool_arch: x86_64
+            pkgconfig_dir: /usr/lib/x86_64-linux-gnu/pkgconfig
+          - display_name: arm64
+            runner: ubuntu-24.04-arm
+            wails_platform: linux/arm64
+            artifact_name: linux-portable-arm
+            output_name: SpotiFLAC-ARM.AppImage
+            appimage_arch: aarch64
+            appimagetool_arch: aarch64
+            pkgconfig_dir: /usr/lib/aarch64-linux-gnu/pkgconfig
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -225,7 +245,7 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick upx-ucl
 
           # Create symlink for webkit2gtk-4.0 -> webkit2gtk-4.1 (Ubuntu 24.04 compatibility)
-          sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
+          sudo ln -sf "${{ matrix.pkgconfig_dir }}/webkit2gtk-4.1.pc" "${{ matrix.pkgconfig_dir }}/webkit2gtk-4.0.pc"
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -237,7 +257,7 @@ jobs:
           pnpm run generate-icon
 
       - name: Build application
-        run: wails build -platform linux/amd64
+        run: wails build -platform ${{ matrix.wails_platform }}
 
       - name: Compress with UPX
         run: |
@@ -248,13 +268,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: appimagetool
-          key: appimagetool-x86_64-v1
+          key: appimagetool-${{ matrix.appimagetool_arch }}-v2
 
       - name: Download appimagetool
         if: steps.cache-appimagetool.outputs.cache-hit != 'true'
         run: |
-          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage || \
-          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.appimagetool_arch }}.AppImage" || \
+          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${{ matrix.appimagetool_arch }}.AppImage"
 
       - name: Make appimagetool executable
         run: chmod +x appimagetool
@@ -309,13 +329,13 @@ jobs:
 
           # Create AppImage
           mkdir -p dist
-          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiFLAC.AppImage
+          ARCH=${{ matrix.appimage_arch }} ./appimagetool --no-appstream AppDir "dist/${{ matrix.output_name }}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-portable
-          path: dist/SpotiFLAC.AppImage
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.output_name }}
           retention-days: 7
 
   create-release:
@@ -356,7 +376,8 @@ jobs:
 
             - `SpotiFLAC.exe` - Windows
             - `SpotiFLAC.dmg` - macOS
-            - `SpotiFLAC.AppImage` - Linux
+            - `SpotiFLAC.AppImage` - Linux AMD64
+            - `SpotiFLAC-ARM.AppImage` - Linux ARM64
 
             <details>
             <summary><b>Linux Requirements</b></summary>
@@ -384,10 +405,17 @@ jobs:
             ./SpotiFLAC.AppImage
             ```
 
+            For ARM64:
+            ```bash
+            chmod +x SpotiFLAC-ARM.AppImage
+            ./SpotiFLAC-ARM.AppImage
+            ```
+
             </details>
           files: |
-            artifacts/windows-portable/*.exe
-            artifacts/macos-portable/*.dmg
-            artifacts/linux-portable/*.AppImage
+            artifacts/windows-portable/SpotiFLAC.exe
+            artifacts/macos-portable/SpotiFLAC.dmg
+            artifacts/linux-portable/SpotiFLAC.AppImage
+            artifacts/linux-portable-arm/SpotiFLAC-ARM.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
