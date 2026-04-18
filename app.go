@@ -34,7 +34,7 @@ type CurrentIPInfo struct {
 }
 
 const checkOperationTimeout = 10 * time.Second
-const unifiedStatusAPIURL = "https://api-status.afkarxyz.qzz.io/api/status/spotiflac/"
+const unifiedStatusAPIURL = "https://status.spotbye.qzz.io/api/status/spotiflac/"
 const unifiedStatusCacheTTL = 5 * time.Second
 
 var (

@@ -56,7 +56,7 @@ func (a *AmazonDownloader) DownloadFromAfkarXYZ(amazonURL, outputDir, quality st
 		return "", fmt.Errorf("failed to extract ASIN from URL: %s", amazonURL)
 	}
 
-	apiURL := fmt.Sprintf("https://amzn.afkarxyz.qzz.io/api/track/%s", asin)
+	apiURL := fmt.Sprintf("https://amazon.spotbye.qzz.io/api/track/%s", asin)
 	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return "", err

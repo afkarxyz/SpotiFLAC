@@ -17,8 +17,8 @@ export const API_SOURCES: ApiSource[] = [
     { id: "tidal7", type: "tidal", name: "Tidal G", url: "https://tidal.kinoplus.online" },
     { id: "qobuz1", type: "qobuz", name: "Qobuz A", url: "https://dab.yeet.su" },
     { id: "qobuz2", type: "qobuz", name: "Qobuz B", url: "https://dabmusic.xyz" },
-    { id: "qobuz3", type: "qbz", name: "Qobuz C", url: "https://qbz.afkarxyz.qzz.io" },
-    { id: "amazon1", type: "amazon", name: "Amazon Music", url: "https://amzn.afkarxyz.qzz.io" },
+    { id: "qobuz3", type: "qbz", name: "Qobuz C", url: "https://qobuz.spotbye.qzz.io" },
+    { id: "amazon1", type: "amazon", name: "Amazon Music", url: "https://amazon.spotbye.qzz.io" },
     { id: "lrclib", type: "lrclib", name: "LRCLIB", url: "https://lrclib.net" },
     { id: "musicbrainz", type: "musicbrainz", name: "MusicBrainz", url: "https://musicbrainz.org" },
 ];

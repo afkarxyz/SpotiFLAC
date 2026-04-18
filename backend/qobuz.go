@@ -139,7 +139,7 @@ func (q *QobuzDownloader) searchByISRC(isrc string) (*QobuzTrack, error) {
 }
 
 func buildQobuzAPIURL(apiBase string, trackID int64, quality string) string {
-	if strings.Contains(apiBase, "qbz.afkarxyz.qzz.io") {
+	if strings.Contains(apiBase, "qobuz.spotbye.qzz.io") {
 		return fmt.Sprintf("%s%d?quality=%s", apiBase, trackID, quality)
 	}
 	return fmt.Sprintf("%s%d&quality=%s", apiBase, trackID, quality)
@@ -194,7 +194,7 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 	standardAPIs := prioritizeProviders("qobuz", []string{
 		"https://dab.yeet.su/api/stream?trackId=",
 		"https://dabmusic.xyz/api/stream?trackId=",
-		"https://qbz.afkarxyz.qzz.io/api/track/",
+		"https://qobuz.spotbye.qzz.io/api/track/",
 	})
 
 	downloadFunc := func(qual string) (string, error) {
