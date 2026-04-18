@@ -81,13 +81,13 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p dist
-          Compress-Archive -Path "build\bin\SpotiFLAC.exe" -DestinationPath "dist\spotiflac-windows.zip" -Force
+          Copy-Item -Path "build\bin\SpotiFLAC.exe" -Destination "dist\SpotiFLAC.exe"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-bundle
-          path: dist/spotiflac-windows.zip
+          name: windows-portable
+          path: dist/SpotiFLAC.exe
           retention-days: 7
 
   build-macos:
@@ -147,33 +147,36 @@ jobs:
       - name: Build application
         run: wails build -platform darwin/universal
 
-      - name: Create macOS bundle
+      - name: Create DMG
         run: |
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "build/bin/SpotiFLAC.app" "dist/spotiflac-macos-bundle.zip"
+          # Install create-dmg if not available
+          brew install create-dmg || true
+
+          # Create DMG
+          create-dmg \
+            --volname "SpotiFLAC" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "SpotiFLAC.app" 175 120 \
+            --hide-extension "SpotiFLAC.app" \
+            --app-drop-link 425 120 \
+            "dist/SpotiFLAC.dmg" \
+            "build/bin/SpotiFLAC.app" || \
+          # Fallback to hdiutil if create-dmg fails
+          hdiutil create -volname SpotiFLAC -srcfolder build/bin/SpotiFLAC.app -ov -format UDZO dist/SpotiFLAC.dmg
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-bundle
-          path: dist/spotiflac-macos-bundle.zip
+          name: macos-portable
+          path: dist/SpotiFLAC.dmg
           retention-days: 7
 
   build-linux:
-    name: Build Linux (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            goarch: amd64
-            runner: ubuntu-24.04
-            appimage_arch: x86_64
-          - arch: arm64
-            goarch: arm64
-            runner: ubuntu-24.04-arm
-            appimage_arch: aarch64
+    name: Build Linux
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -219,15 +222,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          PACKAGES="libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick"
-          if [ "${{ matrix.goarch }}" = "amd64" ]; then
-            PACKAGES="$PACKAGES upx-ucl"
-          fi
-          sudo apt-get install -y $PACKAGES
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libfuse2 imagemagick upx-ucl
 
           # Create symlink for webkit2gtk-4.0 -> webkit2gtk-4.1 (Ubuntu 24.04 compatibility)
-          MULTIARCH="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
-          sudo ln -sf "/usr/lib/${MULTIARCH}/pkgconfig/webkit2gtk-4.1.pc" "/usr/lib/${MULTIARCH}/pkgconfig/webkit2gtk-4.0.pc"
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
 
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -239,10 +237,9 @@ jobs:
           pnpm run generate-icon
 
       - name: Build application
-        run: wails build -platform linux/${{ matrix.goarch }}
+        run: wails build -platform linux/amd64
 
       - name: Compress with UPX
-        if: matrix.goarch == 'amd64'
         run: |
           upx --best --lzma build/bin/SpotiFLAC
 
@@ -251,13 +248,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: appimagetool
-          key: appimagetool-${{ matrix.appimage_arch }}-v1
+          key: appimagetool-x86_64-v1
 
       - name: Download appimagetool
         if: steps.cache-appimagetool.outputs.cache-hit != 'true'
         run: |
-          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.appimage_arch }}.AppImage || \
-          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-${{ matrix.appimage_arch }}.AppImage
+          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage || \
+          wget --timeout=30 --tries=5 --retry-connrefused --waitretry=5 -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
 
       - name: Make appimagetool executable
         run: chmod +x appimagetool
@@ -312,18 +309,13 @@ jobs:
 
           # Create AppImage
           mkdir -p dist
-          if [ "${{ matrix.goarch }}" = "arm64" ]; then
-            RELEASE_ARCH="arm64v8"
-          else
-            RELEASE_ARCH="amd64"
-          fi
-          ARCH=${{ matrix.appimage_arch }} ./appimagetool --no-appstream AppDir "dist/SpotiFLAC-${RELEASE_ARCH}.AppImage"
+          ARCH=x86_64 ./appimagetool --no-appstream AppDir dist/SpotiFLAC.AppImage
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linux-appimage-${{ matrix.arch }}
-          path: dist/*.AppImage
+          name: linux-portable
+          path: dist/SpotiFLAC.AppImage
           retention-days: 7
 
   create-release:
@@ -351,13 +343,6 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
-      - name: Create Linux bundle
-        run: |
-          mkdir -p release/SpotiFLAC-linux-bundle
-          cp artifacts/linux-appimage-amd64/*.AppImage release/SpotiFLAC-linux-bundle/
-          cp artifacts/linux-appimage-arm64/*.AppImage release/SpotiFLAC-linux-bundle/
-          tar -czf release/spotiflac-linux-bundle.tar.gz -C release SpotiFLAC-linux-bundle
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -369,19 +354,14 @@ jobs:
 
             ## Downloads
 
-            - `spotiflac-windows.zip` - amd64
-            - `spotiflac-macos-bundle.zip` - amd64 + arm64
-            - `spotiflac-linux-bundle.tar.gz` - amd64 + arm64v8
+            - `SpotiFLAC.exe` - Windows
+            - `SpotiFLAC.dmg` - macOS
+            - `SpotiFLAC.AppImage` - Linux
 
             <details>
             <summary><b>Linux Requirements</b></summary>
 
             The AppImage requires `webkit2gtk-4.1` to be installed on your system:
-
-            Choose the correct AppImage after extracting the bundle:
-
-            - `SpotiFLAC-amd64.AppImage` - amd64
-            - `SpotiFLAC-arm64v8.AppImage` - arm64v8
 
             **Ubuntu/Debian:**
             ```bash
@@ -400,14 +380,14 @@ jobs:
 
             After installing the dependency, make the AppImage executable:
             ```bash
-            tar -xzf spotiflac-linux-bundle.tar.gz
-            chmod +x SpotiFLAC-*.AppImage
+            chmod +x SpotiFLAC.AppImage
+            ./SpotiFLAC.AppImage
             ```
 
             </details>
           files: |
-            artifacts/windows-bundle/*.zip
-            artifacts/macos-bundle/*.zip
-            release/spotiflac-linux-bundle.tar.gz
+            artifacts/windows-portable/*.exe
+            artifacts/macos-portable/*.dmg
+            artifacts/linux-portable/*.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
