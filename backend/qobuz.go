@@ -147,7 +147,12 @@ func buildQobuzAPIURL(apiBase string, trackID int64, quality string) string {
 
 func (q *QobuzDownloader) DownloadFromStandard(apiBase string, trackID int64, quality string) (string, error) {
 	apiURL := buildQobuzAPIURL(apiBase, trackID, quality)
-	resp, err := q.client.Get(apiURL)
+	req, err := NewRequestWithDefaultHeaders(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := q.client.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -191,11 +196,7 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 
 	fmt.Printf("Getting download URL for track ID: %d with requested quality: %s\n", trackID, qualityCode)
 
-	standardAPIs := prioritizeProviders("qobuz", []string{
-		"https://dab.yeet.su/api/stream?trackId=",
-		"https://dabmusic.xyz/api/stream?trackId=",
-		"https://qobuz.spotbye.qzz.io/api/track/",
-	})
+	standardAPIs := prioritizeProviders("qobuz", GetQobuzStreamAPIBaseURLs())
 
 	downloadFunc := func(qual string) (string, error) {
 		type Provider struct {
@@ -272,7 +273,12 @@ func (q *QobuzDownloader) DownloadFile(url, filepath string) error {
 		Timeout: 5 * time.Minute,
 	}
 
-	resp, err := downloadClient.Get(url)
+	req, err := NewRequestWithDefaultHeaders(http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create download request: %w", err)
+	}
+
+	resp, err := downloadClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download file: %w", err)
 	}
@@ -306,7 +312,12 @@ func (q *QobuzDownloader) DownloadCoverArt(coverURL, filepath string) error {
 		return fmt.Errorf("no cover URL provided")
 	}
 
-	resp, err := q.client.Get(coverURL)
+	req, err := NewRequestWithDefaultHeaders(http.MethodGet, coverURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create cover request: %w", err)
+	}
+
+	resp, err := q.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to download cover: %w", err)
 	}

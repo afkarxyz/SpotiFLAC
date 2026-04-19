@@ -53,8 +53,6 @@ export function DownloadTrack(arg1:main.DownloadRequest):Promise<main.DownloadRe
 
 export function ExportFailedDownloads():Promise<string>;
 
-export function FetchUnifiedAPIStatus(arg1:boolean):Promise<string>;
-
 export function GetBrewPath():Promise<string>;
 
 export function GetConfigPath():Promise<string>;

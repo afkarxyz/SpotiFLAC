@@ -102,10 +102,6 @@ export function ExportFailedDownloads() {
   return window['go']['main']['App']['ExportFailedDownloads']();
 }
 
-export function FetchUnifiedAPIStatus(arg1) {
-  return window['go']['main']['App']['FetchUnifiedAPIStatus'](arg1);
-}
-
 export function GetBrewPath() {
   return window['go']['main']['App']['GetBrewPath']();
 }

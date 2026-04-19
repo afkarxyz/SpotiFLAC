@@ -21,7 +21,7 @@ const (
 	qobuzAPIBaseURL                = "https://www.qobuz.com/api.json/0.2"
 	qobuzDefaultAPIAppID           = "712109809"
 	qobuzDefaultAPIAppSecret       = "589be88e4538daea11f509d29e4a23b1"
-	qobuzDefaultUA                 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
+	qobuzDefaultUA                 = DefaultDownloaderUserAgent
 	qobuzCredentialsCacheFile      = "qobuz-api-credentials.json"
 	qobuzCredentialsCacheTTL       = 24 * time.Hour
 	qobuzCredentialsProbeTrackISRC = "USUM71703861"
