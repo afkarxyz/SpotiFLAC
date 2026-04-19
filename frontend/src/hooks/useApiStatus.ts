@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { API_SOURCES, checkAllApiStatuses, ensureApiStatusCheckStarted, getApiStatusState, subscribeApiStatus, } from "@/lib/api-status";
+import { API_SOURCES, checkAllApiStatuses, getApiStatusState, subscribeApiStatus, } from "@/lib/api-status";
 export function useApiStatus() {
     const [state, setState] = useState(getApiStatusState);
     useEffect(() => {
-        ensureApiStatusCheckStarted();
         return subscribeApiStatus(() => {
             setState(getApiStatusState());
         });
@@ -11,6 +10,6 @@ export function useApiStatus() {
     return {
         ...state,
         sources: API_SOURCES,
-        refreshAll: () => checkAllApiStatuses(true),
+        checkAll: () => checkAllApiStatuses(false),
     };
 }

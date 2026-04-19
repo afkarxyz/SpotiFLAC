@@ -91,17 +91,6 @@ export function subscribeApiStatus(listener: () => void): () => void {
         listeners.delete(listener);
     };
 }
-export function hasApiStatusResults(): boolean {
-    return API_SOURCES.some((source) => {
-        const status = apiStatusState.statuses[source.id];
-        return status === "online" || status === "offline";
-    });
-}
-export function ensureApiStatusCheckStarted(): void {
-    if (!activeCheckAll && !hasApiStatusResults()) {
-        void checkAllApiStatuses(false);
-    }
-}
 export async function checkAllApiStatuses(forceRefresh: boolean = false): Promise<void> {
     if (activeCheckAll) {
         return activeCheckAll;

@@ -1,14 +1,14 @@
 import { Button } from "@/components/ui/button";
-import { RefreshCw, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { SearchCheck, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { TidalIcon, QobuzIcon, AmazonIcon, LrclibIcon, MusicBrainzIcon } from "./PlatformIcons";
 import { useApiStatus } from "@/hooks/useApiStatus";
 export function ApiStatusTab() {
-    const { sources, statuses, isCheckingAll, refreshAll } = useApiStatus();
+    const { sources, statuses, isCheckingAll, checkAll } = useApiStatus();
     return (<div className="space-y-6">
       <div className="flex items-center justify-end">
-        <Button variant="outline" onClick={() => void refreshAll()} disabled={isCheckingAll} className="gap-2">
-          <RefreshCw className={`h-4 w-4 ${isCheckingAll ? "animate-spin" : ""}`}/>
-          Refresh All
+        <Button variant="outline" onClick={() => void checkAll()} disabled={isCheckingAll} className="gap-2">
+          {isCheckingAll ? <Loader2 className="h-4 w-4 animate-spin"/> : <SearchCheck className="h-4 w-4"/>}
+          Check
         </Button>
       </div>
 
