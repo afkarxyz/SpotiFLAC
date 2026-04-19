@@ -307,6 +307,7 @@ type DownloadRequest struct {
 	ReleaseDate          string `json:"release_date,omitempty"`
 	CoverURL             string `json:"cover_url,omitempty"`
 	TidalAPIURL          string `json:"tidal_api_url,omitempty"`
+	TidalVariant         string `json:"tidal_variant,omitempty"`
 	OutputDir            string `json:"output_dir,omitempty"`
 	AudioFormat          string `json:"audio_format,omitempty"`
 	FilenameFormat       string `json:"filename_format,omitempty"`
@@ -661,7 +662,11 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 	case "tidal":
-		if req.TidalAPIURL == "" || req.TidalAPIURL == "auto" {
+		tidalVariant := strings.ToLower(strings.TrimSpace(req.TidalVariant))
+		if tidalVariant == "alt" {
+			downloader := backend.NewTidalDownloader("")
+			filename, err = downloader.DownloadAlt(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, req.Composer, metadataSeparator, req.ISRC, spotifyURL, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
+		} else if req.TidalAPIURL == "" || req.TidalAPIURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
 			if req.ServiceURL != "" {
 				filename, err = downloader.DownloadByURLWithFallback(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, req.Composer, metadataSeparator, req.ISRC, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
@@ -789,6 +794,11 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			backend.CompleteDownloadItem(itemID, filename, 0)
 		}
 
+		historySource := req.Service
+		if req.Service == "tidal" && strings.EqualFold(strings.TrimSpace(req.TidalVariant), "alt") {
+			historySource = "tidal alt"
+		}
+
 		go func(fPath, track, artist, album, sID, cover, format, source string) {
 			time.Sleep(2 * time.Second)
 
@@ -834,7 +844,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 			}
 
 			backend.AddHistoryItem(item, "SpotiFLAC")
-		}(filename, req.TrackName, req.ArtistName, req.AlbumName, req.SpotifyID, req.CoverURL, req.AudioFormat, req.Service)
+		}(filename, req.TrackName, req.ArtistName, req.AlbumName, req.SpotifyID, req.CoverURL, req.AudioFormat, historySource)
 	}
 
 	return DownloadResponse{

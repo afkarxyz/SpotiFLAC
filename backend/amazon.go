@@ -288,6 +288,16 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, quality, filename
 		mbMeta = result.Metadata
 	}
 
+	upc := ""
+	if spotifyURL != "" {
+		if identifiers, err := GetSpotifyTrackIdentifiersDirect(spotifyURL); err == nil || identifiers.ISRC != "" || identifiers.UPC != "" {
+			if strings.TrimSpace(isrc) == "" && strings.TrimSpace(identifiers.ISRC) != "" {
+				isrc = strings.TrimSpace(identifiers.ISRC)
+			}
+			upc = strings.TrimSpace(identifiers.UPC)
+		}
+	}
+
 	originalFileDir := filepath.Dir(filePath)
 	originalFileBase := strings.TrimSuffix(filepath.Base(filePath), filepath.Ext(filePath))
 
@@ -407,6 +417,7 @@ func (a *AmazonDownloader) DownloadByURL(amazonURL, outputDir, quality, filename
 		Separator:   metadataSeparator,
 		Description: "https://github.com/spotbye/SpotiFLAC",
 		ISRC:        isrc,
+		UPC:         upc,
 		Genre:       mbMeta.Genre,
 	}
 
