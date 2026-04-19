@@ -3,7 +3,6 @@ import { SearchCheck, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { TidalIcon, QobuzIcon, AmazonIcon, MusicBrainzIcon, AppleMusicIcon, DeezerIcon } from "./PlatformIcons";
 import { useApiStatus } from "@/hooks/useApiStatus";
 import { SPOTIFLAC_NEXT_SOURCES } from "@/lib/api-status";
-
 function renderStatusIcon(status: "checking" | "online" | "offline" | "idle") {
     if (status === "online") {
         return <CheckCircle2 className="h-5 w-5 text-emerald-500"/>;
@@ -13,7 +12,6 @@ function renderStatusIcon(status: "checking" | "online" | "offline" | "idle") {
     }
     return null;
 }
-
 function renderPlatformIcon(type: string) {
     if (type === "tidal") {
         return <TidalIcon className="w-5 h-5 shrink-0 text-muted-foreground"/>;
@@ -32,7 +30,6 @@ function renderPlatformIcon(type: string) {
     }
     return <QobuzIcon className="w-5 h-5 shrink-0 text-muted-foreground"/>;
 }
-
 export function ApiStatusTab() {
     const { sources, statuses, nextStatuses, checkingSources, checkOne } = useApiStatus();
     return (<div className="space-y-6">

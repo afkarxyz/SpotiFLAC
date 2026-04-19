@@ -18,4 +18,3 @@ func NewRequestWithDefaultHeaders(method string, rawURL string, body io.Reader) 
 
 	return req, nil
 }
-
