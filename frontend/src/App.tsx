@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useLayoutEffect } from "react";
+import { useState, useEffect, useCallback, useLayoutEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 import { Search, X, ArrowUp } from "lucide-react";
@@ -125,6 +125,7 @@ function parseStoredHistory(value: string | null): HistoryItem[] {
 }
 function App() {
     const [currentPage, setCurrentPage] = useState<PageType>("main");
+    const contentScrollRef = useRef<HTMLDivElement | null>(null);
     const [spotifyUrl, setSpotifyUrl] = useState("");
     const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -199,18 +200,31 @@ function App() {
         checkForUpdates();
         ensureApiStatusCheckStarted();
         void loadHistory();
-        const handleScroll = () => {
-            setShowScrollTop(window.scrollY > 300);
-        };
-        window.addEventListener("scroll", handleScroll);
         return () => {
             mediaQuery.removeEventListener("change", handleChange);
-            window.removeEventListener("scroll", handleScroll);
+        };
+    }, []);
+    useEffect(() => {
+        const contentElement = contentScrollRef.current;
+        if (!contentElement) {
+            return;
+        }
+        const handleScroll = () => {
+            setShowScrollTop(contentElement.scrollTop > 300);
+        };
+        handleScroll();
+        contentElement.addEventListener("scroll", handleScroll, { passive: true });
+        return () => {
+            contentElement.removeEventListener("scroll", handleScroll);
         };
     }, []);
     const scrollToTop = useCallback(() => {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        contentScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     }, []);
+    useEffect(() => {
+        contentScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+        setShowScrollTop(false);
+    }, [currentPage]);
     useEffect(() => {
         setSelectedTracks([]);
         setSearchQuery("");
@@ -584,14 +598,16 @@ function App() {
         }
     };
     return (<TooltipProvider>
-        <div className="min-h-screen bg-background flex flex-col">
+        <div className="h-screen overflow-hidden bg-background">
             <TitleBar />
             <Sidebar currentPage={currentPage} onPageChange={handlePageChange}/>
 
 
-            <div className="flex-1 ml-14 mt-10 p-4 md:p-8">
-                <div className="max-w-4xl mx-auto space-y-6">
-                    {renderPage()}
+            <div ref={contentScrollRef} className="fixed top-10 right-0 bottom-0 left-14 overflow-y-auto overflow-x-hidden">
+                <div className="p-4 md:p-8">
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        {renderPage()}
+                    </div>
                 </div>
             </div>
 
