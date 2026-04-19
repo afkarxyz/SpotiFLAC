@@ -32,6 +32,7 @@ import { useMetadata } from "@/hooks/useMetadata";
 import { useLyrics } from "@/hooks/useLyrics";
 import { useCover } from "@/hooks/useCover";
 import { useAvailability } from "@/hooks/useAvailability";
+import { ensureSpotiFLACNextStatusCheckStarted } from "@/lib/api-status";
 import { useDownloadQueueDialog } from "@/hooks/useDownloadQueueDialog";
 import { useDownloadProgress } from "@/hooks/useDownloadProgress";
 import { buildPlaylistFolderName } from "@/lib/playlist";
@@ -197,6 +198,7 @@ function App() {
         };
         mediaQuery.addEventListener("change", handleChange);
         checkForUpdates();
+        ensureSpotiFLACNextStatusCheckStarted();
         void loadHistory();
         return () => {
             mediaQuery.removeEventListener("change", handleChange);
