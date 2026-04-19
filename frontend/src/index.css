@@ -73,6 +73,13 @@
 }
 
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }

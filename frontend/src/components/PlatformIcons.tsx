@@ -1,4 +1,6 @@
 import amazonMusicIcon from "../assets/icons/amzn.png";
+import appleMusicIcon from "../assets/icons/am.png";
+import deezerIcon from "../assets/icons/dzr.png";
 import lrclibIcon from "../assets/icons/lrclib.png";
 import musicBrainzDarkIcon from "../assets/icons/musicbrainz_d.png";
 import musicBrainzLightIcon from "../assets/icons/musicbrainz_l.png";
@@ -80,6 +82,12 @@ export function QobuzIcon({ className = "w-4 h-4" }: PlatformIconProps) {
 }
 export function AmazonIcon({ className = "w-4 h-4" }: PlatformIconProps) {
     return <PlatformIcon src={amazonMusicIcon} alt="Amazon Music" className={className} defaultClassName="rounded-[4px]"/>;
+}
+export function AppleMusicIcon({ className = "w-4 h-4" }: PlatformIconProps) {
+    return <PlatformIcon src={appleMusicIcon} alt="Apple Music" className={className} defaultClassName="rounded-[4px]"/>;
+}
+export function DeezerIcon({ className = "w-4 h-4" }: PlatformIconProps) {
+    return <PlatformIcon src={deezerIcon} alt="Deezer" className={className} defaultClassName="rounded-[4px]"/>;
 }
 export function LrclibIcon({ className = "w-4 h-4" }: PlatformIconProps) {
     return <PlatformIcon src={lrclibIcon} alt="LRCLIB" className={className}/>;

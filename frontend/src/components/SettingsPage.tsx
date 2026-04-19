@@ -102,6 +102,9 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
     const handleTidalQualityChange = async (value: "LOSSLESS" | "HI_RES_LOSSLESS") => {
         setTempSettings((prev) => ({ ...prev, tidalQuality: value }));
     };
+    const handleTidalVariantChange = (value: "tidal" | "alt") => {
+        setTempSettings((prev) => ({ ...prev, tidalVariant: value }));
+    };
     const handleQobuzQualityChange = (value: "6" | "7" | "27") => {
         setTempSettings((prev) => ({ ...prev, qobuzQuality: value }));
     };
@@ -424,17 +427,19 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
                       </Select>
                     </>)}
 
-                  {tempSettings.downloader === "tidal" && (<Select value={tempSettings.tidalQuality} onValueChange={handleTidalQualityChange}>
-                      <SelectTrigger className="h-9 w-fit">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="LOSSLESS">16-bit/44.1kHz</SelectItem>
-                        <SelectItem value="HI_RES_LOSSLESS">
-                          24-bit/48kHz
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>)}
+                  {tempSettings.downloader === "tidal" && (tempSettings.tidalVariant === "alt" ? (<div className="h-9 px-3 flex items-center text-sm font-medium border border-input rounded-md bg-muted/30 text-muted-foreground whitespace-nowrap cursor-default">
+                        16-bit/44.1kHz
+                      </div>) : (<Select value={tempSettings.tidalQuality} onValueChange={handleTidalQualityChange}>
+                        <SelectTrigger className="h-9 w-fit">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="LOSSLESS">16-bit/44.1kHz</SelectItem>
+                          <SelectItem value="HI_RES_LOSSLESS">
+                            24-bit/48kHz
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>))}
 
                   {tempSettings.downloader === "qobuz" && (<Select value={tempSettings.qobuzQuality} onValueChange={handleQobuzQualityChange}>
                       <SelectTrigger className="h-9 w-fit">
@@ -452,7 +457,21 @@ export function SettingsPage({ onUnsavedChangesChange, onResetRequest, }: Settin
 
                 </div>
 
+                {(tempSettings.downloader === "tidal" || tempSettings.downloader === "auto") && (<div className="space-y-2 pt-2">
+                    <Label htmlFor="tidal-variant">Tidal Variant</Label>
+                    <Select value={tempSettings.tidalVariant || "tidal"} onValueChange={handleTidalVariantChange}>
+                      <SelectTrigger id="tidal-variant" className="h-9 w-fit min-w-[160px]">
+                        <SelectValue placeholder="Select Tidal variant"/>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="tidal">Tidal</SelectItem>
+                        <SelectItem value="alt">Tidal Alt.</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>)}
+
                 {((tempSettings.downloader === "tidal" &&
+                tempSettings.tidalVariant !== "alt" &&
                 tempSettings.tidalQuality === "HI_RES_LOSSLESS") ||
                 (tempSettings.downloader === "qobuz" &&
                     tempSettings.qobuzQuality === "27") ||

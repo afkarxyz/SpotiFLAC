@@ -20,10 +20,6 @@ Get Spotify tracks in true FLAC from Tidal, Qobuz & Amazon Music — no account 
 
 Get Spotify tracks in true Lossless from Tidal, Qobuz, Amazon Music, Deezer & Apple Music — no account required.
 
-### [SpotiDownloader](https://github.com/spotbye/SpotiDownloader)
-
-Get Spotify tracks, albums, playlists and discography in MP3 and FLAC.
-
 ### [SpotubeDL.com](https://spotubedl.com)
 
 Download Spotify Tracks, Albums, Playlists & Discography as MP3/OGG/Opus.

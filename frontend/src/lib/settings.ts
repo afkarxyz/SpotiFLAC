@@ -22,6 +22,7 @@ export interface Settings {
     embedLyrics: boolean;
     embedMaxQualityCover: boolean;
     operatingSystem: "Windows" | "linux/MacOS";
+    tidalVariant: "tidal" | "alt";
     tidalQuality: "LOSSLESS" | "HI_RES_LOSSLESS";
     qobuzQuality: "6" | "7" | "27";
     amazonQuality: "original";
@@ -110,6 +111,7 @@ export const DEFAULT_SETTINGS: Settings = {
     embedLyrics: false,
     embedMaxQualityCover: false,
     operatingSystem: detectOS(),
+    tidalVariant: "tidal",
     tidalQuality: "LOSSLESS",
     qobuzQuality: "6",
     amazonQuality: "original",
@@ -215,6 +217,9 @@ function getSettingsFromLocalStorage(): Settings {
             if (!('tidalQuality' in parsed)) {
                 parsed.tidalQuality = "LOSSLESS";
             }
+            if (!('tidalVariant' in parsed)) {
+                parsed.tidalVariant = "tidal";
+            }
             if (!('qobuzQuality' in parsed)) {
                 parsed.qobuzQuality = "6";
             }
@@ -305,6 +310,9 @@ export async function loadSettings(): Promise<Settings> {
             parsed.operatingSystem = detectOS();
             if (!('tidalQuality' in parsed)) {
                 parsed.tidalQuality = "LOSSLESS";
+            }
+            if (!('tidalVariant' in parsed)) {
+                parsed.tidalVariant = "tidal";
             }
             if (!('qobuzQuality' in parsed)) {
                 parsed.qobuzQuality = "6";
