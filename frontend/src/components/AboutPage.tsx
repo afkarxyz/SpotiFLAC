@@ -8,7 +8,6 @@ import ChatGPTTTSIcon from "@/assets/chatgpt-tts.webp";
 import XIcon from "@/assets/x.webp";
 import XProIcon from "@/assets/x-pro.webp";
 import SpotubeDLIcon from "@/assets/icons/spotubedl.svg";
-import SpotiDownloaderIcon from "@/assets/icons/spotidownloader.svg";
 import XBatchDLIcon from "@/assets/icons/xbatchdl.svg";
 import SpotiFLACNextIcon from "@/assets/icons/next.svg";
 import KofiLogo from "@/assets/ko-fi.gif";
@@ -21,7 +20,12 @@ const browserExtensionItems = [
     { icon: XIcon, label: "Twitter/X Media Batch Downloader", alt: "Twitter/X Media Batch Downloader" },
     { icon: XProIcon, label: "Twitter/X Media Batch Downloader Pro", alt: "Twitter/X Media Batch Downloader Pro" },
 ];
-const projectCardClass = "cursor-pointer transition-colors hover:bg-muted/50 dark:hover:bg-accent/50";
+const projectCardClass = "cursor-pointer gap-3 py-5 transition-colors hover:bg-muted/50 dark:hover:bg-accent/50";
+const projectCardHeaderClass = "px-5 gap-1.5";
+const projectCardContentClass = "px-5";
+const projectBodyClass = "text-[13px] leading-snug";
+const releaseMetaClass = "text-xs text-muted-foreground whitespace-nowrap";
+const releaseVersionClass = "text-xs bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold whitespace-nowrap";
 export function AboutPage() {
     const [activeTab, setActiveTab] = useState<"projects" | "support">("projects");
     const [repoStats, setRepoStats] = useState<Record<string, any>>({});
@@ -44,8 +48,7 @@ export function AboutPage() {
                 }
             }
             const repos = [
-                { name: "SpotiDownloader", owner: "afkarxyz" },
-                { name: "SpotiFLAC-Next", owner: "spotiverse" },
+                { name: "SpotiFLAC-Next", owner: "spotbye" },
                 { name: "Twitter-X-Media-Batch-Downloader", owner: "afkarxyz" },
             ];
             const stats: Record<string, any> = {};
@@ -176,7 +179,7 @@ export function AboutPage() {
     const getRepoDescription = (repoName: string): string => {
         return repoStats[repoName]?.description || "";
     };
-    return (<div className="flex flex-col space-y-4">
+    return (<div className="flex flex-col space-y-3">
       <div className="flex items-center justify-between shrink-0">
         <h2 className="text-2xl font-bold tracking-tight">About</h2>
       </div>
@@ -195,17 +198,17 @@ export function AboutPage() {
       <div className="flex-1 min-h-0">
 
 
-        {activeTab === "projects" && (<div className="p-1 pr-2">
-            <div className="grid gap-2 grid-cols-4">
-              <Card className={`gap-2 ${projectCardClass}`} onClick={() => openExternal("https://github.com/spotbye/SpotiFLAC-Next")}>
-                <CardHeader>
+        {activeTab === "projects" && (<div className="pr-1.5">
+            <div className="grid gap-2 grid-cols-3">
+              <Card className={projectCardClass} onClick={() => openExternal("https://github.com/spotbye/SpotiFLAC-Next")}>
+                <CardHeader className={projectCardHeaderClass}>
                   <div className="flex justify-between items-start mb-2">
                     <img src={SpotiFLACNextIcon} className="h-6 w-6 shrink-0" alt="SpotiFLAC Next"/>
-                    <div className="flex items-center gap-2">
-                      {repoStats["SpotiFLAC-Next"]?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    <div className="ml-3 flex flex-wrap items-center justify-end gap-2">
+                      {repoStats["SpotiFLAC-Next"]?.latestReleaseAt && (<span className={releaseMetaClass}>
                           {formatReleaseTimeAgo(repoStats["SpotiFLAC-Next"].latestReleaseAt)}
                         </span>)}
-                      {repoStats["SpotiFLAC-Next"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                      {repoStats["SpotiFLAC-Next"]?.latestVersion && (<span className={releaseVersionClass}>
                           {repoStats["SpotiFLAC-Next"].latestVersion}
                         </span>)}
                     </div>
@@ -213,11 +216,11 @@ export function AboutPage() {
                   <CardTitle className="leading-tight">
                     SpotiFLAC Next
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className={projectBodyClass}>
                     {getRepoDescription("SpotiFLAC-Next")}
                   </CardDescription>
                 </CardHeader>
-                {repoStats["SpotiFLAC-Next"] && (<CardContent className="space-y-2">
+                {repoStats["SpotiFLAC-Next"] && (<CardContent className={`${projectCardContentClass} space-y-2`}>
                     {repoStats["SpotiFLAC-Next"].languages?.length > 0 && (<div className="flex flex-wrap gap-2 text-xs">
                         {repoStats["SpotiFLAC-Next"].languages.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
                             backgroundColor: getLangColor(lang) + "20",
@@ -245,76 +248,21 @@ export function AboutPage() {
                         <Info className="h-3.5 w-3.5"/>
                         Note
                       </div>
-                      <p className="text-xs leading-relaxed text-sky-700 dark:text-sky-300">
+                      <p className="text-xs leading-snug text-sky-700 dark:text-sky-300">
                         This project was created as a thank-you to everyone who has supported SpotiFLAC on Ko-fi.
                       </p>
                     </div>
                   </CardContent>)}
               </Card>
-              <Card className={projectCardClass} onClick={() => openExternal("https://github.com/spotbye/SpotiDownloader")}>
-                <CardHeader>
-                  <div className="flex justify-between items-start mb-2">
-                    <img src={SpotiDownloaderIcon} className="h-6 w-6 shrink-0" alt="SpotiDownloader"/>
-                    <div className="flex items-center gap-2">
-                      {repoStats["SpotiDownloader"]?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                          {formatReleaseTimeAgo(repoStats["SpotiDownloader"].latestReleaseAt)}
-                        </span>)}
-                      {repoStats["SpotiDownloader"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
-                          {repoStats["SpotiDownloader"].latestVersion}
-                        </span>)}
-                    </div>
-                  </div>
-                  <CardTitle className="leading-tight">
-                    SpotiDownloader
-                  </CardTitle>
-                  <CardDescription>
-                    {getRepoDescription("SpotiDownloader")}
-                  </CardDescription>
-                </CardHeader>
-                {repoStats["SpotiDownloader"] && (<CardContent className="space-y-3">
-                    <div className="flex flex-wrap gap-2 text-xs">
-                      {repoStats["SpotiDownloader"].languages?.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
-                        backgroundColor: getLangColor(lang) + "20",
-                        color: getLangColor(lang),
-                    }}>
-                            {lang}
-                          </span>))}
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500"/>{" "}
-                        {formatNumber(repoStats["SpotiDownloader"].stars)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <GitFork className="h-3.5 w-3.5"/>{" "}
-                        {repoStats["SpotiDownloader"].forks}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3.5 w-3.5"/>{" "}
-                        {formatTimeAgo(repoStats["SpotiDownloader"].createdAt)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1 text-xs text-muted-foreground items-start">
-                      <span className="flex items-center gap-1">
-                        <Download className="h-3.5 w-3.5"/> TOTAL:{" "}
-                        {formatNumber(repoStats["SpotiDownloader"].totalDownloads)}
-                      </span>
-                      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
-                        <Download className="h-3.5 w-3.5"/> LATEST:{" "}
-                        {formatNumber(repoStats["SpotiDownloader"].latestDownloads)}
-                      </span>
-                    </div>
-                  </CardContent>)}
-              </Card>
               <Card className={projectCardClass} onClick={() => openExternal("https://github.com/afkarxyz/Twitter-X-Media-Batch-Downloader")}>
-                <CardHeader>
+                <CardHeader className={projectCardHeaderClass}>
                   <div className="flex justify-between items-start mb-2">
                     <img src={XBatchDLIcon} className="h-6 w-6 shrink-0" alt="Twitter/X Media Batch Downloader"/>
-                    <div className="flex items-center gap-2">
-                      {repoStats["Twitter-X-Media-Batch-Downloader"]?.latestReleaseAt && (<span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    <div className="ml-3 flex flex-wrap items-center justify-end gap-2">
+                      {repoStats["Twitter-X-Media-Batch-Downloader"]?.latestReleaseAt && (<span className={releaseMetaClass}>
                           {formatReleaseTimeAgo(repoStats["Twitter-X-Media-Batch-Downloader"].latestReleaseAt)}
                         </span>)}
-                      {repoStats["Twitter-X-Media-Batch-Downloader"]?.latestVersion && (<span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.5 rounded-sm font-mono font-semibold max-w-[80px] truncate">
+                      {repoStats["Twitter-X-Media-Batch-Downloader"]?.latestVersion && (<span className={releaseVersionClass}>
                           {repoStats["Twitter-X-Media-Batch-Downloader"].latestVersion}
                         </span>)}
                     </div>
@@ -322,11 +270,11 @@ export function AboutPage() {
                   <CardTitle className="leading-tight">
                     Twitter/X Media Batch Downloader
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className={projectBodyClass}>
                     {getRepoDescription("Twitter-X-Media-Batch-Downloader")}
                   </CardDescription>
                 </CardHeader>
-                {repoStats["Twitter-X-Media-Batch-Downloader"] && (<CardContent className="space-y-3">
+                {repoStats["Twitter-X-Media-Batch-Downloader"] && (<CardContent className={`${projectCardContentClass} space-y-2`}>
                     <div className="flex flex-wrap gap-2 text-xs">
                       {repoStats["Twitter-X-Media-Batch-Downloader"].languages?.map((lang: string) => (<span key={lang} className="px-2 py-0.5 rounded-full font-medium" style={{
                         backgroundColor: getLangColor(lang) + "20",
@@ -364,14 +312,14 @@ export function AboutPage() {
                     </div>
                   </CardContent>)}
               </Card>
-              <div className="flex flex-col gap-2 h-full">
+              <div className="flex h-full flex-col gap-1.5">
                 <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://exyezed.qzz.io/")}>
-                    <CardHeader>
-                    <CardTitle>Browser Extensions & Scripts</CardTitle>
-                    <CardDescription className="flex flex-col gap-2 pt-2">
-                      {browserExtensionItems.map((item) => (<div key={item.alt} className="flex items-center gap-2">
+                    <CardHeader className={projectCardHeaderClass}>
+                    <CardTitle className="leading-tight">Browser Extensions & Scripts</CardTitle>
+                    <CardDescription className="flex flex-col gap-2.5 pt-1.5">
+                      {browserExtensionItems.map((item) => (<div key={item.alt} className="flex items-center gap-2.5">
                           <img src={item.icon} className="h-[22px] w-[22px] rounded-sm shadow-sm" alt={item.alt}/>
-                          <span className="text-[11px] leading-tight text-muted-foreground">
+                          <span className={`${projectBodyClass} text-muted-foreground`}>
                             {item.label}
                           </span>
                         </div>))}
@@ -379,12 +327,12 @@ export function AboutPage() {
                   </CardHeader>
                 </Card>
                 <Card className={`${projectCardClass} flex-1`} onClick={() => openExternal("https://spotubedl.com/")}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                  <CardHeader className={projectCardHeaderClass}>
+                    <CardTitle className="flex items-center gap-2 leading-tight">
                       <img src={SpotubeDLIcon} className="h-5 w-5" alt="SpotubeDL"/>{" "}
                       SpotubeDL.com
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className={projectBodyClass}>
                       Download Spotify Tracks, Albums, Playlists & Discography as MP3/OGG/Opus.
                     </CardDescription>
                   </CardHeader>
