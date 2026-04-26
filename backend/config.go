@@ -60,6 +60,40 @@ func GetRedownloadWithSuffixSetting() bool {
 	return enabled
 }
 
+func GetCustomTidalAPISetting() string {
+	settings, err := LoadConfigSettings()
+	if err != nil || settings == nil {
+		return ""
+	}
+
+	customAPI, _ := settings["customTidalApi"].(string)
+	customAPI = strings.TrimRight(strings.TrimSpace(customAPI), "/")
+	if strings.HasPrefix(customAPI, "https://") {
+		return customAPI
+	}
+
+	return ""
+}
+
+func normalizeExistingFileCheckMode(value string) string {
+	switch strings.TrimSpace(strings.ToLower(value)) {
+	case "isrc", "upc":
+		return "isrc"
+	default:
+		return "filename"
+	}
+}
+
+func GetExistingFileCheckModeSetting() string {
+	settings, err := LoadConfigSettings()
+	if err != nil || settings == nil {
+		return "filename"
+	}
+
+	rawMode, _ := settings["existingFileCheckMode"].(string)
+	return normalizeExistingFileCheckMode(rawMode)
+}
+
 func GetLinkResolverSetting() string {
 	settings, err := LoadConfigSettings()
 	if err != nil || settings == nil {

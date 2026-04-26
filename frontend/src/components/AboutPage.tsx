@@ -249,7 +249,7 @@ export function AboutPage() {
                         Note
                       </div>
                       <p className="text-xs leading-snug text-sky-700 dark:text-sky-300">
-                        This project was created as a thank-you to everyone who has supported SpotiFLAC on Ko-fi.
+                        This project released as a token of appreciation for those who have supported SpotiFLAC on Ko-fi. It’s not a paid product, but it’s shared privately through a supporter-only post.
                       </p>
                     </div>
                   </CardContent>)}
@@ -318,7 +318,7 @@ export function AboutPage() {
                     <CardTitle className="leading-tight">Browser Extensions & Scripts</CardTitle>
                     <CardDescription className="flex flex-col gap-2.5 pt-1.5">
                       {browserExtensionItems.map((item) => (<div key={item.alt} className="flex items-center gap-2.5">
-                          <img src={item.icon} className="h-[22px] w-[22px] rounded-sm shadow-sm" alt={item.alt}/>
+                          <img src={item.icon} className="h-5.5 w-5.5 rounded-sm shadow-sm" alt={item.alt}/>
                           <span className={`${projectBodyClass} text-muted-foreground`}>
                             {item.label}
                           </span>

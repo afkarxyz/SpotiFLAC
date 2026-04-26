@@ -9,13 +9,17 @@ const GetTrackISRC = (spotifyId: string): Promise<string> => (window as any)["go
 async function resolveTemplateISRC(settings: {
     folderTemplate?: string;
     filenameTemplate?: string;
+    existingFileCheckMode?: string;
 }, spotifyId?: string): Promise<string> {
     if (!spotifyId) {
         return "";
     }
     const folderTemplate = settings.folderTemplate || "";
     const filenameTemplate = settings.filenameTemplate || "";
-    if (!folderTemplate.includes("{isrc}") && !filenameTemplate.includes("{isrc}")) {
+    const shouldResolveISRC = settings.existingFileCheckMode === "isrc" ||
+        folderTemplate.includes("{isrc}") ||
+        filenameTemplate.includes("{isrc}");
+    if (!shouldResolveISRC) {
         return "";
     }
     try {

@@ -307,7 +307,6 @@ type DownloadRequest struct {
 	ReleaseDate          string `json:"release_date,omitempty"`
 	CoverURL             string `json:"cover_url,omitempty"`
 	TidalAPIURL          string `json:"tidal_api_url,omitempty"`
-	TidalVariant         string `json:"tidal_variant,omitempty"`
 	OutputDir            string `json:"output_dir,omitempty"`
 	AudioFormat          string `json:"audio_format,omitempty"`
 	FilenameFormat       string `json:"filename_format,omitempty"`
@@ -508,7 +507,8 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 	if req.FilenameFormat == "" {
 		req.FilenameFormat = "title-artist"
 	}
-	if req.ISRC == "" && strings.Contains(req.FilenameFormat, "{isrc}") && req.SpotifyID != "" {
+	shouldResolveISRC := strings.Contains(req.FilenameFormat, "{isrc}") || backend.GetExistingFileCheckModeSetting() == "isrc"
+	if req.ISRC == "" && shouldResolveISRC && req.SpotifyID != "" {
 		req.ISRC = backend.ResolveTrackISRC(req.SpotifyID)
 	}
 
@@ -662,11 +662,7 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 	case "tidal":
-		tidalVariant := strings.ToLower(strings.TrimSpace(req.TidalVariant))
-		if tidalVariant == "alt" {
-			downloader := backend.NewTidalDownloader("")
-			filename, err = downloader.DownloadAlt(req.SpotifyID, req.OutputDir, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, req.Composer, metadataSeparator, req.ISRC, spotifyURL, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
-		} else if req.TidalAPIURL == "" || req.TidalAPIURL == "auto" {
+		if req.TidalAPIURL == "" || req.TidalAPIURL == "auto" {
 			downloader := backend.NewTidalDownloader("")
 			if req.ServiceURL != "" {
 				filename, err = downloader.DownloadByURLWithFallback(req.ServiceURL, req.OutputDir, req.AudioFormat, req.FilenameFormat, req.TrackNumber, req.Position, req.TrackName, req.ArtistName, req.AlbumName, req.AlbumArtist, req.ReleaseDate, req.UseAlbumTrackNumber, req.CoverURL, req.EmbedMaxQualityCover, req.SpotifyTrackNumber, req.SpotifyDiscNumber, req.SpotifyTotalTracks, req.SpotifyTotalDiscs, req.Copyright, req.Publisher, req.Composer, metadataSeparator, req.ISRC, spotifyURL, req.AllowFallback, req.UseFirstArtistOnly, req.UseSingleGenre, req.EmbedGenre)
@@ -795,9 +791,6 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 		}
 
 		historySource := req.Service
-		if req.Service == "tidal" && strings.EqualFold(strings.TrimSpace(req.TidalVariant), "alt") {
-			historySource = "tidal alt"
-		}
 
 		go func(fPath, track, artist, album, sID, cover, format, source string) {
 			time.Sleep(2 * time.Second)
@@ -826,21 +819,21 @@ func (a *App) DownloadTrack(req DownloadRequest) (DownloadResponse, error) {
 				DurationStr: durationStr,
 				CoverURL:    cover,
 				Quality:     quality,
-				Format:      strings.ToUpper(format),
 				Path:        fPath,
 				Source:      source,
 			}
 
-			if item.Format == "" || item.Format == "LOSSLESS" {
-				ext := filepath.Ext(fPath)
-				if len(ext) > 1 {
-					item.Format = strings.ToUpper(ext[1:])
-				}
+			item.Format = strings.ToUpper(strings.TrimSpace(format))
+
+			if ext := filepath.Ext(fPath); len(ext) > 1 {
+				item.Format = strings.ToUpper(ext[1:])
 			}
 
 			switch item.Format {
-			case "6", "7", "27":
+			case "6", "7", "27", "LOSSLESS", "HI_RES", "HI_RES_LOSSLESS":
 				item.Format = "FLAC"
+			case "ALAC", "APPLE", "ATMOS", "M4A-AAC", "M4A-ALAC":
+				item.Format = "M4A"
 			}
 
 			backend.AddHistoryItem(item, "SpotiFLAC")
@@ -1029,6 +1022,90 @@ func (a *App) CheckAPIStatus(apiType string, apiURL string) bool {
 	return isOnline
 }
 
+func (a *App) CheckCustomTidalAPI(apiURL string) bool {
+	type tidalProbeResponse struct {
+		Version string `json:"version"`
+		Data    struct {
+			TrackID           int64  `json:"trackId"`
+			AssetPresentation string `json:"assetPresentation"`
+			ManifestMimeType  string `json:"manifestMimeType"`
+			Manifest          string `json:"manifest"`
+		} `json:"data"`
+	}
+	type tidalLegacyResponse struct {
+		OriginalTrackURL string `json:"OriginalTrackUrl"`
+	}
+
+	apiURL = strings.TrimRight(strings.TrimSpace(apiURL), "/")
+	if apiURL == "" {
+		return false
+	}
+
+	const probeTrackID int64 = 441821360
+	probeURL := fmt.Sprintf("%s/track/?id=%d&quality=LOSSLESS", apiURL, probeTrackID)
+
+	req, err := http.NewRequest(http.MethodGet, probeURL, nil)
+	if err != nil {
+		fmt.Printf("[CheckCustomTidalAPI] Failed to create request for %s: %v\n", apiURL, err)
+		return false
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json")
+
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("[CheckCustomTidalAPI] Probe request failed for %s: %v\n", apiURL, err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if err != nil {
+		fmt.Printf("[CheckCustomTidalAPI] Failed to read probe response for %s: %v\n", apiURL, err)
+		return false
+	}
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("[CheckCustomTidalAPI] Probe returned status %d for %s: %s\n", resp.StatusCode, apiURL, previewResponseBody(body, 200))
+		return false
+	}
+
+	var probe tidalProbeResponse
+	if err := json.Unmarshal(body, &probe); err == nil {
+		assetPresentation := strings.ToUpper(strings.TrimSpace(probe.Data.AssetPresentation))
+		switch assetPresentation {
+		case "FULL":
+			if strings.TrimSpace(probe.Data.Manifest) != "" {
+				fmt.Printf("[CheckCustomTidalAPI] Tidal API is ONLINE for %s (assetPresentation=%s)\n", apiURL, assetPresentation)
+				return true
+			}
+			fmt.Printf("[CheckCustomTidalAPI] Probe returned FULL without manifest for %s\n", apiURL)
+			return false
+		case "PREVIEW":
+			fmt.Printf("[CheckCustomTidalAPI] Probe returned PREVIEW for %s\n", apiURL)
+			return false
+		case "":
+
+		default:
+			fmt.Printf("[CheckCustomTidalAPI] Probe returned unsupported assetPresentation=%s for %s\n", assetPresentation, apiURL)
+			return false
+		}
+	}
+
+	var legacy []tidalLegacyResponse
+	if err := json.Unmarshal(body, &legacy); err == nil {
+		for _, item := range legacy {
+			if strings.TrimSpace(item.OriginalTrackURL) != "" {
+				fmt.Printf("[CheckCustomTidalAPI] Tidal API is ONLINE for %s (legacy response)\n", apiURL)
+				return true
+			}
+		}
+	}
+
+	fmt.Printf("[CheckCustomTidalAPI] Probe response was unusable for %s: %s\n", apiURL, previewResponseBody(body, 200))
+	return false
+}
+
 func buildTidalStatusCheckURLs(apiURL string) []string {
 	apiURL = strings.TrimRight(strings.TrimSpace(apiURL), "/")
 	if apiURL != "" {
@@ -1058,18 +1135,18 @@ func buildQobuzStatusCheckURLs(apiURL string) []string {
 	}
 
 	bases := backend.GetQobuzStreamAPIBaseURLs()
-	urls := make([]string, 0, len(bases))
+	urls := make([]string, 0, len(bases)+1)
 	for _, baseURL := range bases {
 		urls = append(urls, buildQobuzStatusCheckURL(baseURL))
+	}
+	if musicDLURL := strings.TrimSpace(backend.GetQobuzMusicDLDownloadAPIURL()); musicDLURL != "" {
+		urls = append(urls, musicDLURL)
 	}
 	return urls
 }
 
 func buildQobuzStatusCheckURL(apiBase string) string {
 	apiBase = strings.TrimSpace(apiBase)
-	if strings.Contains(apiBase, "qobuz.spotbye.qzz.io") {
-		return fmt.Sprintf("%s360735657?quality=27", apiBase)
-	}
 	return fmt.Sprintf("%s360735657&quality=27", apiBase)
 }
 
@@ -1138,6 +1215,10 @@ func checkGroupedAPIStatus(apiType string, checkURLs []string) bool {
 
 func checkSingleAPIStatus(apiType string, checkURL string) bool {
 	client := &http.Client{Timeout: 4 * time.Second}
+	if (apiType == "qobuz" || apiType == "qbz") && strings.EqualFold(strings.TrimSpace(checkURL), strings.TrimSpace(backend.GetQobuzMusicDLDownloadAPIURL())) {
+		return backend.CheckQobuzMusicDLStatus(client)
+	}
+
 	req, err := backend.NewRequestWithDefaultHeaders(http.MethodGet, checkURL, nil)
 	if err != nil {
 		return false
@@ -1733,6 +1814,68 @@ type CheckFileExistenceResult struct {
 	ArtistName string `json:"artist_name,omitempty"`
 }
 
+type existingFileLookupIndex struct {
+	byFilename map[string]string
+	byISRC     map[string]string
+}
+
+func isAudioFileForExistenceCheck(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".flac", ".mp3", ".m4a":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeExistingFileIdentifier(value string) string {
+	return strings.ToUpper(strings.TrimSpace(value))
+}
+
+func buildExistingFileLookupIndex(scanRoot string, mode string) existingFileLookupIndex {
+	index := existingFileLookupIndex{
+		byFilename: make(map[string]string),
+		byISRC:     make(map[string]string),
+	}
+
+	scanRoot = backend.NormalizePath(scanRoot)
+	if scanRoot == "" {
+		return index
+	}
+
+	_ = filepath.Walk(scanRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info == nil || info.IsDir() || !isAudioFileForExistenceCheck(path) {
+			return nil
+		}
+		if info.Size() <= 100*1024 {
+			return nil
+		}
+
+		if _, exists := index.byFilename[info.Name()]; !exists {
+			index.byFilename[info.Name()] = path
+		}
+
+		if mode == "filename" {
+			return nil
+		}
+
+		metadata, metadataErr := backend.ExtractFullMetadataFromFile(path)
+		if metadataErr != nil {
+			return nil
+		}
+
+		if normalizedISRC := normalizeExistingFileIdentifier(metadata.ISRC); normalizedISRC != "" {
+			if _, exists := index.byISRC[normalizedISRC]; !exists {
+				index.byISRC[normalizedISRC] = path
+			}
+		}
+
+		return nil
+	})
+
+	return index
+}
+
 func (a *App) CheckFilesExistence(outputDir string, rootDir string, tracks []CheckFileExistenceRequest) []CheckFileExistenceResult {
 	if len(tracks) == 0 {
 		return []CheckFileExistenceResult{}
@@ -1745,6 +1888,11 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, tracks []Che
 
 	defaultFilenameFormat := "title-artist"
 	redownloadWithSuffix := backend.GetRedownloadWithSuffixSetting()
+	existingFileCheckMode := backend.GetExistingFileCheckModeSetting()
+	scanRoot := outputDir
+	if rootDir != "" {
+		scanRoot = rootDir
+	}
 
 	type result struct {
 		index  int
@@ -1752,29 +1900,13 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, tracks []Che
 	}
 
 	resultsChan := make(chan result, len(tracks))
-
-	var rootDirFiles map[string]string
-	rootDirFilesOnce := false
-	getRootDirFiles := func() map[string]string {
-		if rootDirFilesOnce {
-			return rootDirFiles
-		}
-		rootDirFiles = make(map[string]string)
-		if rootDir != "" && rootDir != outputDir {
-			filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-				if err != nil {
-					return nil
-				}
-				if !info.IsDir() {
-					if strings.EqualFold(filepath.Ext(path), ".flac") || strings.EqualFold(filepath.Ext(path), ".mp3") {
-						rootDirFiles[info.Name()] = path
-					}
-				}
-				return nil
-			})
-		}
-		rootDirFilesOnce = true
-		return rootDirFiles
+	var lookupIndex existingFileLookupIndex
+	var lookupIndexOnce sync.Once
+	getLookupIndex := func() existingFileLookupIndex {
+		lookupIndexOnce.Do(func() {
+			lookupIndex = buildExistingFileLookupIndex(scanRoot, existingFileCheckMode)
+		})
+		return lookupIndex
 	}
 
 	for i, track := range tracks {
@@ -1796,7 +1928,8 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, tracks []Che
 				filenameFormat = defaultFilenameFormat
 			}
 			isrc := strings.TrimSpace(t.ISRC)
-			if isrc == "" && strings.Contains(filenameFormat, "{isrc}") && t.SpotifyID != "" {
+			shouldResolveISRC := existingFileCheckMode == "isrc" || strings.Contains(filenameFormat, "{isrc}")
+			if isrc == "" && shouldResolveISRC && t.SpotifyID != "" {
 				isrc = backend.ResolveTrackISRC(t.SpotifyID)
 			}
 
@@ -1806,8 +1939,11 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, tracks []Che
 			}
 
 			fileExt := ".flac"
-			if t.AudioFormat == "mp3" {
+			switch strings.ToLower(strings.TrimSpace(t.AudioFormat)) {
+			case "mp3":
 				fileExt = ".mp3"
+			case "m4a", "m4a-aac", "m4a-alac", "alac", "atmos", "apple":
+				fileExt = ".m4a"
 			}
 
 			expectedFilenameBase := backend.BuildExpectedFilename(
@@ -1836,14 +1972,29 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, tracks []Che
 			expectedPath := filepath.Join(targetDir, expectedFilename)
 			if redownloadWithSuffix {
 				expectedPath, _ = backend.ResolveOutputPathForDownload(expectedPath, true)
-				res.FilePath = filepath.Base(expectedPath)
-			} else {
+				resultsChan <- result{index: idx, result: res}
+				return
+			}
+
+			normalizedISRC := normalizeExistingFileIdentifier(isrc)
+			effectiveMode := existingFileCheckMode
+			if effectiveMode == "isrc" && normalizedISRC == "" {
+				effectiveMode = "filename"
+			}
+
+			switch effectiveMode {
+			case "isrc":
+				if path, ok := getLookupIndex().byISRC[normalizedISRC]; ok {
+					res.Exists = true
+					res.FilePath = path
+				}
+			default:
 				if fileInfo, err := os.Stat(expectedPath); err == nil && fileInfo.Size() > 100*1024 {
 					res.Exists = true
 					res.FilePath = expectedPath
-				} else {
-
-					res.FilePath = expectedFilename
+				} else if path, ok := getLookupIndex().byFilename[filepath.Base(expectedPath)]; ok {
+					res.Exists = true
+					res.FilePath = path
 				}
 			}
 
@@ -1852,39 +2003,10 @@ func (a *App) CheckFilesExistence(outputDir string, rootDir string, tracks []Che
 	}
 
 	results := make([]CheckFileExistenceResult, len(tracks))
-	missingIndices := []int{}
 
 	for i := 0; i < len(tracks); i++ {
 		r := <-resultsChan
 		results[r.index] = r.result
-		if !results[r.index].Exists {
-			missingIndices = append(missingIndices, r.index)
-		}
-	}
-
-	if len(missingIndices) > 0 && rootDir != "" {
-		filesMap := getRootDirFiles()
-		if len(filesMap) > 0 {
-			for _, idx := range missingIndices {
-
-				expectedFilename := results[idx].FilePath
-				baseName := filepath.Base(expectedFilename)
-				if path, ok := filesMap[baseName]; ok {
-					results[idx].Exists = true
-					results[idx].FilePath = path
-				} else {
-					results[idx].FilePath = ""
-				}
-			}
-		} else {
-			for _, idx := range missingIndices {
-				results[idx].FilePath = ""
-			}
-		}
-	} else {
-		for _, idx := range missingIndices {
-			results[idx].FilePath = ""
-		}
 	}
 
 	return results
@@ -1910,6 +2032,14 @@ func (a *App) GetConfigPath() (string, error) {
 	return filepath.Join(dir, "config.json"), nil
 }
 
+func (a *App) GetFontsPath() (string, error) {
+	dir, err := backend.GetFFmpegDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "fonts.json"), nil
+}
+
 func (a *App) SaveSettings(settings map[string]interface{}) error {
 	configPath, err := a.GetConfigPath()
 	if err != nil {
@@ -1929,6 +2059,27 @@ func (a *App) SaveSettings(settings map[string]interface{}) error {
 	}
 
 	return os.WriteFile(configPath, data, 0644)
+}
+
+func (a *App) SaveFonts(fonts []map[string]interface{}) error {
+	fontsPath, err := a.GetFontsPath()
+	if err != nil {
+		return err
+	}
+
+	dir := filepath.Dir(fontsPath)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+
+	data, err := json.MarshalIndent(fonts, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(fontsPath, data, 0644)
 }
 
 func (a *App) LoadSettings() (map[string]interface{}, error) {
@@ -1952,6 +2103,32 @@ func (a *App) LoadSettings() (map[string]interface{}, error) {
 	}
 
 	return settings, nil
+}
+
+func (a *App) LoadFonts() ([]map[string]interface{}, error) {
+	fontsPath, err := a.GetFontsPath()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := os.Stat(fontsPath); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(fontsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var fonts []map[string]interface{}
+	if err := json.Unmarshal(data, &fonts); err != nil {
+		return nil, err
+	}
+	if fonts == nil {
+		return []map[string]interface{}{}, nil
+	}
+
+	return fonts, nil
 }
 
 func (a *App) CheckFFmpegInstalled() (bool, error) {

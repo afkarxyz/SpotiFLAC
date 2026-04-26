@@ -1,6 +1,9 @@
 package backend
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,6 +25,76 @@ type AmazonDownloader struct {
 type AmazonStreamResponse struct {
 	StreamURL     string `json:"streamUrl"`
 	DecryptionKey string `json:"decryptionKey"`
+}
+
+var (
+	amazonMusicDebugKeyOnce sync.Once
+	amazonMusicDebugKey     string
+	amazonMusicDebugKeyErr  error
+)
+
+var amazonMusicDebugKeySeedParts = [][]byte{
+	[]byte("spotif"),
+	[]byte("lac:am"),
+	[]byte("azon:spotbye:api:v1"),
+}
+
+var amazonMusicDebugKeyAAD = []byte{
+	0x61, 0x6d, 0x61, 0x7a, 0x6f, 0x6e, 0x7c, 0x73, 0x70, 0x6f, 0x74, 0x62,
+	0x79, 0x65, 0x7c, 0x64, 0x65, 0x62, 0x75, 0x67, 0x7c, 0x76, 0x31,
+}
+
+var amazonMusicDebugKeyNonce = []byte{
+	0x52, 0x1f, 0xa4, 0x9c, 0x13, 0x77, 0x5b, 0xe2, 0x81, 0x44, 0x90, 0x6d,
+}
+
+var amazonMusicDebugKeyCiphertext = []byte{
+	0x5b, 0xf9, 0xc1, 0x2e, 0x58, 0xf8, 0x5b, 0xc0, 0x04, 0x68, 0x7e, 0xff,
+	0x3d, 0xd6, 0x8b, 0xe3, 0x86, 0x49, 0x6c, 0xfd, 0xc1, 0x49, 0x0b, 0xfb,
+}
+
+var amazonMusicDebugKeyTag = []byte{
+	0x6c, 0x21, 0x98, 0x51, 0xf2, 0x38, 0x4b, 0x4a, 0x23, 0xe1, 0xc6, 0xd7,
+	0x65, 0x7f, 0xfb, 0xa1,
+}
+
+func getAmazonMusicDebugKey() (string, error) {
+	amazonMusicDebugKeyOnce.Do(func() {
+		hasher := sha256.New()
+		for _, part := range amazonMusicDebugKeySeedParts {
+			hasher.Write(part)
+		}
+
+		block, err := aes.NewCipher(hasher.Sum(nil))
+		if err != nil {
+			amazonMusicDebugKeyErr = err
+			return
+		}
+
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			amazonMusicDebugKeyErr = err
+			return
+		}
+
+		sealed := make([]byte, 0, len(amazonMusicDebugKeyCiphertext)+len(amazonMusicDebugKeyTag))
+		sealed = append(sealed, amazonMusicDebugKeyCiphertext...)
+		sealed = append(sealed, amazonMusicDebugKeyTag...)
+
+		plaintext, err := gcm.Open(nil, amazonMusicDebugKeyNonce, sealed, amazonMusicDebugKeyAAD)
+		if err != nil {
+			amazonMusicDebugKeyErr = err
+			return
+		}
+
+		amazonMusicDebugKey = string(plaintext)
+	})
+
+	if amazonMusicDebugKeyErr != nil {
+		return "", amazonMusicDebugKeyErr
+	}
+
+	return amazonMusicDebugKey, nil
 }
 
 func NewAmazonDownloader() *AmazonDownloader {
@@ -61,6 +135,12 @@ func (a *AmazonDownloader) DownloadFromAfkarXYZ(amazonURL, outputDir, quality st
 	if err != nil {
 		return "", err
 	}
+
+	debugKey, err := getAmazonMusicDebugKey()
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt Amazon debug key: %w", err)
+	}
+	req.Header.Set("X-Debug-Key", debugKey)
 
 	fmt.Printf("Fetching from Amazon API (ASIN: %s)...\n", asin)
 	resp, err := a.client.Do(req)

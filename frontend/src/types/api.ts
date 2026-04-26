@@ -120,7 +120,6 @@ export interface DownloadRequest {
     release_date?: string;
     cover_url?: string;
     tidal_api_url?: string;
-    tidal_variant?: "tidal" | "alt";
     output_dir?: string;
     audio_format?: string;
     folder_name?: string;

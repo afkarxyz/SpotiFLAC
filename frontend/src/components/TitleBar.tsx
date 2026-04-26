@@ -1,6 +1,9 @@
 import { X, Minus, Maximize, SlidersHorizontal, Globe, Eye, EyeOff } from "lucide-react";
 import { WindowMinimise, WindowToggleMaximise, Quit } from "../../wailsjs/runtime/runtime";
 import { Menubar, MenubarContent, MenubarMenu, MenubarItem, MenubarTrigger, MenubarLabel, MenubarSeparator } from "@/components/ui/menubar";
+import { Slider } from "@/components/ui/slider";
+import { getSettings, updateSettings } from "@/lib/settings";
+import { PREVIEW_VOLUME_CHANGED_EVENT } from "@/lib/preview";
 import { fetchCurrentIPInfo } from "@/lib/api";
 import type { CurrentIPInfo } from "@/types/api";
 import { openExternal } from "@/lib/utils";
@@ -24,7 +27,12 @@ const SPOTIFY_BLOCKED_COUNTRY_CODES = new Set([
     "TM",
     "YE",
 ]);
+interface SettingsUpdatedDetail {
+    previewVolume?: number;
+}
 export function TitleBar() {
+    const initialSettings = getSettings();
+    const [previewVolume, setPreviewVolume] = useState(initialSettings.previewVolume ?? 100);
     const [currentIPInfo, setCurrentIPInfo] = useState<CurrentIPInfo | null>(null);
     const [isLoadingCurrentIPInfo, setIsLoadingCurrentIPInfo] = useState(false);
     const [currentIPInfoError, setCurrentIPInfoError] = useState("");
@@ -33,6 +41,16 @@ export function TitleBar() {
     useEffect(() => {
         currentIPInfoRef.current = currentIPInfo;
     }, [currentIPInfo]);
+    useEffect(() => {
+        const handleSettingsUpdate = (event: Event) => {
+            const updatedSettings = (event as CustomEvent<SettingsUpdatedDetail>).detail;
+            if (updatedSettings && typeof updatedSettings.previewVolume === "number") {
+                setPreviewVolume(updatedSettings.previewVolume);
+            }
+        };
+        window.addEventListener("settingsUpdated", handleSettingsUpdate);
+        return () => window.removeEventListener("settingsUpdated", handleSettingsUpdate);
+    }, []);
     const loadCurrentIPInfo = async (options?: {
         silent?: boolean;
     }) => {
@@ -88,6 +106,22 @@ export function TitleBar() {
     const handleClose = () => {
         Quit();
     };
+    const handlePreviewVolumeChange = (value: number[]) => {
+        const nextValue = value[0];
+        if (typeof nextValue !== "number" || Number.isNaN(nextValue)) {
+            return;
+        }
+        setPreviewVolume(nextValue);
+        window.dispatchEvent(new CustomEvent(PREVIEW_VOLUME_CHANGED_EVENT, { detail: nextValue }));
+    };
+    const handlePreviewVolumeCommit = (value: number[]) => {
+        const nextValue = value[0];
+        if (typeof nextValue !== "number" || Number.isNaN(nextValue)) {
+            return;
+        }
+        setPreviewVolume(nextValue);
+        void updateSettings({ previewVolume: nextValue });
+    };
     const detectedCountryCode = currentIPInfo?.country_code?.toUpperCase() || "";
     const detectedFlagPath = detectedCountryCode ? `/assets/flags/${detectedCountryCode.toLowerCase()}.svg` : "";
     const isSpotifyBlockedCountry = detectedCountryCode !== "" && SPOTIFY_BLOCKED_COUNTRY_CODES.has(detectedCountryCode);
@@ -102,7 +136,17 @@ export function TitleBar() {
                 <MenubarTrigger className="cursor-pointer w-8 h-7 p-0 flex items-center justify-center hover:bg-muted transition-colors rounded data-[state=open]:bg-muted">
                     <SlidersHorizontal className="w-3.5 h-3.5"/>
                 </MenubarTrigger>
-                <MenubarContent align="end" className="min-w-[280px]">
+                <MenubarContent align="end" className="min-w-70">
+                    <div className="px-2 py-1.5 space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                            <MenubarLabel className="p-0">Preview Volume</MenubarLabel>
+                            <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                                {previewVolume}%
+                            </span>
+                        </div>
+                        <Slider value={[previewVolume]} min={0} max={100} step={5} onValueChange={handlePreviewVolumeChange} onValueCommit={handlePreviewVolumeCommit} aria-label="Preview volume"/>
+                    </div>
+                    <MenubarSeparator />
                     <div className="flex items-center gap-1.5 px-2 py-1.5">
                         <MenubarLabel className="p-0">Network</MenubarLabel>
                         {isSpotifyBlockedCountry && (<span className="text-xs font-medium text-destructive">
@@ -112,7 +156,7 @@ export function TitleBar() {
                     <div className="px-2 py-1.5 space-y-1">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-2 min-w-0">
-                                {detectedFlagPath ? (<img src={detectedFlagPath} alt={detectedCountryCode} className="h-3.5 w-[18px] rounded-[2px] border object-cover bg-muted"/>) : (<Globe className="w-4 h-4 opacity-70"/>)}
+                                {detectedFlagPath ? (<img src={detectedFlagPath} alt={detectedCountryCode} className="h-3.5 w-4.5 rounded-[2px] border object-cover bg-muted"/>) : (<Globe className="w-4 h-4 opacity-70"/>)}
                                 <span className="font-mono text-xs truncate">
                                     {isLoadingCurrentIPInfo
             ? "Detecting..."

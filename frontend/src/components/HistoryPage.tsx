@@ -9,7 +9,8 @@ import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem, Pagi
 import { GetDownloadHistory, ClearDownloadHistory, GetPreviewURL, GetFetchHistory, DeleteDownloadHistoryItem, DeleteFetchHistoryItem, ClearFetchHistoryByType } from "../../wailsjs/go/main/App";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { openExternal } from "@/lib/utils";
-import { SPOTIFY_PREVIEW_VOLUME } from "@/lib/preview";
+import { getPreviewVolume } from "@/lib/preview";
+import { createPreviewPlayback, type PreviewPlayback } from "@/lib/preview-player";
 import { TidalIcon, QobuzIcon, AmazonIcon } from "./PlatformIcons";
 const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
@@ -20,6 +21,37 @@ const formatDate = (timestamp: number) => {
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
     return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+};
+const getHistoryFormatLabel = (item: DownloadHistoryItem) => {
+    const normalizedPath = (item.path || "").trim().toLowerCase();
+    if (normalizedPath.endsWith(".flac"))
+        return "FLAC";
+    if (normalizedPath.endsWith(".mp3"))
+        return "MP3";
+    if (normalizedPath.endsWith(".m4a"))
+        return "M4A";
+    const normalizedFormat = (item.format || "").trim().toLowerCase();
+    switch (normalizedFormat) {
+        case "hi_res":
+        case "hi_res_lossless":
+        case "lossless":
+        case "flac":
+        case "6":
+        case "7":
+        case "27":
+            return "FLAC";
+        case "alac":
+        case "apple":
+        case "atmos":
+        case "m4a":
+        case "m4a-aac":
+        case "m4a-alac":
+            return "M4A";
+        case "mp3":
+            return "MP3";
+        default:
+            return (item.format || "-").toUpperCase();
+    }
 };
 interface DownloadHistoryItem {
     id: string;
@@ -57,7 +89,7 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
     const [downloadSortBy, setDownloadSortBy] = useState("default");
     const [downloadCurrentPage, setDownloadCurrentPage] = useState(1);
     const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const playbackRef = useRef<PreviewPlayback | null>(null);
     const [fetchHistory, setFetchHistory] = useState<FetchHistoryItem[]>([]);
     const [filteredFetchHistory, setFilteredFetchHistory] = useState<FetchHistoryItem[]>([]);
     const [activeFetchTab, setActiveFetchTab] = useState("track");
@@ -122,9 +154,8 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
     }, [activeTab]);
     useEffect(() => {
         return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-            }
+            playbackRef.current?.destroy();
+            playbackRef.current = null;
         };
     }, []);
     useEffect(() => {
@@ -180,20 +211,35 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
     }, [fetchSearchQuery, activeFetchTab]);
     const handlePreview = async (id: string, spotifyId: string) => {
         if (playingPreviewId === id) {
-            audioRef.current?.pause();
+            playbackRef.current?.destroy();
+            playbackRef.current = null;
             setPlayingPreviewId(null);
             return;
         }
-        if (audioRef.current) {
-            audioRef.current.pause();
+        if (playbackRef.current) {
+            playbackRef.current.destroy();
+            playbackRef.current = null;
         }
         try {
             const url = await GetPreviewURL(spotifyId);
             if (url) {
-                const audio = new Audio(url);
-                audioRef.current = audio;
-                audio.volume = SPOTIFY_PREVIEW_VOLUME;
-                audio.onended = () => setPlayingPreviewId(null);
+                const playback = await createPreviewPlayback(url, getPreviewVolume());
+                const audio = playback.audio;
+                playbackRef.current = playback;
+                audio.onended = () => {
+                    setPlayingPreviewId(null);
+                    if (playbackRef.current?.audio === audio) {
+                        playbackRef.current.destroy();
+                        playbackRef.current = null;
+                    }
+                };
+                audio.onerror = () => {
+                    setPlayingPreviewId(null);
+                    if (playbackRef.current?.audio === audio) {
+                        playbackRef.current.destroy();
+                        playbackRef.current = null;
+                    }
+                };
                 audio.play();
                 setPlayingPreviewId(id);
             }
@@ -271,7 +317,7 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
                             <Input placeholder="Search downloads..." value={downloadSearchQuery} onChange={(e) => setDownloadSearchQuery(e.target.value)} className="pl-8 h-9"/>
                         </div>
                         <Select value={downloadSortBy} onValueChange={setDownloadSortBy}>
-                            <SelectTrigger className="w-[180px] h-9">
+                            <SelectTrigger className="w-45 h-9">
                                 <ArrowUpDown className="mr-2 h-4 w-4"/>
                                 <SelectValue placeholder="Sort by"/>
                             </SelectTrigger>
@@ -329,10 +375,10 @@ export function HistoryPage({ onHistorySelect }: HistoryPageProps) {
                                         <td className="p-3 align-middle text-sm text-muted-foreground hidden md:table-cell">
                                             <div className="truncate">{item.album}</div>
                                         </td>
-                                         <td className="p-3 align-middle text-left hidden lg:table-cell">
+                                        <td className="p-3 align-middle text-left hidden lg:table-cell">
                                             <div className="flex flex-col items-start gap-1">
                                                 <span className="text-xs font-bold text-foreground">
-                                                    {['HI_RES_LOSSLESS', 'LOSSLESS', 'flac', '6', '7', '27'].includes(item.format?.toLowerCase() || '') ? 'FLAC' : item.format?.toUpperCase()}
+                                                    {getHistoryFormatLabel(item)}
                                                 </span>
                                                 {item.quality && <span className="text-[11px] text-muted-foreground leading-none whitespace-nowrap">{item.quality}</span>}
                                             </div>

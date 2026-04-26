@@ -10,19 +10,10 @@ export interface ApiSource {
 interface SpotiFLACNextSource {
     id: string;
     name: string;
+    statusKey?: string;
+    statusPrefix?: string;
 }
-type SpotiFLACNextStatusResponse = {
-    tidal?: string;
-    qobuz_a?: string;
-    qobuz_b?: string;
-    qobuz_c?: string;
-    deezer_a?: string;
-    deezer_b?: string;
-    amazon_a?: string;
-    amazon_b?: string;
-    amazon_c?: string;
-    apple?: string;
-};
+type SpotiFLACNextStatusResponse = Partial<Record<string, string>>;
 export const API_SOURCES: ApiSource[] = [
     { id: "tidal", type: "tidal", name: "Tidal", url: "" },
     { id: "qobuz", type: "qobuz", name: "Qobuz", url: "" },
@@ -30,13 +21,13 @@ export const API_SOURCES: ApiSource[] = [
     { id: "musicbrainz", type: "musicbrainz", name: "MusicBrainz", url: "https://musicbrainz.org" },
 ];
 export const SPOTIFLAC_NEXT_SOURCES: SpotiFLACNextSource[] = [
-    { id: "tidal", name: "Tidal" },
-    { id: "qobuz", name: "Qobuz" },
-    { id: "amazon", name: "Amazon Music" },
-    { id: "deezer", name: "Deezer" },
-    { id: "apple", name: "Apple Music" },
+    { id: "tidal", name: "Tidal", statusKey: "tidal" },
+    { id: "qobuz", name: "Qobuz", statusPrefix: "qobuz_" },
+    { id: "amazon", name: "Amazon Music", statusPrefix: "amazon_" },
+    { id: "deezer", name: "Deezer", statusPrefix: "deezer_" },
+    { id: "apple", name: "Apple Music", statusKey: "apple" },
 ];
-const SPOTIFLAC_NEXT_STATUS_URL = "https://status.spotbye.qzz.io/status";
+const SPOTIFLAC_NEXT_STATUS_URL = "https://gist.githubusercontent.com/afkarxyz/6e57cd362cbd67f889e3a91a76254a5e/raw";
 const SPOTIFLAC_NEXT_MAX_ATTEMPTS = 3;
 const SPOTIFLAC_NEXT_RETRY_DELAY_MS = 1200;
 type ApiStatusState = {
@@ -70,11 +61,24 @@ async function checkSourceStatus(source: ApiSource): Promise<ApiCheckStatus> {
         return "offline";
     }
 }
-function statusFromNextValue(value: string | undefined): ApiCheckStatus {
-    return value === "up" ? "online" : "offline";
-}
 function anyNextVariantUp(values: Array<string | undefined>): ApiCheckStatus {
     return values.some((value) => value === "up") ? "online" : "offline";
+}
+function getNextSourceValues(payload: SpotiFLACNextStatusResponse, source: SpotiFLACNextSource): string[] {
+    if (source.statusKey) {
+        const value = payload[source.statusKey];
+        return typeof value === "string" ? [value] : [];
+    }
+    if (!source.statusPrefix) {
+        return [];
+    }
+    const values: string[] = [];
+    for (const [key, value] of Object.entries(payload)) {
+        if (key.startsWith(source.statusPrefix) && typeof value === "string") {
+            values.push(value);
+        }
+    }
+    return values;
 }
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -98,13 +102,10 @@ async function fetchSpotiFLACNextStatusesOnce(): Promise<Record<string, ApiCheck
         throw new Error(`SpotiFLAC Next status returned ${response.status}`);
     }
     const payload = (await response.json()) as SpotiFLACNextStatusResponse;
-    return {
-        tidal: statusFromNextValue(payload.tidal),
-        qobuz: anyNextVariantUp([payload.qobuz_a, payload.qobuz_b, payload.qobuz_c]),
-        deezer: anyNextVariantUp([payload.deezer_a, payload.deezer_b]),
-        amazon: anyNextVariantUp([payload.amazon_a, payload.amazon_b, payload.amazon_c]),
-        apple: statusFromNextValue(payload.apple),
-    };
+    return SPOTIFLAC_NEXT_SOURCES.reduce<Record<string, ApiCheckStatus>>((acc, source) => {
+        acc[source.id] = anyNextVariantUp(getNextSourceValues(payload, source));
+        return acc;
+    }, {});
 }
 async function checkSpotiFLACNextStatuses(): Promise<Record<string, ApiCheckStatus>> {
     let lastError: unknown = null;

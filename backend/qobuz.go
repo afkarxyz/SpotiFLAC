@@ -1,6 +1,10 @@
 package backend
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -68,6 +73,57 @@ type QobuzStreamResponse struct {
 	URL string `json:"url"`
 }
 
+type qobuzMusicDLRequest struct {
+	URL     string `json:"url"`
+	Quality string `json:"quality"`
+}
+
+type qobuzMusicDLResponse struct {
+	Success     bool   `json:"success"`
+	Type        string `json:"type"`
+	URLType     string `json:"url_type"`
+	TrackID     string `json:"track_id"`
+	Quality     string `json:"quality_label"`
+	DownloadURL string `json:"download_url"`
+	Message     string `json:"message"`
+	Error       string `json:"error"`
+}
+
+const qobuzMusicDLProbeTrackID int64 = 341032040
+
+var (
+	qobuzMusicDLDebugKeyOnce sync.Once
+	qobuzMusicDLDebugKey     string
+	qobuzMusicDLDebugKeyErr  error
+)
+
+var qobuzMusicDLDebugKeySeedParts = [][]byte{
+	{0x73, 0x70, 0x6f, 0x74, 0x69, 0x66},
+	{0x6c, 0x61, 0x63, 0x3a, 0x71, 0x6f},
+	{0x62, 0x75, 0x7a, 0x3a, 0x6d, 0x75, 0x73, 0x69, 0x63, 0x64, 0x6c, 0x3a, 0x76, 0x31},
+}
+
+var qobuzMusicDLDebugKeyAAD = []byte{
+	0x71, 0x6f, 0x62, 0x75, 0x7a, 0x7c, 0x6d, 0x75, 0x73, 0x69, 0x63, 0x64,
+	0x6c, 0x7c, 0x64, 0x65, 0x62, 0x75, 0x67, 0x7c, 0x76, 0x31,
+}
+
+var qobuzMusicDLDebugKeyNonce = []byte{
+	0x91, 0x2a, 0x5c, 0x77, 0x0f, 0x33, 0xa8, 0x14, 0x62, 0x9d, 0xce, 0x41,
+}
+
+var qobuzMusicDLDebugKeyCiphertext = []byte{
+	0xf3, 0x4a, 0x83, 0x45, 0x24, 0xb6, 0x22, 0xaf, 0xd6, 0xc3, 0x6e, 0x2d,
+	0x56, 0xd1, 0xbb, 0x0b, 0xe9, 0x1b, 0x4f, 0x1c, 0x5f, 0x41, 0x55, 0xc2,
+	0xc6, 0xdf, 0xad, 0x21, 0x58, 0xfe, 0xd5, 0xb8, 0x2d, 0x29, 0xf9, 0x9e,
+	0x6f, 0xd6,
+}
+
+var qobuzMusicDLDebugKeyTag = []byte{
+	0x69, 0x0c, 0x42, 0x70, 0x14, 0x83, 0xff, 0x14, 0xc8, 0xbe, 0x17, 0x00,
+	0x69, 0xb1, 0xfe, 0xbb,
+}
+
 func NewQobuzDownloader() *QobuzDownloader {
 	return &QobuzDownloader{
 		client: &http.Client{
@@ -75,6 +131,57 @@ func NewQobuzDownloader() *QobuzDownloader {
 		},
 		appID: qobuzDefaultAPIAppID,
 	}
+}
+
+func previewQobuzResponseBody(body []byte, maxLen int) string {
+	preview := strings.TrimSpace(string(body))
+	if len(preview) > maxLen {
+		return preview[:maxLen] + "..."
+	}
+	return preview
+}
+
+func buildQobuzOpenTrackURL(trackID int64) string {
+	return fmt.Sprintf("https://open.qobuz.com/track/%d", trackID)
+}
+
+func getQobuzMusicDLDebugKey() (string, error) {
+	qobuzMusicDLDebugKeyOnce.Do(func() {
+		hasher := sha256.New()
+		for _, part := range qobuzMusicDLDebugKeySeedParts {
+			hasher.Write(part)
+		}
+
+		block, err := aes.NewCipher(hasher.Sum(nil))
+		if err != nil {
+			qobuzMusicDLDebugKeyErr = err
+			return
+		}
+
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			qobuzMusicDLDebugKeyErr = err
+			return
+		}
+
+		sealed := make([]byte, 0, len(qobuzMusicDLDebugKeyCiphertext)+len(qobuzMusicDLDebugKeyTag))
+		sealed = append(sealed, qobuzMusicDLDebugKeyCiphertext...)
+		sealed = append(sealed, qobuzMusicDLDebugKeyTag...)
+
+		plaintext, err := gcm.Open(nil, qobuzMusicDLDebugKeyNonce, sealed, qobuzMusicDLDebugKeyAAD)
+		if err != nil {
+			qobuzMusicDLDebugKeyErr = err
+			return
+		}
+
+		qobuzMusicDLDebugKey = string(plaintext)
+	})
+
+	if qobuzMusicDLDebugKeyErr != nil {
+		return "", qobuzMusicDLDebugKeyErr
+	}
+
+	return qobuzMusicDLDebugKey, nil
 }
 
 func (q *QobuzDownloader) searchByISRC(isrc string) (*QobuzTrack, error) {
@@ -139,9 +246,6 @@ func (q *QobuzDownloader) searchByISRC(isrc string) (*QobuzTrack, error) {
 }
 
 func buildQobuzAPIURL(apiBase string, trackID int64, quality string) string {
-	if strings.Contains(apiBase, "qobuz.spotbye.qzz.io") {
-		return fmt.Sprintf("%s%d?quality=%s", apiBase, trackID, quality)
-	}
 	return fmt.Sprintf("%s%d&quality=%s", apiBase, trackID, quality)
 }
 
@@ -188,6 +292,81 @@ func (q *QobuzDownloader) DownloadFromStandard(apiBase string, trackID int64, qu
 	return "", fmt.Errorf("invalid response")
 }
 
+func (q *QobuzDownloader) DownloadFromMusicDL(trackID int64, quality string) (string, error) {
+	if strings.TrimSpace(quality) == "" {
+		quality = "6"
+	}
+
+	debugKey, err := getQobuzMusicDLDebugKey()
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt MusicDL debug key: %w", err)
+	}
+
+	payload, err := json.Marshal(qobuzMusicDLRequest{
+		URL:     buildQobuzOpenTrackURL(trackID),
+		Quality: strings.TrimSpace(quality),
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to encode MusicDL request: %w", err)
+	}
+
+	req, err := NewRequestWithDefaultHeaders(http.MethodPost, GetQobuzMusicDLDownloadAPIURL(), bytes.NewReader(payload))
+	if err != nil {
+		return "", fmt.Errorf("failed to create MusicDL request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Debug-Key", debugKey)
+
+	resp, err := q.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to reach MusicDL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read MusicDL response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("MusicDL returned status %d: %s", resp.StatusCode, previewQobuzResponseBody(body, 256))
+	}
+
+	var downloadResp qobuzMusicDLResponse
+	if err := json.Unmarshal(body, &downloadResp); err != nil {
+		return "", fmt.Errorf("failed to decode MusicDL response: %w (%s)", err, previewQobuzResponseBody(body, 256))
+	}
+
+	if !downloadResp.Success {
+		message := strings.TrimSpace(downloadResp.Error)
+		if message == "" {
+			message = strings.TrimSpace(downloadResp.Message)
+		}
+		if message == "" {
+			message = "MusicDL reported failure"
+		}
+		return "", fmt.Errorf("%s", message)
+	}
+
+	downloadURL := strings.TrimSpace(downloadResp.DownloadURL)
+	if downloadURL == "" {
+		return "", fmt.Errorf("MusicDL response did not include a download_url")
+	}
+
+	return downloadURL, nil
+}
+
+func CheckQobuzMusicDLStatus(client *http.Client) bool {
+	if client == nil {
+		client = &http.Client{Timeout: 4 * time.Second}
+	}
+
+	downloader := &QobuzDownloader{client: client, appID: qobuzDefaultAPIAppID}
+	_, err := downloader.DownloadFromMusicDL(qobuzMusicDLProbeTrackID, "27")
+	return err == nil
+}
+
 func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFallback bool) (string, error) {
 	qualityCode := quality
 	if qualityCode == "" || qualityCode == "5" {
@@ -196,8 +375,6 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 
 	fmt.Printf("Getting download URL for track ID: %d with requested quality: %s\n", trackID, qualityCode)
 
-	standardAPIs := prioritizeProviders("qobuz", GetQobuzStreamAPIBaseURLs())
-
 	downloadFunc := func(qual string) (string, error) {
 		type Provider struct {
 			Name string
@@ -205,21 +382,48 @@ func (q *QobuzDownloader) GetDownloadURL(trackID int64, quality string, allowFal
 			Func func() (string, error)
 		}
 
-		var providers []Provider
+		providerMap := make(map[string]Provider)
+		providerIDs := []string{GetQobuzMusicDLDownloadAPIURL()}
 
-		for _, api := range standardAPIs {
+		providerMap[GetQobuzMusicDLDownloadAPIURL()] = Provider{
+			Name: "MusicDL",
+			API:  GetQobuzMusicDLDownloadAPIURL(),
+			Func: func() (string, error) {
+				return q.DownloadFromMusicDL(trackID, qual)
+			},
+		}
+
+		for _, api := range GetQobuzStreamAPIBaseURLs() {
 			currentAPI := api
-			providers = append(providers, Provider{
+			providerIDs = append(providerIDs, currentAPI)
+			providerMap[currentAPI] = Provider{
 				Name: "Standard(" + currentAPI + ")",
 				API:  currentAPI,
 				Func: func() (string, error) {
 					return q.DownloadFromStandard(currentAPI, trackID, qual)
 				},
-			})
+			}
 		}
 
+		orderedProviderIDs := prioritizeProviders("qobuz", providerIDs)
+		primaryProviderID := GetQobuzMusicDLDownloadAPIURL()
+		if len(orderedProviderIDs) > 1 && orderedProviderIDs[0] != primaryProviderID {
+			reordered := []string{primaryProviderID}
+			for _, providerID := range orderedProviderIDs {
+				if providerID == primaryProviderID {
+					continue
+				}
+				reordered = append(reordered, providerID)
+			}
+			orderedProviderIDs = reordered
+		}
 		var lastErr error
-		for _, p := range providers {
+		for _, providerID := range orderedProviderIDs {
+			p, ok := providerMap[providerID]
+			if !ok {
+				continue
+			}
+
 			fmt.Printf("Trying Provider: %s (Quality: %s)...\n", p.Name, qual)
 
 			url, err := p.Func()

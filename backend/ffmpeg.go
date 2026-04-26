@@ -19,6 +19,11 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
+type executableCandidate struct {
+	path   string
+	source string
+}
+
 func ValidateExecutable(path string) error {
 	cleanedPath := filepath.Clean(path)
 	if cleanedPath == "" {
@@ -83,6 +88,50 @@ func GetFFmpegDir() (string, error) {
 	return EnsureAppDir()
 }
 
+func copyExecutable(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o755)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
+
+	if err := out.Sync(); err != nil {
+		return err
+	}
+
+	return prepareExecutableForUse(dst)
+}
+
+func appendExecutableCandidate(candidates []executableCandidate, seen map[string]struct{}, path, source string) []executableCandidate {
+	cleanedPath := filepath.Clean(strings.TrimSpace(path))
+	if cleanedPath == "" {
+		return candidates
+	}
+	if _, exists := seen[cleanedPath]; exists {
+		return candidates
+	}
+
+	seen[cleanedPath] = struct{}{}
+	return append(candidates, executableCandidate{
+		path:   cleanedPath,
+		source: source,
+	})
+}
+
 func resolveSystemExecutable(executableName string) string {
 	if runtime.GOOS == "darwin" {
 		candidates := []string{
@@ -114,83 +163,163 @@ func resolveSystemExecutable(executableName string) string {
 	return ""
 }
 
-func GetFFmpegPath() (string, error) {
-	ffmpegDir, err := GetFFmpegDir()
-	if err != nil {
-		return "", err
+func runExecutableVersionCheck(path string) error {
+	cmd := exec.Command(path, "-version")
+	setHideWindow(cmd)
+	return cmd.Run()
+}
+
+func removeMacOSQuarantineAttribute(path string) error {
+	cmd := exec.Command("xattr", "-d", "com.apple.quarantine", path)
+	setHideWindow(cmd)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
 	}
 
+	trimmedOutput := strings.TrimSpace(string(output))
+	lowerOutput := strings.ToLower(trimmedOutput)
+	if strings.Contains(lowerOutput, "no such xattr") || strings.Contains(lowerOutput, "attribute not found") {
+		return nil
+	}
+
+	if trimmedOutput != "" {
+		return fmt.Errorf("%w: %s", err, trimmedOutput)
+	}
+
+	return err
+}
+
+func prepareExecutableForUse(path string) error {
+	cleanedPath := filepath.Clean(strings.TrimSpace(path))
+	if cleanedPath == "" {
+		return fmt.Errorf("empty path")
+	}
+
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
+	if err := os.Chmod(cleanedPath, 0755); err != nil {
+		return fmt.Errorf("failed to mark executable: %w", err)
+	}
+
+	if runtime.GOOS == "darwin" {
+		if err := removeMacOSQuarantineAttribute(cleanedPath); err != nil {
+			fmt.Printf("[FFmpeg] Warning: failed to remove macOS quarantine from %s: %v\n", cleanedPath, err)
+		}
+	}
+
+	return nil
+}
+
+func resolveExecutablePath(executableName string) (string, string, error) {
+	ffmpegDir, err := GetFFmpegDir()
+	if err != nil {
+		return "", "", err
+	}
+
+	localPath := filepath.Join(ffmpegDir, executableName)
+	nextDir := filepath.Join(filepath.Dir(ffmpegDir), ".spotiflac-next")
+	nextPath := filepath.Join(nextDir, executableName)
+	localExists := false
+	candidates := make([]executableCandidate, 0, 3)
+	seen := make(map[string]struct{}, 3)
+
+	if systemPath := resolveSystemExecutable(executableName); systemPath != "" {
+		candidates = appendExecutableCandidate(candidates, seen, systemPath, "system")
+	}
+
+	if _, err := os.Stat(localPath); err == nil {
+		localExists = true
+		candidates = appendExecutableCandidate(candidates, seen, localPath, "local")
+	}
+
+	if !localExists {
+		if _, err := os.Stat(nextPath); err == nil {
+			if copyErr := copyExecutable(nextPath, localPath); copyErr == nil {
+				fmt.Printf("[FFmpeg] Copied %s from SpotiFLAC-Next folder\n", executableName)
+				candidates = appendExecutableCandidate(candidates, seen, localPath, "migrated")
+			}
+		}
+	}
+
+	var lastErr error
+	for _, candidate := range candidates {
+		if candidate.source != "system" {
+			if err := prepareExecutableForUse(candidate.path); err != nil {
+				lastErr = err
+				fmt.Printf("[FFmpeg] Skipping %s %s: %v\n", candidate.source, candidate.path, err)
+				continue
+			}
+		}
+
+		if err := ValidateExecutable(candidate.path); err != nil {
+			lastErr = err
+			fmt.Printf("[FFmpeg] Skipping %s %s: %v\n", candidate.source, candidate.path, err)
+			continue
+		}
+
+		if err := runExecutableVersionCheck(candidate.path); err != nil {
+			lastErr = err
+			fmt.Printf("[FFmpeg] Skipping %s %s: %v\n", candidate.source, candidate.path, err)
+			continue
+		}
+
+		return candidate.path, localPath, nil
+	}
+
+	if len(candidates) > 0 {
+		if lastErr != nil {
+			return "", localPath, fmt.Errorf("no working %s executable found: %w", executableName, lastErr)
+		}
+		return "", localPath, fmt.Errorf("no working %s executable found", executableName)
+	}
+
+	return "", localPath, fmt.Errorf("%s not found in app directory or system path", executableName)
+}
+
+func GetFFmpegPath() (string, error) {
 	ffmpegName := "ffmpeg"
 	if runtime.GOOS == "windows" {
 		ffmpegName = "ffmpeg.exe"
 	}
 
-	if path := resolveSystemExecutable(ffmpegName); path != "" {
-		return path, nil
-	}
-
-	localPath := filepath.Join(ffmpegDir, ffmpegName)
-	if _, err := os.Stat(localPath); err == nil {
-		return localPath, nil
-	}
-
-	return localPath, nil
-}
-
-func GetFFprobePath() (string, error) {
-	ffmpegDir, err := GetFFmpegDir()
+	path, localPath, err := resolveExecutablePath(ffmpegName)
 	if err != nil {
+		if localPath != "" {
+			return localPath, err
+		}
 		return "", err
 	}
 
+	return path, nil
+}
+
+func GetFFprobePath() (string, error) {
 	ffprobeName := "ffprobe"
 	if runtime.GOOS == "windows" {
 		ffprobeName = "ffprobe.exe"
 	}
 
-	if path := resolveSystemExecutable(ffprobeName); path != "" {
-		return path, nil
+	path, localPath, err := resolveExecutablePath(ffprobeName)
+	if err != nil {
+		if localPath != "" {
+			return localPath, err
+		}
+		return "", err
 	}
 
-	localPath := filepath.Join(ffmpegDir, ffprobeName)
-	if _, err := os.Stat(localPath); err == nil {
-		return localPath, nil
-	}
-
-	return localPath, fmt.Errorf("ffprobe not found in app directory or system path")
+	return path, nil
 }
 
 func IsFFprobeInstalled() (bool, error) {
-	ffprobePath, err := GetFFprobePath()
-	if err != nil {
-		return false, nil
-	}
-
-	if err := ValidateExecutable(ffprobePath); err != nil {
-		return false, nil
-	}
-
-	cmd := exec.Command(ffprobePath, "-version")
-	setHideWindow(cmd)
-	err = cmd.Run()
+	_, err := GetFFprobePath()
 	return err == nil, nil
 }
 
 func IsFFmpegInstalled() (bool, error) {
-	ffmpegPath, err := GetFFmpegPath()
-	if err != nil {
-		return false, err
-	}
-
-	if err := ValidateExecutable(ffmpegPath); err != nil {
-		return false, nil
-	}
-
-	cmd := exec.Command(ffmpegPath, "-version")
-
-	setHideWindow(cmd)
-	err = cmd.Run()
-	if err != nil {
+	if _, err := GetFFmpegPath(); err != nil {
 		return false, nil
 	}
 
@@ -507,6 +636,10 @@ func extractZip(zipPath, destDir string) error {
 			return fmt.Errorf("failed to extract file: %w", err)
 		}
 
+		if err := prepareExecutableForUse(destPath); err != nil {
+			return fmt.Errorf("failed to prepare extracted executable: %w", err)
+		}
+
 		fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
 	}
 
@@ -582,6 +715,10 @@ func extractTarXz(tarXzPath, destDir string) error {
 
 		if err != nil {
 			return fmt.Errorf("failed to extract file: %w", err)
+		}
+
+		if err := prepareExecutableForUse(destPath); err != nil {
+			return fmt.Errorf("failed to prepare extracted executable: %w", err)
 		}
 
 		fmt.Printf("[FFmpeg] Extracted to: %s\n", destPath)
